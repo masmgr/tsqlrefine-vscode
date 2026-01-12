@@ -27,7 +27,7 @@
 
 ## 5. Lint target selection
 - [ ] Use file path for saved documents.
-- [ ] Support unsaved/untitled via stdin or temp file.
+- [ ] Support unsaved/untitled via temp file (tsqllint does not accept stdin).
 - [ ] Map temp file paths back to original URI for diagnostics.
 
 ## 6. External process execution (runTsqllint)
@@ -38,8 +38,9 @@
 - [ ] Return stdout/stderr/exitCode/timedOut/cancelled accurately.
 
 ## 7. Stdout parsing (parseOutput)
-- [x] Regex pattern matches `<path>(<line>,<col>): <severity> <rule> : <message>`.
-- [x] Line/column conversion to 0-based, with `col=-1` -> `0`.
+- [ ] Regex pattern matches `<file>(<line>,<col>): <severity> <ruleName> : <message>.` (severity is `error|warning`, trailing `.`).
+- [x] Line/column conversion to 0-based.
+- [ ] Handle summary block (ignore for diagnostics) and "plain messages" like invalid path/dir.
 - [x] Severity mapping to LSP `DiagnosticSeverity`.
 - [x] Path normalization against `cwd` and URI fsPath.
 - [x] Range fallback when column exceeds line length.

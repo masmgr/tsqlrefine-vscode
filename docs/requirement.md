@@ -28,9 +28,12 @@
 
 - lint: `tsqllint <file.sql | dir | wildcard>` [2]
 - config: `-c` 指定、もしくは探索（環境変数/カレント/ホーム等） [2]
-- 出力：少なくとも以下形式の例がある（stdout 想定）
-  - `~/Desktop/foo.sql(1,-1): warning prefer-tabs : Should use spaces rather than tabs.` [1]
-  - `ImportAssociationAttributes.sql(74,1): error conditional-begin-end : ...` [3]
+- 出力（stdout）：ConsoleReporter が生成する固定フォーマット（1行=1違反）
+  - `<file>(<line>,<col>): <severity> <ruleName> : <message>.`
+  - `severity` は `error` / `warning` の小文字のみ（Off は出力されない）
+  - 構文エラー時は `ruleName=invalid-syntax`
+  - 最後にサマリーが 1 ブロック出る（ファイル数が 0 の場合は出ない）
+  - 入力パスが無効などの場合は上記と異なる素のメッセージが出る
 - 終了コード：ルールが error の違反があると非0になりうる [2]
   - warning は0になりうる（ツール仕様として説明あり） [2]
 
@@ -80,12 +83,11 @@
 
 - stdout を 1 行ずつ読み取り、以下を抽出して Diagnostic を生成する [1]
   - file, line, column, severity, ruleName, message
-- 想定フォーマット（暫定）：
-  - `<path>(<line>,<col>): <severity> <rule> : <message>`
+- 想定フォーマット（確定）：
+  - `<file>(<line>,<col>): <severity> <ruleName> : <message>.`
 - マッピング：
   - error → `DiagnosticSeverity.Error`
   - warning → `DiagnosticSeverity.Warning`
-  - その他 → `DiagnosticSeverity.Information`
 
 ### 4.4 設定（Configuration）
 

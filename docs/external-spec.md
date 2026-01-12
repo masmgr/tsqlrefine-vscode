@@ -44,8 +44,11 @@
 
 - 実行：`tsqllint <file.sql | dir | wildcard>`
 - 設定：`-c <configPath>` 指定、または `tsqllint` 側の探索（環境変数/カレント/ホーム等）
-- 出力（stdout）：少なくとも以下形式の実例がある
-  - `<path>(<line>,<col>): <severity> <rule> : <message>`
+- 出力（stdout）：ConsoleReporter が生成する固定フォーマット（1行=1違反）
+  - `<file>(<line>,<col>): <severity> <ruleName> : <message>.`
+  - `severity` は `error` / `warning` の小文字のみ（Off は出力されない）
+  - 構文エラー時は `ruleName=invalid-syntax`
+  - 最後にサマリーが 1 ブロック出る（ファイル数が 0 の場合は出ない）
 - 終了コード：error 違反がある場合に非0終了になりうる
 
 ---
@@ -112,16 +115,27 @@
 #### 4.3.1 入力フォーマット
 
 - 1 行を 1 件の問題として扱う（行単位パース）
-- 想定フォーマット（暫定）：
-  - `<path>(<line>,<col>): <severity> <rule> : <message>`
+- 想定フォーマット（確定）：
+  - `<file>(<line>,<col>): <severity> <ruleName> : <message>.`
+- サマリー（違反とは別扱い）：
+
+```
+Linted {fileCount} files in {seconds} seconds
+
+{errorCount} Errors.
+{warningCount} Warnings.
+```
+
+（`--fix` 実行時に修正があれば末尾に `{fixedCount} Fixed` が追加される）
+- 入力パスが無効などの場合は上記と異なる素のメッセージが出る（例: `"{path} is not a valid file path."`）。
 
 #### 4.3.2 抽出項目
 
-- `path`：対象ファイルパス
+- `file`：対象ファイルパス
 - `line`：行番号（1 始まり想定）
-- `col`：列番号（1 始まり想定、`-1` の実例あり）
-- `severity`：`error` / `warning`（その他が出る場合あり）
-- `rule`：ルール名
+- `col`：列番号（1 始まり想定）
+- `severity`：`error` / `warning`
+- `ruleName`：ルール名（構文エラー時は `invalid-syntax`）
 - `message`：メッセージ本文
 
 #### 4.3.3 VS Code へのマッピング
@@ -129,11 +143,9 @@
 - Severity
   - `error` → `DiagnosticSeverity.Error`
   - `warning` → `DiagnosticSeverity.Warning`
-  - その他 → `DiagnosticSeverity.Information`
 - 位置情報
   - `line` は 1 始まりのため、VS Code への反映時は 0 始まりに変換する
   - `col` は 1 始まりのため、VS Code への反映時は 0 始まりに変換する
-  - `col=-1` は「行頭（0）」として扱う
   - 範囲長は `tsqllint` 出力に長さ情報がないため、原則 1 文字幅とする
 
 ### 4.4 `.tsqllintrc` / config の扱い

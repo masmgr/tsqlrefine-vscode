@@ -131,8 +131,7 @@ src/
 - `file://` URI かつ保存済みの場合:
   - `tsqllint <filePath>` で実行する（最も安定）。
 - 未保存（Untitled）または「変更が未保存で runOnType」:
-  - `tsqllint` が stdin を受け取れる場合: stdin で内容を渡す。
-  - stdin が使えない場合: 一時ファイルに書き出して lint し、終了後に削除する。
+  - `tsqllint` は stdin を受け取れないため、一時ファイルに書き出して lint し、終了後に削除する。
   - 一時ファイル運用時は、パースした `path` と元 URI のひも付け（出力の `path` が一時ファイルを指す問題）に注意する。
 
 ---
@@ -182,30 +181,66 @@ type LintRunResult = {
 
 ### 8.1 想定フォーマット
 
+`tsqllint` の標準出力は「1行=1違反」のプレーンテキストで、ConsoleReporter が生成する固定フォーマット。
+
+違反 1 件は次の形式（末尾に `.` が付く）:
+
 ```
-<path>(<line>,<col>): <severity> <rule> : <message>
+<file>(<line>,<col>): <severity> <ruleName> : <message>.
+```
+
+- `severity` は `error` / `warning` の小文字のみ（`RuleViolationSeverity.Off` は出力されない）。
+- `ruleName` はルール名（例: `select-star`）。構文エラー時は `invalid-syntax`。
+
+また、最後に集計サマリーが 1 ブロック出力される（ファイル数が 0 の場合はサマリー自体が出ない）。
+
+```
+Linted {fileCount} files in {seconds} seconds
+
+{errorCount} Errors.
+{warningCount} Warnings.
+```
+
+`--fix` 実行時に修正があれば、末尾に次が追加される:
+
+```
+{fixedCount} Fixed
+```
+
+入力パスが無効（ファイル不存在/ディレクトリ不存在等）の場合は上記フォーマットではなく、
+`"{path} is not a valid file path."` / `"Directory does not exist: {dir}"` のような素のメッセージが出る。
+
+サンプル（テストで期待されている形式）:
+
+```
+foo.sql(1,1): error rule name : rule text.
+foo.sql(1,2): error rule name : rule text.
+foo.sql(1,3): warning rule name : rule text.
+
+Linted 1 files in 3661 seconds
+
+2 Errors.
+1 Warnings.
 ```
 
 ### 8.2 正規表現
 
 ```ts
 const pattern =
-  /^(?<path>.+?)\((?<line>\d+),(?<col>-?\d+)\):\s+(?<severity>\w+)\s+(?<rule>[^:]+)\s+:\s+(?<message>.+)$/;
+  /^(?<file>.+)\((?<line>\d+),(?<col>\d+)\): (?<severity>error|warning) (?<ruleName>[^ ]+) : (?<message>.+)\.$/;
 ```
 
 ### 8.3 変換ルール（LSP Diagnostic）
 
 - `line` / `col` は 1 始まり → 0 始まりへ変換する。
-- `col = -1` は行頭扱い（`col=0`）に正規化する。
 - ルール名は `Diagnostic.code` に格納し、`Diagnostic.source = "tsqllint"` を付与する。
 - `severity` マップ:
   - `error` -> `DiagnosticSeverity.Error`
   - `warning` -> `DiagnosticSeverity.Warning`
-  - それ以外 -> `DiagnosticSeverity.Information`
 
 ### 8.4 ファイルフィルタ
 
-- `path` は相対/絶対が混在しうるため、`cwd` を基準に `path.resolve()` して正規化し、URI から導出した file path（例: `URI.parse(uri).fsPath`）と突き合わせる。
+- `file` は相対/絶対が混在しうるため、`cwd` を基準に `path.resolve()` して正規化し、URI から導出した file path（例: `URI.parse(uri).fsPath`）と突き合わせる。
 - 対象 URI と一致しない行は基本的に無視する（将来、複数ファイル lint を行う場合は URI ごとに振り分ける）。
 
 ---
@@ -252,8 +287,9 @@ const pattern =
 
 - `server/lint/parseOutput.ts` に対するテストケースを用意する。
   - 正常行/異常行
-  - `col=-1` の補正
-  - warning/error/その他
+  - warning/error
+  - `invalid-syntax`（構文エラー）
+  - サマリー行や素のメッセージ行は無視されること
   - path の正規化（相対/絶対、Windows パス）
 
 ### 11.2 統合テスト
@@ -266,5 +302,5 @@ const pattern =
 ## 12. 未確定事項
 
 - runOnType の既定 debounce 値の最終調整
-- stdin lint の可否（`tsqllint` の入力仕様に依存）
+- stdin lint は不可（`tsqllint` は stdin を受け取れないため、未保存は一時ファイル運用で対応する）
 - rename/delete の通知経路（LSP 標準通知で受けるか、VS Code 側イベント + カスタム通知にするか）
