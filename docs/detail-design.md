@@ -70,6 +70,7 @@ src/
 4. `onDidSaveTextDocument` を登録（runOnSave）。
 5. `onDidChangeTextDocument` を登録（runOnType）。
 6. `onDidCloseTextDocument` で Diagnostics をクリア。
+7. `onDidRenameFiles` / `onDidDeleteFiles` で旧 URI の Diagnostics をクリア。
 
 ---
 
@@ -77,20 +78,21 @@ src/
 
 ### 5.1 トリガ
 
-- 保存時: 対象ファイルが `.sql` の場合のみ。
-- 入力中: `.sql` かつ `runOnType=true` の場合のみ。
+- 保存時: `doc.languageId === "sql"` の場合のみ。
+- 入力中: `doc.languageId === "sql"` かつ `doc.isDirty` かつ `runOnType=true` の場合のみ。
 
 ### 5.2 同時実行制御（単一実行）
 
 - 共有状態:
   - `isRunning: boolean`
-  - `pendingRequest: TextDocument | null`
+  - `pendingRequests: Map<string, TextDocument>`（key は URI 文字列）
+  - `abortController: AbortController | null`
 - 擬似コード:
 
 ```ts
 async function enqueueLint(doc: TextDocument) {
   if (isRunning) {
-    pendingRequest = doc;
+    pendingRequests.set(doc.uri.toString(), doc);
     return;
   }
   isRunning = true;
@@ -98,14 +100,18 @@ async function enqueueLint(doc: TextDocument) {
     await runLint(doc);
   } finally {
     isRunning = false;
-    if (pendingRequest) {
-      const next = pendingRequest;
-      pendingRequest = null;
+    if (pendingRequests.size > 0) {
+      const next = pendingRequests.values().next().value;
+      pendingRequests.delete(next.uri.toString());
       enqueueLint(next);
     }
   }
 }
 ```
+
+補足:
+- pending は「最後の状態だけ lint できればよい」前提のため、同一 URI は上書き。
+- 入力中 lint では前回の実行を中断できるようにする（AbortController / ChildProcess.kill）。
 
 ---
 
@@ -120,10 +126,12 @@ async function enqueueLint(doc: TextDocument) {
   - 対象ファイルパス
   - `tsqllint.configPath` が指定されている場合のみ `-c <path>` を付与。
 - `cwd`:
-  - ワークスペースがある場合は workspace root。
+  - `vscode.workspace.getWorkspaceFolder(doc.uri)` がある場合はその root。
   - ない場合は対象ファイルのディレクトリ。
 - タイムアウト:
   - `tsqllint.timeoutMs` を使用。
+ - キャンセル:
+  - `AbortController` で中断要求を伝播し、`ChildProcess.kill` で停止する。
 
 ### 6.2 戻り値
 
@@ -133,6 +141,7 @@ type LintRunResult = {
   stderr: string;
   exitCode: number | null;
   timedOut: boolean;
+  cancelled: boolean;
 };
 ```
 
@@ -144,6 +153,12 @@ type LintRunResult = {
   - 失敗扱いにせず stdout をパースして Diagnostics を更新。
 - タイムアウト:
   - 通知 + OutputChannel に詳細を出す。
+
+### 6.4 入力中 lint と未保存内容
+
+- `tsqllint` が stdin を受け取れる場合は、保存済みファイルパスに加えて現在の内容を渡す。
+- stdin が使えない場合は、入力中 lint は「保存済み内容に対してのみ」になる旨を設定説明に明記する。
+- 代替として一時ファイルに書き出して実行する案もあるが、I/O と競合ケアが必要なため慎重に扱う。
 
 ---
 
@@ -159,7 +174,7 @@ type LintRunResult = {
 
 ```ts
 const pattern =
-  /^(?<path>.+)\((?<line>\d+),(?<col>-?\d+)\):\s+(?<severity>\w+)\s+(?<rule>[^:]+)\s+:\s+(?<message>.+)$/;
+  /^(?<path>.+?)\((?<line>\d+),(?<col>-?\d+)\):\s+(?<severity>\w+)\s+(?<rule>[^:]+)\s+:\s+(?<message>.+)$/;
 ```
 
 ### 7.3 変換ルール
@@ -190,7 +205,8 @@ const pattern =
 ### 8.2 位置計算
 
 - 範囲長は 1 文字を既定とする。
-- 行末を越えないように `lineLength` を参照して調整する。
+- `col` が行長を超える場合は、行全体ハイライト（`Range(line, 0, line, lineLength)`）へフォールバックする。
+- 必要なら「1 文字 / 行全体」を切り替えられる設定を検討する。
 
 ---
 
@@ -260,6 +276,7 @@ src/
 - `textDocument/didSave` で lint 実行（既定）。
 - `textDocument/didChange` で lint 実行（runOnType 時のみ）。
 - `textDocument/didClose` で診断をクリア。
+- `workspace/didRenameFiles` / `workspace/didDeleteFiles` で旧 URI の診断をクリア。
 - 設定変更時は debounce を再構築。
 
 ### 11.5 診断送信
@@ -272,4 +289,4 @@ src/
 
 - `tsqllint.timeoutMs` 設定キー名の最終確定
 - runOnType の既定 debounce 値の最終調整
-- マルチファイル lint の扱い（外部仕様の未決 3 点に連動）
+- stdin lint の可否（`tsqllint` の入力仕様に依存）
