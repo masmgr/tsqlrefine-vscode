@@ -175,7 +175,7 @@ const pattern =
 ### 7.4 ファイルフィルタ
 
 - `path` が対象ドキュメントと一致する行のみ採用。
-- 異なるファイルの行は無視（将来: multi-file lint へ拡張余地）。
+- 異なるファイルの行は無視。
 
 ---
 
@@ -230,11 +230,41 @@ const pattern =
 
 ---
 
-## 11. 将来拡張
+## 11. LSP 化
 
-- ワークスペース全体 lint の追加
-- LSP 化
-- 複数ファイル出力の取り込み
+### 11.1 目的
+- lint 実行・診断更新を言語サーバー側へ集約し、拡張側はクライアントに専念する。
+- テスト容易性を高め、VS Code 以外のクライアントへ拡張可能にする。
+
+### 11.2 構成
+```
+src/
+├─ extension.ts                (LanguageClient 起動・設定)
+├─ client/
+│  └─ client.ts                (LSP 初期化・設定同期)
+└─ server/
+   ├─ server.ts                (LSP サーバー本体)
+   ├─ lint/
+   │  ├─ runTsqllint.ts         (外部プロセス実行)
+   │  └─ parseOutput.ts         (stdout -> Diagnostic)
+   └─ config/
+      └─ settings.ts            (設定読み取り・既定値)
+```
+
+### 11.3 Client 側（extension.ts）
+- `LanguageClient` を起動し、`onLanguage:sql` で有効化。
+- 設定変更を `workspace/didChangeConfiguration` でサーバーへ通知。
+- コマンド `tsqllint.run` は `workspace/executeCommand` を LSP へ委譲。
+
+### 11.4 Server 側（server.ts）
+- `textDocument/didSave` で lint 実行（既定）。
+- `textDocument/didChange` で lint 実行（runOnType 時のみ）。
+- `textDocument/didClose` で診断をクリア。
+- 設定変更時は debounce を再構築。
+
+### 11.5 診断送信
+- `textDocument/publishDiagnostics` で送信。
+- 旧診断は空配列送信でクリア。
 
 ---
 
