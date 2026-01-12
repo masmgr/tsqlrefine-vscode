@@ -27,6 +27,7 @@ export async function runTsqllint(
 
 	const command = await resolveCommand(options.settings);
 	const args = buildArgs(options);
+	const spawnSpec = resolveSpawn(command, args);
 
 	return new Promise((resolve, reject) => {
 		let settled = false;
@@ -36,7 +37,7 @@ export async function runTsqllint(
 		let stderr = "";
 		let timer: NodeJS.Timeout | null = null;
 
-		const child = spawn(command, args, {
+		const child = spawn(spawnSpec.command, spawnSpec.args, {
 			cwd: options.cwd,
 			stdio: ["ignore", "pipe", "pipe"],
 		});
@@ -120,6 +121,22 @@ export async function runTsqllint(
 
 let cachedCommandAvailability: { command: string; available: boolean } | null =
 	null;
+
+function resolveSpawn(
+	command: string,
+	args: string[],
+): { command: string; args: string[] } {
+	if (process.platform !== "win32") {
+		return { command, args };
+	}
+	const normalized = command.toLowerCase();
+	if (normalized.endsWith(".cmd") || normalized.endsWith(".bat")) {
+		const env = process.env as NodeJS.ProcessEnv & { ComSpec?: string };
+		const comspec = env.ComSpec ?? "cmd.exe";
+		return { command: comspec, args: ["/c", command, ...args] };
+	}
+	return { command, args };
+}
 
 function buildArgs(options: RunTsqllintOptions): string[] {
 	const args: string[] = [];
