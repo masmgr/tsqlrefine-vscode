@@ -56,7 +56,8 @@
 
 ## 9. Notifications and logging
 - [x] Warn on run failure and timeout.
-- [ ] Notify for missing `tsqllint`, config errors, or stderr conditions.
+- [ ] Preflight-check `tsqllint` exists (path/PATH) and notify when missing.
+- [ ] Notify for config errors, or stderr conditions.
 - [ ] Notify after `--fix` run (e.g., show fixed count when available).
 - [ ] Route detailed logs to LSP output channel.
 

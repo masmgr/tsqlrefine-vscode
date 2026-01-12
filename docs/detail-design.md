@@ -177,6 +177,9 @@ type LintRunResult = {
 
 ### 7.3 エラーハンドリング
 
+- 実行前チェック（必須）:
+  - `tsqllint.path` が設定されている場合：そのパスが実在し実行可能であることを確認する（存在しなければ即エラー通知）。
+  - 未指定の場合：コマンドライン上で `tsqllint` が解決できることを確認する（例: `tsqllint --version` の起動可否で確認）。
 - 起動失敗（spawn error）:
   - Server は `window/showMessage`（warning/error）と `window/logMessage` を併用し、当該 URI の Diagnostics は空で更新する。
 - 非ゼロ exit code:
@@ -282,6 +285,7 @@ const pattern =
 
 - 原因（起動できない、設定不正、タイムアウト）
 - 次に行うべき手順（install 手順、`tsqllint --print-config`）
+  - `tsqllint` が見つからない場合は、「PATH にない / `tsqllint.path` が不正」のどちらかを明示する。
 
 ### 10.3 ログ出力
 
