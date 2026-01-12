@@ -6,13 +6,15 @@ import {
 import { URI } from "vscode-uri";
 
 const pattern =
-	/^(?<path>.+?)\((?<line>\d+),(?<col>-?\d+)\):\s+(?<severity>\w+)\s+(?<rule>[^:]+)\s+:\s+(?<message>.+)$/;
+	/^(?<file>.+)\((?<line>\d+),(?<col>\d+)\): (?<severity>error|warning) (?<ruleName>[^ ]+) : (?<message>.+)\.$/;
 
 type ParseOutputOptions = {
 	stdout: string;
 	uri: string;
 	cwd: string | null;
 	lines: string[];
+	rangeMode?: "character" | "line";
+	targetPaths?: string[];
 };
 
 function normalizeForCompare(filePath: string): string {
@@ -37,7 +39,14 @@ function mapSeverity(severity: string): DiagnosticSeverity {
 export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 	const diagnostics: Diagnostic[] = [];
 	const targetPath = normalizeForCompare(URI.parse(options.uri).fsPath);
+	const extraTargets = options.targetPaths ?? [];
+	const targetPaths = new Set(
+		[targetPath, ...extraTargets].map((filePath) =>
+			normalizeForCompare(filePath),
+		),
+	);
 	const cwd = options.cwd ?? path.dirname(targetPath);
+	const rangeMode = options.rangeMode ?? "character";
 
 	for (const line of options.stdout.split(/\r?\n/)) {
 		if (!line.trim()) {
@@ -46,11 +55,11 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 		const match = pattern.exec(line);
 		const groups = match?.groups as
 			| {
-					path: string;
+					file: string;
 					line: string;
 					col: string;
 					severity: string;
-					rule: string;
+					ruleName: string;
 					message: string;
 			  }
 			| undefined;
@@ -58,19 +67,19 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 			continue;
 		}
 
-		const rawPath = groups.path;
+		const rawPath = groups.file;
 		if (!rawPath) {
 			continue;
 		}
 		const resolvedPath = normalizeForCompare(path.resolve(cwd, rawPath));
-		if (resolvedPath !== targetPath) {
+		if (!targetPaths.has(resolvedPath)) {
 			continue;
 		}
 
 		const rawLine = groups.line;
 		const rawCol = groups.col;
 		const rawSeverity = groups.severity;
-		const rawRule = groups.rule;
+		const rawRule = groups.ruleName;
 		const rawMessage = groups.message;
 		if (!rawLine || !rawCol || !rawSeverity || !rawRule || !rawMessage) {
 			continue;
@@ -82,11 +91,20 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 		const lineText = options.lines[lineNumber] ?? "";
 		const lineLength = lineText.length;
 
-		const start = { line: lineNumber, character: column };
-		const end =
-			column >= lineLength
-				? { line: lineNumber, character: lineLength }
-				: { line: lineNumber, character: column + 1 };
+		const exceedsLine = column >= lineLength;
+		const start =
+			rangeMode === "line" || exceedsLine
+				? { line: lineNumber, character: 0 }
+				: { line: lineNumber, character: column };
+		let end: { line: number; character: number };
+		if (rangeMode === "line" || exceedsLine) {
+			end = { line: lineNumber, character: lineLength };
+		} else {
+			end =
+				column >= lineLength
+					? { line: lineNumber, character: lineLength }
+					: { line: lineNumber, character: column + 1 };
+		}
 
 		diagnostics.push({
 			message: rawMessage,

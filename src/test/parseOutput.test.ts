@@ -8,7 +8,7 @@ suite("parseOutput", () => {
 	test("parses diagnostics for matching path", () => {
 		const filePath = path.resolve("workspace", "query.sql");
 		const uri = URI.file(filePath).toString();
-		const stdout = `${filePath}(2,5): error Rule-Name : Bad stuff`;
+		const stdout = `${filePath}(2,5): error Rule-Name : Bad stuff.`;
 		const lines = ["select 1;", "select *"];
 
 		const diagnostics = parseOutput({ stdout, uri, cwd: null, lines });
@@ -24,11 +24,11 @@ suite("parseOutput", () => {
 		assert.deepStrictEqual(diag.range.end, { line: 1, character: 5 });
 	});
 
-	test("normalizes col=-1 to start of line", () => {
+	test("handles relative paths against cwd", () => {
 		const cwd = path.resolve("workspace");
 		const filePath = path.join(cwd, "query.sql");
 		const uri = URI.file(filePath).toString();
-		const stdout = "query.sql(1,-1): warning RuleX : Heads up";
+		const stdout = "query.sql(1,1): warning RuleX : Heads up.";
 		const lines = ["select 1;"];
 
 		const diagnostics = parseOutput({ stdout, uri, cwd, lines });
@@ -41,11 +41,67 @@ suite("parseOutput", () => {
 		assert.deepStrictEqual(diag.range.end, { line: 0, character: 1 });
 	});
 
+	test("uses line ranges when configured", () => {
+		const cwd = path.resolve("workspace");
+		const filePath = path.join(cwd, "query.sql");
+		const uri = URI.file(filePath).toString();
+		const stdout = "query.sql(1,99): error RuleX : Heads up.";
+		const lines = ["select 1;"];
+
+		const diagnostics = parseOutput({
+			stdout,
+			uri,
+			cwd,
+			lines,
+			rangeMode: "line",
+		});
+
+		assert.strictEqual(diagnostics.length, 1);
+		const diag = diagnostics[0];
+		assert.ok(diag);
+		assert.deepStrictEqual(diag.range.start, { line: 0, character: 0 });
+		assert.deepStrictEqual(diag.range.end, { line: 0, character: 9 });
+	});
+
+	test("falls back to full-line range when column exceeds length", () => {
+		const cwd = path.resolve("workspace");
+		const filePath = path.join(cwd, "query.sql");
+		const uri = URI.file(filePath).toString();
+		const stdout = "query.sql(1,20): warning RuleX : Heads up.";
+		const lines = ["select 1;"];
+
+		const diagnostics = parseOutput({ stdout, uri, cwd, lines });
+
+		assert.strictEqual(diagnostics.length, 1);
+		const diag = diagnostics[0];
+		assert.ok(diag);
+		assert.deepStrictEqual(diag.range.start, { line: 0, character: 0 });
+		assert.deepStrictEqual(diag.range.end, { line: 0, character: 9 });
+	});
+
 	test("ignores output for different file paths", () => {
 		const cwd = path.resolve("workspace");
 		const filePath = path.join(cwd, "query.sql");
 		const uri = URI.file(filePath).toString();
-		const stdout = "other.sql(1,1): info RuleY : Not for this file";
+		const stdout = "other.sql(1,1): warning RuleY : Not for this file.";
+		const lines = ["select 1;"];
+
+		const diagnostics = parseOutput({ stdout, uri, cwd, lines });
+
+		assert.strictEqual(diagnostics.length, 0);
+	});
+
+	test("ignores summary blocks and plain messages", () => {
+		const cwd = path.resolve("workspace");
+		const filePath = path.join(cwd, "query.sql");
+		const uri = URI.file(filePath).toString();
+		const stdout = [
+			"Linted 1 files in 0.1 seconds",
+			"",
+			"1 Errors.",
+			"0 Warnings.",
+			"query.sql is not a valid file path.",
+		].join("\n");
 		const lines = ["select 1;"];
 
 		const diagnostics = parseOutput({ stdout, uri, cwd, lines });

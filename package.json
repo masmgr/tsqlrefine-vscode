@@ -7,13 +7,22 @@
 		"vscode": "^1.108.1"
 	},
 	"categories": ["Other"],
-	"activationEvents": ["onLanguage:sql", "onCommand:tsqllint-lite.run"],
+	"activationEvents": [
+		"onLanguage:sql",
+		"onCommand:tsqllint-lite.run",
+		"onCommand:tsqllint-lite.fix"
+	],
 	"main": "./out/extension.js",
 	"contributes": {
 		"commands": [
 			{
 				"command": "tsqllint-lite.run",
 				"title": "TSQLLint: Run",
+				"category": "TSQLLint"
+			},
+			{
+				"command": "tsqllint-lite.fix",
+				"title": "TSQLLint: Fix",
 				"category": "TSQLLint"
 			}
 		],
@@ -35,6 +44,11 @@
 					"default": true,
 					"description": "Run lint when a SQL document is saved."
 				},
+				"tsqllint.fixOnSave": {
+					"type": "boolean",
+					"default": false,
+					"description": "Run tsqllint --fix on save for saved files."
+				},
 				"tsqllint.runOnType": {
 					"type": "boolean",
 					"default": false,
@@ -49,6 +63,12 @@
 					"type": "number",
 					"default": 10000,
 					"description": "Timeout in milliseconds for lint execution."
+				},
+				"tsqllint.rangeMode": {
+					"type": "string",
+					"enum": ["character", "line"],
+					"default": "character",
+					"description": "Diagnostic range mode for reported issues."
 				}
 			}
 		}

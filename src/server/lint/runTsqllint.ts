@@ -1,12 +1,15 @@
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import { spawn } from "node:child_process";
 import type { TsqllintSettings } from "../config/settings";
 import type { LintRunResult } from "./types";
 
 export type RunTsqllintOptions = {
 	filePath: string;
-	content: string;
 	cwd: string;
 	settings: TsqllintSettings;
 	signal: AbortSignal;
+	fix?: boolean;
 };
 
 export async function runTsqllint(
@@ -22,30 +25,192 @@ export async function runTsqllint(
 		};
 	}
 
-	return new Promise((resolve) => {
-		const timer = setTimeout(() => {
-			resolve({
-				stdout: "",
-				stderr: "",
-				exitCode: 0,
-				timedOut: false,
-				cancelled: false,
+	const command = await resolveCommand(options.settings);
+	const args = buildArgs(options);
+
+	return new Promise((resolve, reject) => {
+		let settled = false;
+		let timedOut = false;
+		let cancelled = false;
+		let stdout = "";
+		let stderr = "";
+		let timer: NodeJS.Timeout | null = null;
+
+		const child = spawn(command, args, {
+			cwd: options.cwd,
+			stdio: ["ignore", "pipe", "pipe"],
+		});
+
+		const finish = (result: LintRunResult) => {
+			if (settled) {
+				return;
+			}
+			settled = true;
+			if (timer) {
+				clearTimeout(timer);
+				timer = null;
+			}
+			resolve(result);
+		};
+
+		const fail = (error: Error) => {
+			if (settled) {
+				return;
+			}
+			settled = true;
+			if (timer) {
+				clearTimeout(timer);
+				timer = null;
+			}
+			reject(error);
+		};
+
+		timer = setTimeout(() => {
+			timedOut = true;
+			child.kill();
+			finish({
+				stdout,
+				stderr,
+				exitCode: null,
+				timedOut,
+				cancelled,
 			});
-		}, 10);
+		}, options.settings.timeoutMs);
 
 		options.signal.addEventListener(
 			"abort",
 			() => {
-				clearTimeout(timer);
-				resolve({
-					stdout: "",
-					stderr: "",
+				cancelled = true;
+				child.kill();
+				finish({
+					stdout,
+					stderr,
 					exitCode: null,
-					timedOut: false,
-					cancelled: true,
+					timedOut,
+					cancelled,
 				});
 			},
 			{ once: true },
 		);
+
+		child.stdout.setEncoding("utf8");
+		child.stdout.on("data", (data: string) => {
+			stdout += data;
+		});
+		child.stderr.setEncoding("utf8");
+		child.stderr.on("data", (data: string) => {
+			stderr += data;
+		});
+
+		child.on("error", (error) => {
+			fail(error);
+		});
+
+		child.on("close", (exitCode) => {
+			finish({
+				stdout,
+				stderr,
+				exitCode,
+				timedOut,
+				cancelled,
+			});
+		});
 	});
+}
+
+let cachedCommandAvailability: { command: string; available: boolean } | null =
+	null;
+
+function buildArgs(options: RunTsqllintOptions): string[] {
+	const args: string[] = [];
+	const configPath = normalizeConfigPath(options.settings.configPath);
+	if (options.fix) {
+		args.push("--fix");
+	}
+	if (configPath) {
+		args.push("-c", configPath);
+	}
+	args.push(options.filePath);
+	return args;
+}
+
+async function resolveCommand(settings: TsqllintSettings): Promise<string> {
+	const configuredPath = normalizeExecutablePath(settings.path);
+	if (configuredPath) {
+		await assertPathExists(configuredPath);
+		return configuredPath;
+	}
+	const command = "tsqllint";
+	if (
+		cachedCommandAvailability &&
+		cachedCommandAvailability.command === command
+	) {
+		if (!cachedCommandAvailability.available) {
+			throw new Error(
+				"tsqllint not found. Set tsqllint.path or install tsqllint.",
+			);
+		}
+		return command;
+	}
+	const available = await checkCommandAvailable(command);
+	cachedCommandAvailability = { command, available };
+	if (!available) {
+		throw new Error(
+			"tsqllint not found. Set tsqllint.path or install tsqllint.",
+		);
+	}
+	return command;
+}
+
+async function assertPathExists(filePath: string): Promise<void> {
+	try {
+		const stat = await fs.stat(filePath);
+		if (!stat.isFile()) {
+			throw new Error(`tsqllint.path is not a file: ${filePath}`);
+		}
+	} catch (error) {
+		throw new Error(`tsqllint.path not found: ${filePath}`);
+	}
+}
+
+async function checkCommandAvailable(command: string): Promise<boolean> {
+	return new Promise((resolve) => {
+		const child = spawn(command, ["--version"], {
+			stdio: "ignore",
+		});
+		const timer = setTimeout(() => {
+			child.kill();
+			resolve(false);
+		}, 3000);
+		child.on("error", () => {
+			clearTimeout(timer);
+			resolve(false);
+		});
+		child.on("close", (code) => {
+			clearTimeout(timer);
+			resolve(code === 0);
+		});
+	});
+}
+
+function normalizeExecutablePath(value: string | undefined): string | null {
+	if (!value) {
+		return null;
+	}
+	const trimmed = value.trim();
+	if (!trimmed) {
+		return null;
+	}
+	return path.resolve(trimmed);
+}
+
+function normalizeConfigPath(value: string | undefined): string | null {
+	if (!value) {
+		return null;
+	}
+	const trimmed = value.trim();
+	if (!trimmed) {
+		return null;
+	}
+	return trimmed;
 }
