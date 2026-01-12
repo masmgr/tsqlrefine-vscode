@@ -1,8 +1,8 @@
-# 外部仕様書：tsqllint-vscode-lite（案）
+# 外部仕様書：tsqllint-lite（案）
 
 ## 0. 文書情報
 
-- 対象：VS Code 拡張 `tsqllint-vscode-lite`
+- 対象：VS Code 拡張 `tsqllint-lite`
 - 目的：外部ツール `tsqllint`（TSQLLint）を実行し、SQL の lint 結果を VS Code の Diagnostics として提示する
 - 前提：本書は `docs/requirement.md`（要件定義ドラフト）に基づく外部仕様（利用者・利用環境・外部I/F・振る舞い）を定義する
 
@@ -21,7 +21,7 @@
 
 - 対象：`.sql`
 - lint 実行：保存時（必須）、入力中（任意・debounce）
-- LSP：初期対象外（外部ツール実行＋stdout パースで実装）
+- 内部実装：LSP（Language Server Protocol）を採用し、診断生成は言語サーバー側で行う
 - ワークスペース全体の重い解析：初期対象外（基本はファイル単位）
 
 ---
@@ -54,7 +54,8 @@
 
 ### 3.1 VS Code UI 連携
 
-- Diagnostics：`tsqllint` の検出結果を `DiagnosticCollection` として登録し、下線・Problems・ホバーに反映する
+- Diagnostics：`tsqllint` の検出結果を Diagnostics として提示し、下線・Problems・ホバーに反映する
+  - 実装上は LSP の `textDocument/publishDiagnostics` により通知する
 
 ### 3.2 外部プロセス実行 I/F
 
@@ -65,11 +66,15 @@
   - 対象：対象 `.sql` ファイルのパス
   - 任意：`tsqllint.configPath` が指定されている場合のみ `-c <configPath>` を付与
 - 実行時カレントディレクトリ（cwd）
-  - ワークスペースルートがある場合：ワークスペースルート
+  - ワークスペースがある場合：対象ファイルを含むワークスペースフォルダ（なければ先頭）
   - ない場合：対象ファイルのディレクトリ
 - タイムアウト
   - 既定：10 秒
-  - 変更：設定で変更可能（設定キーは実装で確定）
+  - 変更：設定 `tsqllint.timeoutMs` で変更可能
+
+### 3.3 コマンド
+
+- 手動実行：コマンド `tsqllint-lite.run` により、アクティブな `.sql` ドキュメントに対して lint を実行する
 
 ---
 
@@ -148,8 +153,8 @@
 | `tsqllint.configPath` | string | なし | `tsqllint -c` に渡す config パス |
 | `tsqllint.runOnSave` | boolean | true | 保存時 lint を有効化 |
 | `tsqllint.runOnType` | boolean | false | 入力中 lint を有効化 |
-| `tsqllint.debounceMs` | number | （実装で確定） | 入力中 lint の debounce（ms） |
-| （TBD）タイムアウト設定 | number | 10000 | `tsqllint` 実行のタイムアウト（ms） |
+| `tsqllint.debounceMs` | number | 500 | 入力中 lint の debounce（ms） |
+| `tsqllint.timeoutMs` | number | 10000 | `tsqllint` 実行のタイムアウト（ms） |
 
 ---
 
