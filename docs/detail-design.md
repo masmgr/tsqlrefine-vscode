@@ -50,6 +50,7 @@ src/
 | `tsqllint.path` | string | なし | `tsqllint` 実行ファイルの明示パス |
 | `tsqllint.configPath` | string | なし | `tsqllint -c` に渡す config |
 | `tsqllint.runOnSave` | boolean | true | 保存時 lint |
+| `tsqllint.fixOnSave` | boolean | false | 保存時に `tsqllint --fix` を実行（保存済みファイルのみ） |
 | `tsqllint.runOnType` | boolean | false | 入力中 lint |
 | `tsqllint.debounceMs` | number | 500 | 入力中 lint の debounce |
 | `tsqllint.timeoutMs` | number | 10000 | 外部プロセスのタイムアウト |
@@ -74,6 +75,7 @@ src/
 
 - `onLanguage:sql`
 - `onCommand:tsqllint-lite.run`（手動実行）
+- `onCommand:tsqllint-lite.fix`（手動 fix）
 
 ### 4.2 初期化手順
 
@@ -96,6 +98,9 @@ src/
 - 手動 lint: `tsqllint/lintDocument`（request）
   - 入力: `{ uri: string }`
   - 出力: `{ ok: boolean; issues: number }`（UI 表示用途。Diagnostics は別途 publish）
+- 手動 fix: `tsqllint/fixDocument`（request）
+  - 入力: `{ uri: string }`
+  - 出力: `{ ok: boolean }`（fix 実行可否。Diagnostics は別途 publish）
 - クリア: `tsqllint/clearDiagnostics`（notification）
   - 入力: `{ uris: string[] }`
   - rename/delete などで古い URI を確実に消す目的。
@@ -110,8 +115,10 @@ src/
 ### 6.1 トリガ
 
 - 保存時: `didSave` を受けたら lint（`runOnSave=true` の場合）。
+- 保存時 fix: `didSave` を受けたら fix（`fixOnSave=true` の場合）。fix 後に lint し直して Diagnostics を更新する。
 - 入力中: `didChange` を受けたら debounce 後に lint（`runOnType=true` の場合）。
 - 手動: `tsqllint/lintDocument` を受けたら即 lint。
+- 手動 fix: `tsqllint/fixDocument` を受けたら `tsqllint --fix` を実行し、fix 後に lint し直す。
 
 ### 6.2 同時実行制御（URI 単位）
 
@@ -133,6 +140,7 @@ src/
 - 未保存（Untitled）または「変更が未保存で runOnType」:
   - `tsqllint` は stdin を受け取れないため、一時ファイルに書き出して lint し、終了後に削除する。
   - 一時ファイル運用時は、パースした `path` と元 URI のひも付け（出力の `path` が一時ファイルを指す問題）に注意する。
+- fix（`--fix`）は保存済みファイルのみを対象とする（未保存/一時ファイルに対して実行しても編集中の内容に反映できないため）。
 
 ---
 
@@ -146,6 +154,7 @@ src/
 - 引数:
   - 対象ファイルパス
   - `tsqllint.configPath` が指定されている場合のみ `-c <path>` を付与。
+  - fix 実行時は `--fix` を付与。
 - `cwd`:
   - ワークスペース（`workspaceFolders`）がある場合は、対象ファイルを含むフォルダ（なければ先頭）を優先する。
   - ワークスペースがない場合は、対象ファイルのディレクトリを使用する。

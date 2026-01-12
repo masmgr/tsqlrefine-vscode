@@ -78,6 +78,7 @@
 ### 3.3 コマンド
 
 - 手動実行：コマンド `tsqllint-lite.run` により、アクティブな `.sql` ドキュメントに対して lint を実行する
+- 手動 fix：コマンド `tsqllint-lite.fix` により、アクティブな `.sql` ドキュメントに対して `tsqllint --fix` を実行する（保存済みファイルのみ）
 
 ---
 
@@ -101,6 +102,12 @@
 
 - lint は多重起動しない（最大 1 実行）
 - 連続トリガはキュー化し、実行中に新規要求が来た場合は「最新 1 件」へ集約する
+
+#### 4.1.4 fix（任意）
+
+- 設定 `tsqllint.fixOnSave=true` の場合、保存を契機に `tsqllint --fix` を実行し、その後に lint を実行して Diagnostics を更新する
+- 手動 fix（`tsqllint-lite.fix`）でも同様に `--fix` 実行後に lint を行う
+- fix は保存済みファイルのみ対象（未保存/untitled は対象外）
 
 ### 4.2 実行結果の解釈（終了コード）
 
@@ -164,6 +171,7 @@ Linted {fileCount} files in {seconds} seconds
 | `tsqllint.path` | string | なし | `tsqllint` 実行ファイルの明示パス（最優先） |
 | `tsqllint.configPath` | string | なし | `tsqllint -c` に渡す config パス |
 | `tsqllint.runOnSave` | boolean | true | 保存時 lint を有効化 |
+| `tsqllint.fixOnSave` | boolean | false | 保存時に `tsqllint --fix` を実行（保存済みファイルのみ） |
 | `tsqllint.runOnType` | boolean | false | 入力中 lint を有効化 |
 | `tsqllint.debounceMs` | number | 500 | 入力中 lint の debounce（ms） |
 | `tsqllint.timeoutMs` | number | 10000 | `tsqllint` 実行のタイムアウト（ms） |

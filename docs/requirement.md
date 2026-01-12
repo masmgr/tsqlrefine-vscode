@@ -63,8 +63,10 @@
 ### 4.1 lint 実行トリガ
 
 - 基本：保存時 lint
+- 任意：保存時 fix（`tsqllint --fix`）
 - オプション：変更時 lint（debounce、例 300-800ms）
 - 手動実行：コマンド `tsqllint-lite.run`
+- 手動 fix：コマンド `tsqllint-lite.fix`
 - 同時実行制御：
   - 同一ファイル（URI）の lint は多重起動しない
   - 連続トリガは「最新のみ」へ集約し、必要なら前回実行を中断できること
@@ -95,6 +97,7 @@
   - `tsqllint.path`（任意：明示パス。最優先）
   - `tsqllint.configPath`（任意：`-c` で渡す）
   - `tsqllint.runOnSave`（default true）
+  - `tsqllint.fixOnSave`（default false：保存時に `--fix` を実行）
   - `tsqllint.runOnType`（default false）
   - `tsqllint.debounceMs`（default 500）
   - `tsqllint.timeoutMs`（default 10000）

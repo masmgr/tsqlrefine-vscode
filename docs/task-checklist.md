@@ -12,10 +12,12 @@
 - [x] Client syncs `tsqllint` settings; server refreshes on init/change.
 - [x] `runOnSave`, `runOnType`, `debounceMs`, `timeoutMs` drive behavior.
 - [ ] Use `tsqllint.path` and `tsqllint.configPath` in the runner.
+- [ ] Add `tsqllint.fixOnSave` setting (default false).
 
 ## 3. LSP interface
 - [x] Standard document notifications handled via `TextDocuments`.
 - [x] Custom request `tsqllint/lintDocument` returns `{ ok, issues }`.
+- [ ] Add custom request `tsqllint/fixDocument`.
 - [x] Custom notification `tsqllint/clearDiagnostics` clears per-URI.
 
 ## 4. Lint flow and concurrency
@@ -29,10 +31,12 @@
 - [ ] Use file path for saved documents.
 - [ ] Support unsaved/untitled via temp file (tsqllint does not accept stdin).
 - [ ] Map temp file paths back to original URI for diagnostics.
+- [ ] Restrict `--fix` to saved files (non-dirty).
 
 ## 6. External process execution (runTsqllint)
 - [ ] Spawn `tsqllint` using configured path or PATH fallback.
 - [ ] Append `-c <configPath>` when configured.
+- [ ] Append `--fix` when fixing.
 - [ ] Choose `cwd` by workspace folder or file directory.
 - [ ] Enforce timeout and propagate cancellation to the child process.
 - [ ] Return stdout/stderr/exitCode/timedOut/cancelled accurately.
@@ -53,6 +57,7 @@
 ## 9. Notifications and logging
 - [x] Warn on run failure and timeout.
 - [ ] Notify for missing `tsqllint`, config errors, or stderr conditions.
+- [ ] Notify after `--fix` run (e.g., show fixed count when available).
 - [ ] Route detailed logs to LSP output channel.
 
 ## 10. Tests
