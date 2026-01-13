@@ -66,3 +66,24 @@
 - [x] Expand unit coverage (severity variants, path forms, col edge cases).
 - [x] Integration test with fake CLI for `runTsqllint`.
 - [x] Extension test to verify Problems panel updates.
+- [x] Local-only E2E test: run real `tsqllint` binary if installed (skip when missing).
+- [ ] Extension test: `tsqllint-lite.run` updates diagnostics (works even when `runOnSave=false`).
+- [ ] Extension test: run-on-type (`runOnType=true`) runs on unsaved edits (temp file flow).
+- [ ] Extension test: fix flow (`tsqllint-lite.fix` or `fixOnSave=true`) runs `--fix` then re-lints (diagnostics refresh).
+- [ ] Extension test: delete/rename clears diagnostics via `tsqllint/clearDiagnostics` (old URI becomes empty).
+- [ ] Unit/integration tests for `runTsqllint`: timeout (`timedOut=true`) and abort (`cancelled=true`) paths.
+- [ ] Unit test for `parseOutput`: `targetPaths` allows mapping temp file output back to original URI.
+
+## 11. Release readiness (pre-publish)
+- [ ] Replace template `README.md` with real docs (commands, settings, usage, limitations).
+- [ ] Update `CHANGELOG.md` for `0.0.1` (initial release notes).
+- [ ] Run quality gates: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`.
+- [ ] Verify packaging metadata in `package.json` (e.g. `repository`, `publisher`, `keywords`, `icon`) if publishing.
+
+## 12. Architecture review (hardening)
+- [ ] Client readiness: use `client.onReady()` (not `client.start()` Promise) before sending requests/notifications.
+- [ ] Per-document debounce: base `debounceMs` on `getSettingsForDocument(uri)` (scopeUri override), not global `settings`.
+- [ ] Server factoring: split `server.ts` into scheduler/queue vs side-effects (temp files, runner, diagnostics, notifications) for testability.
+- [ ] Concurrency: replace `sleep` polling in `runLintWhenPossible` with a semaphore/awaitable queue.
+- [ ] Command availability cache: avoid permanent negative cache (add TTL or retry on next run / config change).
+- [ ] Parser robustness: decide tolerated stdout variants (missing trailing '.', extra severity, parentheses in file path) and adjust `parseOutput`/tests accordingly.
