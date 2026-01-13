@@ -37,7 +37,11 @@ connection.onInitialize((params) => {
 		[];
 	return {
 		capabilities: {
-			textDocumentSync: TextDocumentSyncKind.Incremental,
+			textDocumentSync: {
+				openClose: true,
+				change: TextDocumentSyncKind.Incremental,
+				save: { includeText: false },
+			},
 		},
 	};
 });
@@ -51,11 +55,7 @@ connection.onDidChangeConfiguration(async () => {
 });
 
 documents.onDidChangeContent((change) => {
-	if (!settings.runOnType) {
-		return;
-	}
-	const uri = change.document.uri;
-	requestLint(uri, "type", false, change.document.version);
+	void handleDidChangeContent(change.document);
 });
 
 documents.onDidOpen((change) => {
@@ -66,15 +66,7 @@ documents.onDidOpen((change) => {
 });
 
 documents.onDidSave((change) => {
-	const uri = change.document.uri;
-	savedVersionByUri.set(uri, change.document.version);
-	if (settings.fixOnSave) {
-		requestLint(uri, "save", true, change.document.version);
-		return;
-	}
-	if (settings.runOnSave) {
-		requestLint(uri, "save", false, change.document.version);
-	}
+	void handleDidSave(change.document);
 });
 
 documents.onDidClose((change) => {
@@ -123,14 +115,66 @@ connection.listen();
 
 async function refreshSettings(): Promise<void> {
 	const config =
-		(await connection.workspace.getConfiguration("tsqllint")) ?? {};
-	settings = {
+		(await connection.workspace.getConfiguration({
+			section: "tsqllint",
+		})) ?? {};
+	settings = normalizeSettings({
 		...defaultSettings,
 		...config,
-	};
-	if (settings.rangeMode !== "character" && settings.rangeMode !== "line") {
-		settings.rangeMode = "character";
+	});
+}
+
+async function handleDidChangeContent(document: TextDocument): Promise<void> {
+	try {
+		const docSettings = await getSettingsForDocument(document.uri);
+		if (!docSettings.runOnType) {
+			return;
+		}
+		requestLint(document.uri, "type", false, document.version);
+	} catch (error) {
+		connection.console.error(
+			`tsqllint: failed to react to change (${String(error)})`,
+		);
 	}
+}
+
+async function handleDidSave(document: TextDocument): Promise<void> {
+	try {
+		const uri = document.uri;
+		savedVersionByUri.set(uri, document.version);
+		const docSettings = await getSettingsForDocument(uri);
+		if (docSettings.fixOnSave) {
+			requestLint(uri, "save", true, document.version);
+			return;
+		}
+		if (docSettings.runOnSave) {
+			requestLint(uri, "save", false, document.version);
+		}
+	} catch (error) {
+		connection.console.error(
+			`tsqllint: failed to react to save (${String(error)})`,
+		);
+	}
+}
+
+async function getSettingsForDocument(uri: string): Promise<TsqllintSettings> {
+	const scopedConfig = ((await connection.workspace.getConfiguration({
+		scopeUri: uri,
+		section: "tsqllint",
+	})) ?? {}) as Partial<TsqllintSettings>;
+	return normalizeSettings({
+		...defaultSettings,
+		...settings,
+		...scopedConfig,
+	});
+}
+
+function normalizeSettings(value: TsqllintSettings): TsqllintSettings {
+	const normalized = { ...value };
+	if (normalized.rangeMode !== "character" && normalized.rangeMode !== "line") {
+		normalized.rangeMode = "character";
+	}
+	return normalized;
 }
 
 async function requestLint(
@@ -300,12 +344,14 @@ async function runLintNow(
 		targetFilePath = tempInfo.filePath;
 	}
 
+	const documentSettings = await getSettingsForDocument(uri);
+
 	let result: LintRunResult;
 	try {
 		result = await runTsqllint({
 			filePath: targetFilePath,
 			cwd,
-			settings,
+			settings: documentSettings,
 			signal: controller.signal,
 			fix,
 		});
@@ -349,7 +395,7 @@ async function runLintNow(
 		uri,
 		cwd,
 		lines: document.getText().split(/\r?\n/),
-		rangeMode: settings.rangeMode,
+		rangeMode: documentSettings.rangeMode,
 		...(tempInfo ? { targetPaths: [tempInfo.filePath] } : {}),
 	});
 

@@ -1,3 +1,5 @@
 {
-	"tsqllint.fixOnSave": false
+	"tsqllint.fixOnSave": false,
+	"tsqllint.path": null,
+	"tsqllint.runOnSave": null
 }

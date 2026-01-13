@@ -5,11 +5,15 @@ import { createLanguageClient } from "./client/client";
 import type { LanguageClient } from "vscode-languageclient/node";
 
 let client: LanguageClient | undefined;
-let clientStart: Promise<void> | undefined;
+export let clientReady: Promise<void> | undefined;
 
-export function activate(context: vscode.ExtensionContext) {
+export type TsqllintLiteApi = {
+	clientReady: Promise<void>;
+};
+
+export function activate(context: vscode.ExtensionContext): TsqllintLiteApi {
 	client = createLanguageClient(context);
-	clientStart = client.start();
+	clientReady = client.start();
 	context.subscriptions.push({
 		dispose: () => {
 			void client?.stop();
@@ -23,8 +27,8 @@ export function activate(context: vscode.ExtensionContext) {
 			if (!activeEditor) {
 				return;
 			}
-			if (clientStart) {
-				await clientStart;
+			if (clientReady) {
+				await clientReady;
 			}
 			await client?.sendRequest("tsqllint/lintDocument", {
 				uri: activeEditor.document.uri.toString(),
@@ -39,8 +43,8 @@ export function activate(context: vscode.ExtensionContext) {
 			if (!activeEditor) {
 				return;
 			}
-			if (clientStart) {
-				await clientStart;
+			if (clientReady) {
+				await clientReady;
 			}
 			await client?.sendRequest("tsqllint/fixDocument", {
 				uri: activeEditor.document.uri.toString(),
@@ -54,8 +58,8 @@ export function activate(context: vscode.ExtensionContext) {
 			if (!client) {
 				return;
 			}
-			if (clientStart) {
-				await clientStart;
+			if (clientReady) {
+				await clientReady;
 			}
 			const uris = event.files.map((file) => file.toString());
 			client.sendNotification("tsqllint/clearDiagnostics", { uris });
@@ -64,17 +68,20 @@ export function activate(context: vscode.ExtensionContext) {
 			if (!client) {
 				return;
 			}
-			if (clientStart) {
-				await clientStart;
+			if (clientReady) {
+				await clientReady;
 			}
 			const uris = event.files.map((file) => file.oldUri.toString());
 			client.sendNotification("tsqllint/clearDiagnostics", { uris });
 		}),
 	);
+
+	return { clientReady };
 }
 
 export async function deactivate() {
 	if (client) {
 		await client.stop();
 	}
+	clientReady = undefined;
 }

@@ -1,24 +1,36 @@
 import * as assert from "node:assert";
 import * as fs from "node:fs/promises";
-import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { createFakeCli } from "./helpers/fakeCli";
 
 suite("Extension Test Suite", () => {
-	test.skip("updates diagnostics after lint run", async function () {
+	test("updates diagnostics after lint run", async function () {
 		this.timeout(20000);
+
+		const extension = vscode.extensions.all.find(
+			(ext) => ext.packageJSON?.name === "tsqllint-lite",
+		);
+		assert.ok(extension, "Extension tsqllint-lite not found");
+		const api = (await extension.activate()) as { clientReady?: Promise<void> };
+		const clientReady = api.clientReady;
+		if (clientReady) {
+			await clientReady;
+		}
+
 		const fakeCli = await createFakeCli(`
 const args = process.argv.slice(2);
 const filePath = args[args.length - 1] || "";
 process.stdout.write(\`\${filePath}(1,1): error FakeRule : Fake issue.\`);
 `);
+
+		const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
+		assert.ok(workspaceRoot, "No workspace folder available for tests");
 		const tempDir = await fs.mkdtemp(
-			path.join(os.tmpdir(), "tsqllint-workspace-"),
+			path.join(workspaceRoot.fsPath, "tsqllint-workspace-"),
 		);
-		const filePath = path.join(tempDir, "query.sql");
-		await fs.writeFile(filePath, "select 1;", "utf8");
-		const documentUri = vscode.Uri.file(filePath);
+		const documentUri = vscode.Uri.file(path.join(tempDir, "query.sql"));
+		await fs.writeFile(documentUri.fsPath, "select 1;", "utf8");
 
 		const config = vscode.workspace.getConfiguration("tsqllint");
 		const previousPath = config.inspect<string>("path")?.workspaceValue;
@@ -43,14 +55,21 @@ process.stdout.write(\`\${filePath}(1,1): error FakeRule : Fake issue.\`);
 				false,
 				vscode.ConfigurationTarget.Workspace,
 			);
-			await sleep(100);
 
-			const document = await vscode.workspace.openTextDocument(documentUri);
-			await vscode.languages.setTextDocumentLanguage(document, "sql");
-			await vscode.window.showTextDocument(document);
+			let document = await vscode.workspace.openTextDocument(documentUri);
+			document = await vscode.languages.setTextDocumentLanguage(
+				document,
+				"sql",
+			);
+			const editor = await vscode.window.showTextDocument(document, {
+				preview: false,
+			});
+			await editor.edit((builder) => {
+				builder.insert(new vscode.Position(0, 0), "-- test\n");
+			});
 			await document.save();
 
-			const diagnostics = await waitForDiagnostics(document.uri, 1);
+			const diagnostics = await waitForDiagnostics(document.uri, 1, 10000);
 			const match = diagnostics.find(
 				(diag) => diag.source === "tsqllint" && diag.code === "FakeRule",
 			);
@@ -59,17 +78,17 @@ process.stdout.write(\`\${filePath}(1,1): error FakeRule : Fake issue.\`);
 		} finally {
 			await config.update(
 				"path",
-				previousPath,
+				previousPath ?? null,
 				vscode.ConfigurationTarget.Workspace,
 			);
 			await config.update(
 				"runOnSave",
-				previousRunOnSave,
+				previousRunOnSave ?? null,
 				vscode.ConfigurationTarget.Workspace,
 			);
 			await config.update(
 				"fixOnSave",
-				previousFixOnSave,
+				previousFixOnSave ?? null,
 				vscode.ConfigurationTarget.Workspace,
 			);
 			await vscode.commands.executeCommand("workbench.action.closeAllEditors");
