@@ -12,10 +12,12 @@ import { URI } from "vscode-uri";
 import { defaultSettings, type TsqllintSettings } from "./config/settings";
 import { parseOutput } from "./lint/parseOutput";
 import { runTsqllint } from "./lint/runTsqllint";
+import {
+	LintScheduler,
+	type LintReason,
+	type PendingLint,
+} from "./lint/scheduler";
 import type { LintRunResult } from "./lint/types";
-
-type LintReason = "save" | "type" | "manual";
-type PendingLint = { reason: LintReason; version: number | null; fix: boolean };
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -24,12 +26,16 @@ let workspaceFolders: string[] = [];
 let settings: TsqllintSettings = defaultSettings;
 
 const inFlightByUri = new Map<string, AbortController>();
-const pendingByUri = new Map<string, PendingLint>();
-const debounceTimerByUri = new Map<string, NodeJS.Timeout>();
 const savedVersionByUri = new Map<string, number>();
-const queuedUris: string[] = [];
 const maxConcurrentRuns = 4;
-let activeRuns = 0;
+const scheduler = new LintScheduler({
+	maxConcurrentRuns,
+	getDocumentVersion: (uri) => {
+		const document = documents.get(uri);
+		return document ? document.version : null;
+	},
+	runLint: (uri, pending) => runLintWithCancel(uri, pending),
+});
 
 connection.onInitialize((params) => {
 	workspaceFolders =
@@ -71,11 +77,9 @@ documents.onDidSave((change) => {
 
 documents.onDidClose((change) => {
 	const uri = change.document.uri;
-	clearDebounce(uri);
+	scheduler.clear(uri);
 	cancelInFlight(uri);
-	pendingByUri.delete(uri);
 	savedVersionByUri.delete(uri);
-	removeFromQueue(uri);
 	connection.sendDiagnostics({ uri, diagnostics: [] });
 });
 
@@ -100,11 +104,9 @@ connection.onNotification(
 	"tsqllint/clearDiagnostics",
 	(params: { uris: string[] }) => {
 		for (const uri of params.uris) {
-			clearDebounce(uri);
+			scheduler.clear(uri);
 			cancelInFlight(uri);
-			pendingByUri.delete(uri);
 			savedVersionByUri.delete(uri);
-			removeFromQueue(uri);
 			connection.sendDiagnostics({ uri, diagnostics: [] });
 		}
 	},
@@ -130,7 +132,13 @@ async function handleDidChangeContent(document: TextDocument): Promise<void> {
 		if (!docSettings.runOnType) {
 			return;
 		}
-		requestLint(document.uri, "type", false, document.version);
+		requestLint(
+			document.uri,
+			"type",
+			false,
+			document.version,
+			docSettings.debounceMs,
+		);
 	} catch (error) {
 		connection.console.error(
 			`tsqllint: failed to react to change (${String(error)})`,
@@ -182,39 +190,20 @@ async function requestLint(
 	reason: LintReason,
 	fix: boolean,
 	version: number | null,
+	debounceMs?: number,
 ): Promise<number> {
 	const document = documents.get(uri);
 	if (!document) {
 		return 0;
 	}
 	const finalVersion = version ?? document.version;
-	pendingByUri.set(uri, { reason, version: finalVersion, fix });
-	if (reason === "manual") {
-		return await runLintWhenPossible(uri);
-	}
-	scheduleLint(uri, reason);
-	return 0;
-}
-
-function scheduleLint(uri: string, reason: LintReason): void {
-	clearDebounce(uri);
-	if (reason !== "type") {
-		void runLintIfReady(uri);
-		return;
-	}
-	const timer = setTimeout(() => {
-		debounceTimerByUri.delete(uri);
-		void runLintIfReady(uri);
-	}, settings.debounceMs);
-	debounceTimerByUri.set(uri, timer);
-}
-
-function clearDebounce(uri: string): void {
-	const timer = debounceTimerByUri.get(uri);
-	if (timer) {
-		clearTimeout(timer);
-		debounceTimerByUri.delete(uri);
-	}
+	return await scheduler.requestLint(
+		uri,
+		reason,
+		fix,
+		finalVersion,
+		debounceMs,
+	);
 }
 
 function cancelInFlight(uri: string): void {
@@ -225,90 +214,12 @@ function cancelInFlight(uri: string): void {
 	}
 }
 
-async function runLintIfReady(uri: string): Promise<void> {
-	clearDebounce(uri);
+async function runLintWithCancel(
+	uri: string,
+	pending: PendingLint,
+): Promise<number> {
 	cancelInFlight(uri);
-
-	if (activeRuns >= maxConcurrentRuns) {
-		queueUri(uri);
-		return;
-	}
-	const pending = pendingByUri.get(uri);
-	if (!pending) {
-		return;
-	}
-	pendingByUri.delete(uri);
-
-	const document = documents.get(uri);
-	if (!document) {
-		return;
-	}
-	if (pending.version !== null && pending.version !== document.version) {
-		queueUri(uri);
-		return;
-	}
-
-	activeRuns += 1;
-	try {
-		await runLintNow(uri, pending.reason, pending.fix);
-	} finally {
-		activeRuns -= 1;
-		void drainQueue();
-	}
-}
-
-async function runLintWhenPossible(uri: string): Promise<number> {
-	clearDebounce(uri);
-	cancelInFlight(uri);
-	removeFromQueue(uri);
-	while (activeRuns >= maxConcurrentRuns) {
-		await sleep(25);
-	}
-	const pending = pendingByUri.get(uri);
-	if (!pending) {
-		return 0;
-	}
-	pendingByUri.delete(uri);
-	const document = documents.get(uri);
-	if (!document) {
-		return 0;
-	}
-	if (pending.version !== document.version) {
-		pending.version = document.version;
-	}
-	activeRuns += 1;
-	try {
-		return await runLintNow(uri, pending.reason, pending.fix);
-	} finally {
-		activeRuns -= 1;
-		void drainQueue();
-	}
-}
-
-function queueUri(uri: string): void {
-	if (!queuedUris.includes(uri)) {
-		queuedUris.push(uri);
-	}
-}
-
-function removeFromQueue(uri: string): void {
-	const index = queuedUris.indexOf(uri);
-	if (index >= 0) {
-		queuedUris.splice(index, 1);
-	}
-}
-
-async function drainQueue(): Promise<void> {
-	while (activeRuns < maxConcurrentRuns && queuedUris.length > 0) {
-		const nextUri = queuedUris.shift();
-		if (!nextUri) {
-			continue;
-		}
-		if (!pendingByUri.has(nextUri)) {
-			continue;
-		}
-		await runLintIfReady(nextUri);
-	}
+	return await runLintNow(uri, pending.reason, pending.fix);
 }
 
 async function runLintNow(
@@ -492,10 +403,4 @@ function firstLine(text: string): string {
 		return text;
 	}
 	return text.slice(0, index);
-}
-
-function sleep(ms: number): Promise<void> {
-	return new Promise((resolve) => {
-		setTimeout(resolve, ms);
-	});
 }

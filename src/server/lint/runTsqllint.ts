@@ -119,8 +119,12 @@ export async function runTsqllint(
 	});
 }
 
-let cachedCommandAvailability: { command: string; available: boolean } | null =
-	null;
+const commandCacheTtlMs = 30000;
+let cachedCommandAvailability: {
+	command: string;
+	available: boolean;
+	checkedAt: number;
+} | null = null;
 
 function resolveSpawn(
 	command: string,
@@ -162,15 +166,19 @@ async function resolveCommand(settings: TsqllintSettings): Promise<string> {
 		cachedCommandAvailability &&
 		cachedCommandAvailability.command === command
 	) {
-		if (!cachedCommandAvailability.available) {
+		const isFresh =
+			Date.now() - cachedCommandAvailability.checkedAt < commandCacheTtlMs;
+		if (!cachedCommandAvailability.available && isFresh) {
 			throw new Error(
 				"tsqllint not found. Set tsqllint.path or install tsqllint.",
 			);
 		}
-		return command;
+		if (cachedCommandAvailability.available) {
+			return command;
+		}
 	}
 	const available = await checkCommandAvailable(command);
-	cachedCommandAvailability = { command, available };
+	cachedCommandAvailability = { command, available, checkedAt: Date.now() };
 	if (!available) {
 		throw new Error(
 			"tsqllint not found. Set tsqllint.path or install tsqllint.",

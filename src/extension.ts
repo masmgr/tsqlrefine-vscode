@@ -5,7 +5,7 @@ import { createLanguageClient } from "./client/client";
 import type { LanguageClient } from "vscode-languageclient/node";
 
 let client: LanguageClient | undefined;
-export let clientReady: Promise<void> | undefined;
+export let clientReady: Promise<void> = Promise.resolve();
 
 export type TsqllintLiteApi = {
 	clientReady: Promise<void>;
@@ -13,7 +13,9 @@ export type TsqllintLiteApi = {
 
 export function activate(context: vscode.ExtensionContext): TsqllintLiteApi {
 	client = createLanguageClient(context);
-	clientReady = client.start();
+	const startPromise = client.start();
+	const maybeReady = (client as { onReady?: () => Promise<void> }).onReady;
+	clientReady = typeof maybeReady === "function" ? maybeReady() : startPromise;
 	context.subscriptions.push({
 		dispose: () => {
 			void client?.stop();
@@ -83,5 +85,5 @@ export async function deactivate() {
 	if (client) {
 		await client.stop();
 	}
-	clientReady = undefined;
+	clientReady = Promise.resolve();
 }

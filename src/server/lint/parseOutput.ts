@@ -6,7 +6,7 @@ import {
 import { URI } from "vscode-uri";
 
 const pattern =
-	/^(?<file>.+)\((?<line>\d+),(?<col>\d+)\): (?<severity>error|warning) (?<ruleName>[^ ]+) : (?<message>.+)\.$/;
+	/^(?<file>.+)\((?<line>\d+),(?<col>\d+)\): (?<details>.+) : (?<message>.+?)(?:\.)?$/i;
 
 type ParseOutputOptions = {
 	stdout: string;
@@ -58,8 +58,7 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 					file: string;
 					line: string;
 					col: string;
-					severity: string;
-					ruleName: string;
+					details: string;
 					message: string;
 			  }
 			| undefined;
@@ -78,10 +77,19 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 
 		const rawLine = groups.line;
 		const rawCol = groups.col;
-		const rawSeverity = groups.severity;
-		const rawRule = groups.ruleName;
+		const rawDetails = groups.details;
 		const rawMessage = groups.message;
-		if (!rawLine || !rawCol || !rawSeverity || !rawRule || !rawMessage) {
+		if (!rawLine || !rawCol || !rawDetails || !rawMessage) {
+			continue;
+		}
+
+		const parts = rawDetails.trim().split(/\s+/);
+		if (parts.length < 2) {
+			continue;
+		}
+		const rawSeverity = parts[0];
+		const rawRule = parts[parts.length - 1];
+		if (!rawSeverity || !rawRule) {
 			continue;
 		}
 

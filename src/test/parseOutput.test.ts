@@ -131,4 +131,36 @@ suite("parseOutput", () => {
 		assert.strictEqual(diag.code, "RuleZ");
 		assert.strictEqual(diag.message, "Temp hit");
 	});
+
+	test("allows missing trailing period and extra severity tokens", () => {
+		const cwd = path.resolve("workspace");
+		const filePath = path.join(cwd, "query.sql");
+		const uri = URI.file(filePath).toString();
+		const stdout = "query.sql(1,1): warning style RuleX : Heads up";
+		const lines = ["select 1;"];
+
+		const diagnostics = parseOutput({ stdout, uri, cwd, lines });
+
+		assert.strictEqual(diagnostics.length, 1);
+		const diag = diagnostics[0];
+		assert.ok(diag);
+		assert.strictEqual(diag.severity, DiagnosticSeverity.Warning);
+		assert.strictEqual(diag.code, "RuleX");
+	});
+
+	test("handles file paths with parentheses", () => {
+		const cwd = path.resolve("workspace");
+		const filePath = path.join(cwd, "query(1).sql");
+		const uri = URI.file(filePath).toString();
+		const stdout = `${filePath}(3,2): error RuleP : Paren path.`;
+		const lines = ["select 1;", "select 2;", "select 3;"];
+
+		const diagnostics = parseOutput({ stdout, uri, cwd, lines });
+
+		assert.strictEqual(diagnostics.length, 1);
+		const diag = diagnostics[0];
+		assert.ok(diag);
+		assert.strictEqual(diag.severity, DiagnosticSeverity.Error);
+		assert.strictEqual(diag.code, "RuleP");
+	});
 });
