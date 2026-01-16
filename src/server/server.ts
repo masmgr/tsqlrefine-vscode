@@ -81,6 +81,11 @@ documents.onDidClose((change) => {
 	cancelInFlight(uri);
 	savedVersionByUri.delete(uri);
 	connection.sendDiagnostics({ uri, diagnostics: [] });
+	connection.sendNotification('tsqllint/diagnosticsCount', {
+		uri,
+		errorCount: 0,
+		warningCount: 0,
+	});
 });
 
 connection.onRequest(
@@ -108,6 +113,11 @@ connection.onNotification(
 			cancelInFlight(uri);
 			savedVersionByUri.delete(uri);
 			connection.sendDiagnostics({ uri, diagnostics: [] });
+			connection.sendNotification('tsqllint/diagnosticsCount', {
+				uri,
+				errorCount: 0,
+				warningCount: 0,
+			});
 		}
 	},
 );
@@ -270,6 +280,11 @@ async function runLintNow(
 		inFlightByUri.delete(uri);
 		await notifyRunFailure(error);
 		connection.sendDiagnostics({ uri, diagnostics: [] });
+		connection.sendNotification('tsqllint/diagnosticsCount', {
+			uri,
+			errorCount: 0,
+			warningCount: 0,
+		});
 		await cleanupTemp(tempInfo);
 		return -1;
 	}
@@ -282,6 +297,11 @@ async function runLintNow(
 		await connection.window.showWarningMessage("tsqllint: lint timed out.");
 		connection.console.warn("tsqllint: lint timed out.");
 		connection.sendDiagnostics({ uri, diagnostics: [] });
+		connection.sendNotification('tsqllint/diagnosticsCount', {
+			uri,
+			errorCount: 0,
+			warningCount: 0,
+		});
 		await cleanupTemp(tempInfo);
 		return -1;
 	}
@@ -311,6 +331,16 @@ async function runLintNow(
 	});
 
 	connection.sendDiagnostics({ uri, diagnostics });
+
+	// Send diagnostic count to client for status bar update
+	const errorCount = diagnostics.filter(d => d.severity === 1).length;
+	const warningCount = diagnostics.filter(d => d.severity === 2).length;
+	connection.sendNotification('tsqllint/diagnosticsCount', {
+		uri,
+		errorCount,
+		warningCount,
+	});
+
 	await cleanupTemp(tempInfo);
 	return diagnostics.length;
 }
