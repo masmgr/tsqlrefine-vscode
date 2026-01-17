@@ -67,7 +67,9 @@ process.stdout.write(\`\${filePath}(1,1): error FakeRule : Fake issue.\`);
 			}
 			await vscode.commands.executeCommand("workbench.action.closeAllEditors");
 			await fakeCli.cleanup();
-			await sleep(100);
+			await sleep(200);
+			await cleanupWorkspace();
+			await sleep(200);
 			await removeDir(tempDir);
 		}
 	});
@@ -125,7 +127,9 @@ process.stdout.write(\`\${filePath}(1,1): error ManualRule : Manual issue.\`);
 			}
 			await vscode.commands.executeCommand("workbench.action.closeAllEditors");
 			await fakeCli.cleanup();
-			await sleep(100);
+			await sleep(200);
+			await cleanupWorkspace();
+			await sleep(200);
 			await removeDir(tempDir);
 		}
 	});
@@ -188,7 +192,9 @@ process.stdout.write(\`\${filePath}(1,1): warning TypeRule : Typed issue.\`);
 			}
 			await vscode.commands.executeCommand("workbench.action.closeAllEditors");
 			await fakeCli.cleanup();
-			await sleep(100);
+			await sleep(200);
+			await cleanupWorkspace();
+			await sleep(200);
 			await removeDir(tempDir);
 		}
 	});
@@ -262,7 +268,9 @@ process.stdout.write(\`\${filePath}(1,1): error RenameRule : Rename issue.\`);
 			}
 			await vscode.commands.executeCommand("workbench.action.closeAllEditors");
 			await fakeCli.cleanup();
-			await sleep(100);
+			await sleep(200);
+			await cleanupWorkspace();
+			await sleep(200);
 			await removeDir(tempDir);
 		}
 	});
@@ -333,7 +341,9 @@ process.stdout.write(\`\${filePath}(1,1): error DeleteRule : Delete issue.\`);
 			}
 			await vscode.commands.executeCommand("workbench.action.closeAllEditors");
 			await fakeCli.cleanup();
-			await sleep(100);
+			await sleep(200);
+			await cleanupWorkspace();
+			await sleep(200);
 			await removeDir(tempDir);
 		}
 	});
@@ -397,20 +407,6 @@ async function restoreConfig(
 			vscode.ConfigurationTarget.Workspace,
 		);
 	}
-	// Clean up workspace settings file if it's empty or no longer needed
-	const workspaceRoot = vscode.workspace.workspaceFolders?.[0];
-	if (workspaceRoot) {
-		const settingsPath = vscode.Uri.joinPath(
-			workspaceRoot.uri,
-			".vscode",
-			"settings.json",
-		);
-		try {
-			await vscode.workspace.fs.delete(settingsPath, { recursive: false });
-		} catch {
-			// Ignore errors if file doesn't exist
-		}
-	}
 }
 
 async function activateExtension(): Promise<void> {
@@ -426,22 +422,43 @@ async function activateExtension(): Promise<void> {
 }
 
 async function removeDir(dirPath: string): Promise<void> {
-	await fs.rm(dirPath, {
-		recursive: true,
-		force: true,
-		maxRetries: 30,
-		retryDelay: 100,
-	});
+	try {
+		await fs.rm(dirPath, {
+			recursive: true,
+			force: true,
+			maxRetries: 30,
+			retryDelay: 100,
+		});
+	} catch (error) {
+		// Log error but don't throw, as directory might not exist or be already cleaned up
+		console.error(`Failed to remove directory ${dirPath}:`, error);
+	}
 }
 
 async function cleanupWorkspace(): Promise<void> {
 	const workspaceRoot = vscode.workspace.workspaceFolders?.[0];
 	if (workspaceRoot) {
+		const workspacePath = workspaceRoot.uri.fsPath;
+
+		// Clean up .vscode directory
 		const vscodeDir = vscode.Uri.joinPath(workspaceRoot.uri, ".vscode");
 		try {
 			await vscode.workspace.fs.delete(vscodeDir, { recursive: true });
 		} catch {
 			// Ignore errors if directory doesn't exist
+		}
+
+		// Clean up any remaining tsqllint-workspace-* directories
+		try {
+			const entries = await fs.readdir(workspacePath);
+			for (const entry of entries) {
+				if (entry.startsWith("tsqllint-workspace-")) {
+					const fullPath = path.join(workspacePath, entry);
+					await removeDir(fullPath);
+				}
+			}
+		} catch {
+			// Ignore errors if workspace root doesn't exist
 		}
 	}
 }
