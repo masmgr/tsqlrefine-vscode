@@ -3,11 +3,16 @@
 	"displayName": "tsqllint-lite",
 	"description": "TSQLLint Check Tool",
 	"version": "0.0.1",
+	"publisher": "tsqllint-lite",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/masmgr/tsqllint-vscode-lite.git"
+	},
 	"engines": {
 		"vscode": "^1.108.1"
 	},
 	"categories": ["Other"],
-	"activationEvents": ["onLanguage:sql", "onCommand:tsqllint-lite.run"],
 	"main": "./out/extension.js",
 	"contributes": {
 		"commands": [
@@ -63,6 +68,7 @@
 		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"build": "tsc -p tsconfig.json",
 		"vscode:prepublish": "npm run build",
+		"package": "vsce package",
 		"lint": "biome lint .",
 		"format": "biome format --write .",
 		"test": "vscode-test",
@@ -76,7 +82,8 @@
 		"@biomejs/biome": "^1.9.4",
 		"typescript": "^5.9.3",
 		"@vscode/test-cli": "^0.0.12",
-		"@vscode/test-electron": "^2.5.2"
+		"@vscode/test-electron": "^2.5.2",
+		"@vscode/vsce": "^3.2.1"
 	},
 	"dependencies": {
 		"vscode-languageclient": "^9.0.1",

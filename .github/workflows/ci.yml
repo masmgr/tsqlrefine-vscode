@@ -24,3 +24,10 @@ jobs:
       - run: npm test
         if: runner.os != 'Linux'
       - run: npm run build
+      - run: npm run package
+        if: runner.os == 'Linux'
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: vsix-package
+          path: '*.vsix'
