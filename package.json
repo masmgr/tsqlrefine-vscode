@@ -1,7 +1,7 @@
 {
 	"name": "tsqllint-lite",
-	"displayName": "tsqllint-lite",
-	"description": "TSQLLint Check Tool",
+	"displayName": "TSQLLint Lite",
+	"description": "Lightweight T-SQL linter integration for VS Code using TSQLLint",
 	"version": "0.0.1",
 	"publisher": "tsqllint-lite",
 	"license": "MIT",
@@ -9,11 +9,31 @@
 		"type": "git",
 		"url": "https://github.com/masmgr/tsqllint-vscode-lite.git"
 	},
+	"bugs": {
+		"url": "https://github.com/masmgr/tsqllint-vscode-lite/issues"
+	},
+	"homepage": "https://github.com/masmgr/tsqllint-vscode-lite#readme",
 	"engines": {
 		"vscode": "^1.108.1"
 	},
 	"categories": [
-		"Other"
+		"Linters",
+		"Programming Languages"
+	],
+	"keywords": [
+		"tsqllint",
+		"t-sql",
+		"sql",
+		"linter",
+		"mssql",
+		"microsoft sql server",
+		"transact-sql",
+		"sql server",
+		"database",
+		"lint"
+	],
+	"activationEvents": [
+		"onLanguage:sql"
 	],
 	"main": "./dist/extension.js",
 	"contributes": {
