@@ -1,0 +1,14 @@
+{
+	"all": true,
+	"include": ["out/server/**/*.js", "out/client/**/*.js"],
+	"exclude": ["out/test/**", "out/**/*.test.js", "out/test/helpers/**"],
+	"reporter": ["text", "text-summary", "lcov", "html"],
+	"check-coverage": true,
+	"lines": 50,
+	"functions": 80,
+	"branches": 75,
+	"statements": 50,
+	"skip-full": false,
+	"temp-directory": ".nyc_output",
+	"report-dir": "coverage"
+}

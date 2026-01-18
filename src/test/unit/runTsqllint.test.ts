@@ -112,4 +112,100 @@ setTimeout(() => {
 			await rmWithRetry(tempDir);
 		}
 	});
+
+	suite("Error scenarios", () => {
+		test("handles stderr output as part of result", async () => {
+			const fakeCli = await createFakeCli(`
+process.stderr.write("warning: deprecated option\\n");
+process.stdout.write("file.sql(1,1): error rule : message");
+`);
+			const tempDir = await fs.mkdtemp(
+				path.join(os.tmpdir(), "tsqllint-test-"),
+			);
+			const filePath = path.join(tempDir, "query.sql");
+			await fs.writeFile(filePath, "select 1;", "utf8");
+
+			try {
+				const result = await runTsqllint({
+					filePath,
+					cwd: tempDir,
+					settings: {
+						...defaultSettings,
+						path: fakeCli.commandPath,
+						timeoutMs: 2000,
+					},
+					signal: new AbortController().signal,
+				});
+
+				assert.ok(result.stderr.includes("warning"));
+				assert.ok(result.stdout.includes("error"));
+			} finally {
+				await fakeCli.cleanup();
+				await rmWithRetry(tempDir);
+			}
+		});
+
+		test("handles CLI exit with non-zero code", async () => {
+			const fakeCli = await createFakeCli(`
+process.stdout.write("error occurred");
+process.exit(1);
+`);
+			const tempDir = await fs.mkdtemp(
+				path.join(os.tmpdir(), "tsqllint-test-"),
+			);
+			const filePath = path.join(tempDir, "query.sql");
+			await fs.writeFile(filePath, "select 1;", "utf8");
+
+			try {
+				const result = await runTsqllint({
+					filePath,
+					cwd: tempDir,
+					settings: {
+						...defaultSettings,
+						path: fakeCli.commandPath,
+						timeoutMs: 2000,
+					},
+					signal: new AbortController().signal,
+				});
+
+				assert.strictEqual(result.exitCode, 1);
+				assert.ok(result.stdout.includes("error occurred"));
+			} finally {
+				await fakeCli.cleanup();
+				await rmWithRetry(tempDir);
+			}
+		});
+
+		test("handles empty stdout and stderr", async () => {
+			const fakeCli = await createFakeCli(`
+// Exit immediately with no output
+process.exit(0);
+`);
+			const tempDir = await fs.mkdtemp(
+				path.join(os.tmpdir(), "tsqllint-test-"),
+			);
+			const filePath = path.join(tempDir, "query.sql");
+			await fs.writeFile(filePath, "select 1;", "utf8");
+
+			try {
+				const result = await runTsqllint({
+					filePath,
+					cwd: tempDir,
+					settings: {
+						...defaultSettings,
+						path: fakeCli.commandPath,
+						timeoutMs: 2000,
+					},
+					signal: new AbortController().signal,
+				});
+
+				assert.strictEqual(result.stdout, "");
+				assert.strictEqual(result.stderr, "");
+				assert.strictEqual(result.exitCode, 0);
+			} finally {
+				await fakeCli.cleanup();
+				await rmWithRetry(tempDir);
+			}
+		});
+	});
 });

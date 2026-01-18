@@ -162,4 +162,59 @@ suite("parseOutput", () => {
 		assert.strictEqual(diag.severity, DiagnosticSeverity.Error);
 		assert.strictEqual(diag.code, "RuleP");
 	});
+
+	suite("Error scenarios", () => {
+		test("handles empty stdout gracefully", () => {
+			const filePath = path.resolve("workspace", "query.sql");
+			const uri = URI.file(filePath).toString();
+			const stdout = "";
+			const lines = ["select 1;"];
+
+			const diagnostics = parseOutput({ stdout, uri, cwd: null, lines });
+
+			assert.strictEqual(diagnostics.length, 0);
+		});
+
+		test("handles malformed line (missing colon)", () => {
+			const filePath = path.resolve("workspace", "query.sql");
+			const uri = URI.file(filePath).toString();
+			const stdout = "query.sql(1,1) error RuleX Invalid format";
+			const lines = ["select 1;"];
+
+			const diagnostics = parseOutput({
+				stdout,
+				uri,
+				cwd: path.resolve("workspace"),
+				lines,
+			});
+
+			// Malformed line should be ignored
+			assert.strictEqual(diagnostics.length, 0);
+		});
+
+		test("handles unicode in error messages", () => {
+			const cwd = path.resolve("workspace");
+			const filePath = path.join(cwd, "query.sql");
+			const uri = URI.file(filePath).toString();
+			const stdout = "query.sql(1,1): error RuleX : エラーメッセージ";
+			const lines = ["select 1;"];
+
+			const diagnostics = parseOutput({ stdout, uri, cwd, lines });
+
+			assert.strictEqual(diagnostics.length, 1);
+			assert.strictEqual(diagnostics[0]?.message, "エラーメッセージ");
+		});
+
+		test("handles Windows path separators", () => {
+			const cwd = "C:\\workspace";
+			const filePath = "C:\\workspace\\query.sql";
+			const uri = URI.file(filePath).toString();
+			const stdout = "C:\\workspace\\query.sql(1,1): error Rule : Message";
+			const lines = ["select 1;"];
+
+			const diagnostics = parseOutput({ stdout, uri, cwd, lines });
+
+			assert.strictEqual(diagnostics.length, 1);
+		});
+	});
 });

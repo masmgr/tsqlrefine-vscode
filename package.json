@@ -93,8 +93,11 @@
 		"lint": "biome lint .",
 		"format": "biome format --write .",
 		"test:unit": "npm run compile:test && mocha --config .mocharc.unit.json",
+		"test:unit:coverage": "npm run compile:test && c8 mocha --config .mocharc.unit.json",
+		"test:coverage": "npm run test:unit:coverage",
 		"test:e2e": "npm run build && npm run compile:test && vscode-test",
-		"test": "npm run test:unit"
+		"test": "npm run test:unit",
+		"prepare": "husky"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
@@ -104,10 +107,17 @@
 		"@vscode/test-cli": "^0.0.12",
 		"@vscode/test-electron": "^2.5.2",
 		"@vscode/vsce": "^3.2.1",
+		"c8": "^10.1.3",
 		"esbuild": "^0.27.2",
+		"husky": "^9.1.7",
+		"lint-staged": "^16.2.7",
 		"mocha": "^11.7.5",
 		"source-map-support": "^0.5.21",
 		"typescript": "^5.9.3"
+	},
+	"lint-staged": {
+		"*.ts": ["biome format --write", "biome lint --fix"],
+		"*.{json,md,yml}": ["biome format --write"]
 	},
 	"dependencies": {
 		"chardet": "^2.1.1",

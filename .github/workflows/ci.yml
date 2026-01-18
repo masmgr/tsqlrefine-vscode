@@ -19,10 +19,28 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
-      - run: xvfb-run -a npm test
+
+      # Run unit tests with coverage (Linux only for performance)
+      - run: npm run test:unit:coverage
         if: runner.os == 'Linux'
-      - run: npm test
+
+      # Upload coverage report
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: coverage-report
+          path: coverage/
+
+      # Run unit tests without coverage on Windows/Mac
+      - run: npm run test:unit
         if: runner.os != 'Linux'
+
+      # Run E2E tests
+      - run: xvfb-run -a npm run test:e2e
+        if: runner.os == 'Linux'
+      - run: npm run test:e2e
+        if: runner.os != 'Linux'
+
       - run: npm run build
       - run: npm run package
         if: runner.os == 'Linux'
