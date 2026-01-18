@@ -6,6 +6,8 @@ This document provides guidance for developers working on the tsqllint-lite VS C
 
 **tsqllint-lite** is a VS Code extension that integrates [TSQLLint](https://github.com/tsqllint/tsqllint) into the editor. It provides real-time linting for SQL files with support for both manual and automatic linting using a Language Server Protocol (LSP) architecture.
 
+**Note**: This project was built from scratch and is not forked from [tsqllint-vscode-extension](https://github.com/tsqllint/tsqllint-vscode-extension). The codebase is independently developed to support the latest TSQLLint versions and LSP architecture.
+
 ## Prerequisites
 
 - **Node.js**: v18 or later
