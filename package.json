@@ -1,0 +1,130 @@
+{
+	"name": "tsqllint-lite",
+	"displayName": "TSQLLint Lite",
+	"description": "Lightweight T-SQL linter integration for VS Code using TSQLLint",
+	"version": "0.0.1",
+	"publisher": "masmgr",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/masmgr/tsqllint-vscode-lite.git"
+	},
+	"bugs": {
+		"url": "https://github.com/masmgr/tsqllint-vscode-lite/issues"
+	},
+	"homepage": "https://github.com/masmgr/tsqllint-vscode-lite#readme",
+	"icon": "icon.png",
+	"engines": {
+		"vscode": "^1.108.1"
+	},
+	"categories": ["Linters", "Programming Languages"],
+	"keywords": [
+		"tsqllint",
+		"t-sql",
+		"sql",
+		"linter",
+		"mssql",
+		"microsoft sql server",
+		"transact-sql",
+		"sql server",
+		"database",
+		"lint"
+	],
+	"activationEvents": ["onLanguage:sql"],
+	"main": "./dist/extension.js",
+	"contributes": {
+		"commands": [
+			{
+				"command": "tsqllint-lite.run",
+				"title": "TSQLLint: Run",
+				"category": "TSQLLint"
+			}
+		],
+		"configuration": {
+			"title": "tsqllint-lite",
+			"properties": {
+				"tsqllint.path": {
+					"type": "string",
+					"default": "",
+					"description": "Path to tsqllint executable."
+				},
+				"tsqllint.configPath": {
+					"type": "string",
+					"default": "",
+					"description": "Path to tsqllint config file (passed with -c)."
+				},
+				"tsqllint.runOnSave": {
+					"type": "boolean",
+					"default": true,
+					"description": "Run lint when a SQL document is saved."
+				},
+				"tsqllint.runOnType": {
+					"type": "boolean",
+					"default": false,
+					"description": "Run lint while typing (debounced)."
+				},
+				"tsqllint.runOnOpen": {
+					"type": "boolean",
+					"default": true,
+					"description": "Run lint when a SQL document is opened."
+				},
+				"tsqllint.debounceMs": {
+					"type": "number",
+					"default": 500,
+					"description": "Debounce time in milliseconds for run-on-type."
+				},
+				"tsqllint.timeoutMs": {
+					"type": "number",
+					"default": 10000,
+					"description": "Timeout in milliseconds for lint execution."
+				}
+			}
+		}
+	},
+	"scripts": {
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"compile": "tsc -p tsconfig.json",
+		"compile:test": "tsc -p tsconfig.test.json",
+		"build": "node esbuild.mjs",
+		"watch": "node esbuild.mjs --watch",
+		"watch:tsc": "tsc -watch -p tsconfig.json",
+		"vscode:prepublish": "npm run build -- --production",
+		"package": "vsce package",
+		"lint": "biome lint .",
+		"format": "biome format --write .",
+		"test:unit": "npm run compile:test && mocha --config .mocharc.unit.json",
+		"test:unit:coverage": "npm run compile:test && c8 mocha --config .mocharc.unit.json",
+		"test:coverage": "npm run test:unit:coverage",
+		"test:e2e": "npm run build && npm run compile:test && vscode-test",
+		"test": "npm run test:unit",
+		"prepare": "husky"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.4",
+		"@types/mocha": "^10.0.10",
+		"@types/node": "22.x",
+		"@types/vscode": "^1.108.1",
+		"@vscode/test-cli": "^0.0.12",
+		"@vscode/test-electron": "^2.5.2",
+		"@vscode/vsce": "^3.2.1",
+		"c8": "^10.1.3",
+		"esbuild": "^0.27.2",
+		"husky": "^9.1.7",
+		"lint-staged": "^16.2.7",
+		"mocha": "^11.7.5",
+		"source-map-support": "^0.5.21",
+		"typescript": "^5.9.3"
+	},
+	"lint-staged": {
+		"*.ts": ["biome format --write", "biome lint --fix"],
+		"*.json": "biome format --write"
+	},
+	"dependencies": {
+		"chardet": "^2.1.1",
+		"iconv-lite": "^0.7.2",
+		"vscode-languageclient": "^9.0.1",
+		"vscode-languageserver": "^9.0.1",
+		"vscode-languageserver-textdocument": "^1.0.11",
+		"vscode-uri": "^3.0.8"
+	}
+}

@@ -1,0 +1,30 @@
+# Validate commit message format (Windows compatible)
+# Pattern: type(scope)?: message
+# type: feat, fix, docs, style, refactor, perf, test, chore, ci
+# scope: optional
+# message: required
+
+COMMIT_MSG=$(head -n 1 "$1" | sed 's/[[:space:]]*$//')
+
+# Check if message starts with valid type
+# Using basic pattern matching for cross-platform compatibility
+case "$COMMIT_MSG" in
+  feat:*|feat\(*\):*|fix:*|fix\(*\):*|docs:*|docs\(*\):*|style:*|style\(*\):*|refactor:*|refactor\(*\):*|perf:*|perf\(*\):*|test:*|test\(*\):*|chore:*|chore\(*\):*|ci:*|ci\(*\):*)
+    # Valid format
+    ;;
+  *)
+    echo "❌ Commit message does not follow Conventional Commits format"
+    echo ""
+    echo "Expected format:"
+    echo "  <type>(<scope>): <message>"
+    echo ""
+    echo "Types: feat, fix, docs, style, refactor, perf, test, chore, ci"
+    echo "Scope: optional"
+    echo ""
+    echo "Examples:"
+    echo "  feat: add new feature"
+    echo "  fix(scheduler): correct timing issue"
+    echo "  docs: update README"
+    exit 1
+    ;;
+esac

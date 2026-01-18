@@ -137,3 +137,13 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+.claude/
+
+nul
+
+*.vsix
+
+test/fixtures/workspace/.vscode
+test/fixtures/workspace/tsqllint-*
+test/fixtures/workspace/*.sql

@@ -1,0 +1,31 @@
+# Development files
+.vscode/**
+.vscode-test/**
+.vscode-test.*
+node_modules/**
+
+# Source files (we ship dist/ instead)
+src/**
+out/**
+test/**
+
+# Build and config files
+esbuild.mjs
+tsconfig.json
+biome.json
+eslint.config.mjs
+.gitignore
+.yarnrc
+
+# Documentation
+vsc-extension-quickstart.md
+CLAUDE.md
+
+# TypeScript and maps
+**/*.ts
+**/*.map
+
+# Tests
+**/*.test.js
+**/*.e2e.test.js
+.vscode-test.e2e.mjs

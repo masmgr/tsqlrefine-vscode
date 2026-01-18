@@ -1,0 +1,9 @@
+{
+	"require": ["source-map-support/register"],
+	"spec": ["out/test/unit/*.test.js"],
+	"timeout": 5000,
+	"reporter": "spec",
+	"color": true,
+	"ui": "tdd",
+	"node-option": ["enable-source-maps"]
+}

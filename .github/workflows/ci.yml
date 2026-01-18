@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  ci:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+
+      # Run unit tests with coverage (Linux only for performance)
+      - run: npm run test:unit:coverage
+        if: runner.os == 'Linux'
+
+      # Upload coverage report
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: coverage-report
+          path: coverage/
+
+      # Run unit tests without coverage on Windows/Mac
+      - run: npm run test:unit
+        if: runner.os != 'Linux'
+
+      # Run E2E tests
+      - run: xvfb-run -a npm run test:e2e
+        if: runner.os == 'Linux'
+      - run: npm run test:e2e
+        if: runner.os != 'Linux'
+
+      - run: npm run build
+      - run: npm run package
+        if: runner.os == 'Linux'
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: vsix-package
+          path: '*.vsix'
