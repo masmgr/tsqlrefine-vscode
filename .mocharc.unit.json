@@ -1,6 +1,6 @@
 {
 	"require": ["source-map-support/register"],
-	"spec": ["out/test/unit/**/*.test.js"],
+	"spec": ["out/test/unit/*.test.js"],
 	"timeout": 5000,
 	"reporter": "spec",
 	"color": true,

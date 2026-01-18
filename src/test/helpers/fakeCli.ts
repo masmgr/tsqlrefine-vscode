@@ -6,7 +6,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { rmWithRetry } from "./cleanup.unit";
+import { rmWithRetry } from "./cleanup";
 
 /**
  * Fake CLI instance with cleanup method.

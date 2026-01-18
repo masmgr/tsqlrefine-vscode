@@ -4,8 +4,10 @@
  */
 
 import * as assert from "node:assert";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import * as vscode from "vscode";
-import type { FakeCli } from "../../test/helpers/unit/fakeCli";
+import type { FakeCli } from "./fakeCli";
 import {
 	createStandardFakeCli,
 	createCustomFakeCli,
@@ -14,11 +16,8 @@ import {
 	applyTestConfig,
 	restoreTestConfig,
 } from "./testFixtures";
-import { cleanupWorkspace, removeDirectory, sleep } from "./cleanup";
-import {
-	TEST_TIMEOUTS,
-	TEST_DELAYS,
-} from "../../test/helpers/unit/testConstants";
+import { removeDirectory, sleep, type RemovalOptions } from "./cleanup";
+import { TEST_TIMEOUTS, TEST_DELAYS } from "./testConstants";
 
 /**
  * Context provided to E2E tests, containing all necessary test resources.
@@ -247,5 +246,44 @@ export async function activateExtension(): Promise<void> {
 	const clientReady = api.clientReady;
 	if (clientReady) {
 		await clientReady;
+	}
+}
+
+/**
+ * Cleans up VS Code workspace test artifacts.
+ * Removes .vscode directory and tsqllint-workspace-* temporary directories.
+ *
+ * @param workspaceRoot - The workspace root URI, or undefined if no workspace
+ * @param options - Cleanup options
+ */
+export async function cleanupWorkspace(
+	workspaceRoot: vscode.Uri | undefined,
+	options: RemovalOptions = {},
+): Promise<void> {
+	if (!workspaceRoot) {
+		return;
+	}
+
+	const workspacePath = workspaceRoot.fsPath;
+
+	// Clean up .vscode directory
+	const vscodeDir = vscode.Uri.joinPath(workspaceRoot, ".vscode");
+	try {
+		await vscode.workspace.fs.delete(vscodeDir, { recursive: true });
+	} catch {
+		// Ignore errors if directory doesn't exist
+	}
+
+	// Clean up any remaining tsqllint-workspace-* directories
+	try {
+		const entries = await fs.readdir(workspacePath);
+		for (const entry of entries) {
+			if (entry.startsWith("tsqllint-workspace-")) {
+				const fullPath = path.join(workspacePath, entry);
+				await removeDirectory(fullPath, options);
+			}
+		}
+	} catch {
+		// Ignore errors if workspace root doesn't exist
 	}
 }

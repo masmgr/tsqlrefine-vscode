@@ -6,6 +6,6 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const workspaceFolder = path.join(rootDir, 'test', 'fixtures', 'workspace');
 
 export default defineConfig({
-	files: 'out/integration/**/*.test.js',
+	files: 'out/test/e2e/**/*.test.js',
 	workspaceFolder,
 });

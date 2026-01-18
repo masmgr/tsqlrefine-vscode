@@ -1,6 +1,9 @@
 /**
- * Cleanup utilities for test file system operations (VS Code-free).
+ * Cleanup utilities for test file system operations.
  * Provides consistent error handling and retry logic for Windows file locking issues.
+ *
+ * This file contains VS Code-independent utilities that can be used in both
+ * unit tests and E2E tests.
  */
 
 import * as fs from "node:fs/promises";

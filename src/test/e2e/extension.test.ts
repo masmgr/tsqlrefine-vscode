@@ -1,12 +1,11 @@
 import * as assert from "node:assert";
 import * as vscode from "vscode";
-import { runE2ETest } from "./helpers/e2eTestHarness";
-import { cleanupWorkspace } from "./helpers/cleanup";
+import { runE2ETest, cleanupWorkspace } from "../helpers/e2eTestHarness";
 import {
 	TEST_TIMEOUTS,
 	TEST_DELAYS,
 	FAKE_CLI_RULES,
-} from "../test/helpers/unit/testConstants";
+} from "../helpers/testConstants";
 
 suite("Extension Test Suite", () => {
 	suiteTeardown(async () => {
