@@ -56,7 +56,9 @@ suite("E2E (local): real tsqllint binary", () => {
 				`Expected diagnostics, got stdout=${JSON.stringify(result.stdout)}`,
 			);
 			assert.ok(
-				diagnostics.some((diag: { source?: string }) => diag.source === "tsqllint"),
+				diagnostics.some(
+					(diag: { source?: string }) => diag.source === "tsqllint",
+				),
 				"Expected tsqllint as Diagnostic.source",
 			);
 		} finally {
