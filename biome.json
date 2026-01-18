@@ -6,6 +6,8 @@
 			"out",
 			"dist",
 			".vscode-test",
+			".nyc_output",
+			"coverage",
 			"**/*.mjs",
 			"*.md",
 			"*.yml",
