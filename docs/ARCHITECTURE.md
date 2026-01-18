@@ -346,14 +346,14 @@ Handles encoding detection and conversion:
 
 ```typescript
 export type TsqllintSettings = {
-  path: string;           // Custom tsqllint path
-  configPath: string;     // TSQLLint config file
+  path?: string;          // Custom tsqllint path (optional)
+  configPath?: string;    // TSQLLint config file (optional)
   runOnSave: boolean;     // Auto-lint on save
   runOnType: boolean;     // Auto-lint while typing
   runOnOpen: boolean;     // Auto-lint on open
   debounceMs: number;     // Debounce delay for typing
   timeoutMs: number;      // Process timeout
-  rangeMode: 'character' | 'line';  // Diagnostic range mode
+  rangeMode: 'character' | 'line';  // Diagnostic range mode (internal only)
 };
 ```
 
@@ -550,15 +550,7 @@ async function getSettingsForDocument(uri: string): Promise<TsqllintSettings> {
 
 ### Configuration Validation
 
-```typescript
-function normalizeSettings(value: TsqllintSettings): TsqllintSettings {
-  const normalized = { ...value };
-  if (normalized.rangeMode !== "character" && normalized.rangeMode !== "line") {
-    normalized.rangeMode = "character";
-  }
-  return normalized;
-}
-```
+Settings are validated on the server side. The `rangeMode` setting is internal only and not exposed in the VS Code configuration UI.
 
 ### Configuration Updates
 
@@ -574,7 +566,7 @@ When configuration changes:
 
 #### 1. Unit Tests
 
-**Location**: [src/test/](../src/test/)
+**Location**: [src/test/unit/](../src/test/unit/)
 
 Test individual functions in isolation:
 - **parseOutput.test.ts**: Output parsing logic
@@ -585,33 +577,25 @@ Test individual functions in isolation:
 
 **Tools**: Mocha test runner with `.mocharc.unit.json` config
 
-#### 2. Integration Tests
+#### 2. E2E Tests
 
-**Location**: [src/integration/](../src/integration/)
+**Location**: [src/test/e2e/](../src/test/e2e/)
 
-Test extension activation and VS Code integration:
+Test full integration with VS Code and tsqllint CLI:
 - **extension.test.ts**: Extension activation, command registration, client lifecycle
-
-**Run Command**: `npm run test:integration`
-
-**Tools**:
-- `@vscode/test-electron` for VS Code instance
-- `.vscode-test.integration.mjs` configuration
-
-#### 3. E2E Tests
-
-**Location**: [src/e2e/](../src/e2e/)
-
-Test full integration with tsqllint CLI:
-- **localTsqllint.e2e.test.ts**: Tests with real tsqllint installation
+- **localTsqllint.test.ts**: Tests with real tsqllint installation
 
 **Run Command**: `npm run test:e2e`
 
-**Prerequisites**: TSQLLint must be installed and available in PATH
+**Tools**:
+- `@vscode/test-cli` and `@vscode/test-electron` for VS Code instance
+- `.vscode-test.mjs` configuration
+
+**Prerequisites**: For localTsqllint tests, TSQLLint must be installed and available in PATH
 
 ### Test Helpers
 
-**Location**: [src/integration/helpers/](../src/integration/helpers/) and [src/test/helpers/unit/](../src/test/helpers/unit/)
+**Location**: [src/test/helpers/](../src/test/helpers/)
 
 #### testConstants.ts
 Centralized test timeouts, delays, and retry values:
@@ -779,13 +763,13 @@ dist/
   └── server.js.map
 
 out/                     # Test compilation output
-  ├── test/
-  │   ├── *.test.js
-  │   └── helpers/
-  ├── integration/
-  │   └── *.test.js
-  └── e2e/
-      └── *.test.js
+  └── test/
+      ├── unit/
+      │   └── *.test.js
+      ├── e2e/
+      │   └── *.test.js
+      └── helpers/
+          └── *.js
 ```
 
 ## Platform Considerations
