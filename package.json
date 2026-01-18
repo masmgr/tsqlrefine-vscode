@@ -116,8 +116,8 @@
 		"typescript": "^5.9.3"
 	},
 	"lint-staged": {
-		"*.ts": "biome format --write",
-		"*.{json,md,yml}": "biome format --write"
+		"*.ts": ["biome format --write", "biome lint --fix"],
+		"*.json": "biome format --write"
 	},
 	"dependencies": {
 		"chardet": "^2.1.1",

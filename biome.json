@@ -1,8 +1,16 @@
 {
 	"$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
 	"files": {
-		"include": ["src", "*.ts", "*.js", "*.json", "*.md", "*.yml", "*.yaml"],
-		"ignore": ["node_modules", "out", "dist", ".vscode-test", "**/*.mjs"]
+		"ignore": [
+			"node_modules",
+			"out",
+			"dist",
+			".vscode-test",
+			"**/*.mjs",
+			"*.md",
+			"*.yml",
+			"*.yaml"
+		]
 	},
 	"linter": {
 		"rules": {
