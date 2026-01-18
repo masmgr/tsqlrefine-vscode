@@ -15,6 +15,7 @@
 	"homepage": "https://github.com/masmgr/tsqllint-vscode-lite#readme",
 	"icon": "icon.png",
 	"engines": {
+		"node": ">=24.0.0",
 		"vscode": "^1.108.1"
 	},
 	"categories": ["Linters", "Programming Languages"],
@@ -102,7 +103,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
 		"@types/mocha": "^10.0.10",
-		"@types/node": "22.x",
+		"@types/node": "24.x",
 		"@types/vscode": "^1.108.1",
 		"@vscode/test-cli": "^0.0.12",
 		"@vscode/test-electron": "^2.5.2",

@@ -725,7 +725,7 @@ Configuration:
   external: ['vscode'],
   format: 'cjs',
   platform: 'node',
-  target: 'node22',
+  target: 'node24',
   sourcemap: true,
   minify: production,
 }

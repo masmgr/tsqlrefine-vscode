@@ -34,6 +34,7 @@ const baseConfig = {
 	sourcemap: !production,
 	sourcesContent: false,
 	platform: "node",
+	target: "node24",
 	logLevel: "silent",
 	plugins: [
 		/* add to the end of plugins array */
