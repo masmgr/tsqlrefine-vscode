@@ -7,7 +7,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { createFakeCli, type FakeCli } from "./fakeCli";
+import { createFakeCli, type FakeCli } from "../../test/helpers/unit/fakeCli";
 
 /**
  * Creates a standard fake CLI that outputs a diagnostic for the linted file.

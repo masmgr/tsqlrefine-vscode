@@ -1,11 +1,9 @@
 /**
- * Cleanup utilities for test file system operations.
+ * Cleanup utilities for test file system operations (VS Code-free).
  * Provides consistent error handling and retry logic for Windows file locking issues.
  */
 
 import * as fs from "node:fs/promises";
-import * as path from "node:path";
-import * as vscode from "vscode";
 import { RETRY_CONFIG } from "./testConstants";
 
 /**
@@ -90,45 +88,6 @@ export async function removeDirectory(
 		}
 		// Log error but don't throw - prevents cleanup failures from masking test failures
 		console.error(`Failed to remove directory ${dirPath}:`, error);
-	}
-}
-
-/**
- * Cleans up VS Code workspace test artifacts.
- * Removes .vscode directory and tsqllint-workspace-* temporary directories.
- *
- * @param workspaceRoot - The workspace root URI, or undefined if no workspace
- * @param options - Cleanup options
- */
-export async function cleanupWorkspace(
-	workspaceRoot: vscode.Uri | undefined,
-	options: RemovalOptions = {},
-): Promise<void> {
-	if (!workspaceRoot) {
-		return;
-	}
-
-	const workspacePath = workspaceRoot.fsPath;
-
-	// Clean up .vscode directory
-	const vscodeDir = vscode.Uri.joinPath(workspaceRoot, ".vscode");
-	try {
-		await vscode.workspace.fs.delete(vscodeDir, { recursive: true });
-	} catch {
-		// Ignore errors if directory doesn't exist
-	}
-
-	// Clean up any remaining tsqllint-workspace-* directories
-	try {
-		const entries = await fs.readdir(workspacePath);
-		for (const entry of entries) {
-			if (entry.startsWith("tsqllint-workspace-")) {
-				const fullPath = path.join(workspacePath, entry);
-				await removeDirectory(fullPath, options);
-			}
-		}
-	} catch {
-		// Ignore errors if workspace root doesn't exist
 	}
 }
 

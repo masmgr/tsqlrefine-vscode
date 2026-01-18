@@ -5,7 +5,7 @@
 
 import * as assert from "node:assert";
 import * as vscode from "vscode";
-import type { FakeCli } from "./fakeCli";
+import type { FakeCli } from "../../test/helpers/unit/fakeCli";
 import {
 	createStandardFakeCli,
 	createCustomFakeCli,
@@ -15,7 +15,10 @@ import {
 	restoreTestConfig,
 } from "./testFixtures";
 import { cleanupWorkspace, removeDirectory, sleep } from "./cleanup";
-import { TEST_TIMEOUTS, TEST_DELAYS } from "./testConstants";
+import {
+	TEST_TIMEOUTS,
+	TEST_DELAYS,
+} from "../../test/helpers/unit/testConstants";
 
 /**
  * Context provided to E2E tests, containing all necessary test resources.

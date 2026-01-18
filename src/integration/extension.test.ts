@@ -6,7 +6,7 @@ import {
 	TEST_TIMEOUTS,
 	TEST_DELAYS,
 	FAKE_CLI_RULES,
-} from "./helpers/testConstants";
+} from "../test/helpers/unit/testConstants";
 
 suite("Extension Test Suite", () => {
 	suiteTeardown(async () => {
@@ -156,7 +156,9 @@ suite("Extension Test Suite", () => {
 				assert.ok(match);
 
 				// Clean up
-				await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+				await vscode.commands.executeCommand(
+					"workbench.action.closeAllEditors",
+				);
 			},
 		);
 	});
@@ -180,7 +182,9 @@ suite("Extension Test Suite", () => {
 					setTimeout(resolve, TEST_DELAYS.DEBOUNCE_SHORT * 2),
 				);
 
-				const diagnostics = vscode.languages.getDiagnostics(context.document.uri);
+				const diagnostics = vscode.languages.getDiagnostics(
+					context.document.uri,
+				);
 				assert.strictEqual(
 					diagnostics.length,
 					0,
