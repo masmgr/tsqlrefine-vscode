@@ -51,11 +51,16 @@ npm run format            # Format with Biome
 
 ### Testing
 ```bash
-npm test                  # Run unit and E2E tests
-npm run test:e2e          # Run E2E tests only
+npm test                    # Run unit tests
+npm run test:unit          # Run unit tests with Mocha
+npm run test:unit:coverage # Run unit tests with c8 coverage reporting
+npm run test:coverage      # Alias for test:unit:coverage
+npm run test:e2e           # Run E2E tests
 ```
 
 **Note**: The test scripts run both `npm run build` (to bundle extension code to `dist/`) and `npm run compile` (to compile test files to `out/`). This is necessary because VS Code loads the extension from `dist/extension.js` while the test runner executes tests from `out/test/**/*.test.js`.
+
+**Code Coverage**: Unit tests are run with c8 coverage. Targets are 50% lines, 80% functions, 75% branches. Use `npm run test:unit:coverage` to generate reports in `coverage/`.
 
 ### Publishing
 ```bash
@@ -117,10 +122,11 @@ Manages concurrent lint execution with sophisticated queuing:
 - **Version tracking**: Ensures lints run against the correct document version
 - **Priority handling**: Manual lints (`reason: "manual"`) bypass debouncing and run immediately
 
-The scheduler handles three lint reasons:
+The scheduler handles four lint reasons:
 - `"save"`: Triggered on document save
 - `"type"`: Triggered during typing (if `runOnType` is enabled)
 - `"manual"`: Triggered by explicit commands
+- `"open"`: Triggered when document is opened (if `runOnOpen` is enabled)
 
 #### 2. TSQLLint Runner ([src/server/lint/runTsqllint.ts](src/server/lint/runTsqllint.ts))
 
@@ -134,9 +140,7 @@ Executes the tsqllint CLI with proper process management:
 
 Parses tsqllint output into VS Code diagnostics:
 - **Pattern**: `<file>(<line>,<col>): <severity> <rule> : <message>`
-- **Range modes**:
-  - `"character"`: Highlights single character at error position
-  - `"line"`: Highlights entire line
+- **Range mode**: Always highlights entire line (fixed to "line" mode)
 - **Path normalization**: Handles Windows case-insensitivity and path resolution
 - **Temporary file support**: Maps temp file paths back to original URIs
 
@@ -165,28 +169,40 @@ The extension contributes these settings (namespace: `tsqllint`):
 - `configPath`: TSQLLint config file path (passed as `-c` argument)
 - `runOnSave`: Auto-lint on save (default: true)
 - `runOnType`: Lint while typing (default: false)
+- `runOnOpen`: Auto-lint on open (default: true)
 - `debounceMs`: Debounce delay for typing (default: 500)
 - `timeoutMs`: Process timeout (default: 10000)
-- `rangeMode`: Diagnostic range mode - "character" or "line" (default: "character")
 
 ## Testing Strategy
 
-Tests are organized into three categories:
+Tests are organized into two main categories under [src/test/](src/test/) with comprehensive coverage:
 
-1. **Unit tests** ([src/test/](src/test/)): Test individual functions like `parseOutput()` and `runTsqllint()`
-2. **Extension tests** ([src/test/extension.test.ts](src/test/extension.test.ts)): Test extension activation and commands
-3. **E2E tests** ([src/e2e/](src/e2e/)): Test full integration with tsqllint CLI
+1. **Unit tests** ([src/test/unit/](src/test/unit/)): Test individual functions in isolation (70 test cases)
+   - [scheduler.test.ts](src/test/unit/scheduler.test.ts) - LintScheduler concurrency, debouncing, queue management (21 tests)
+   - [decodeOutput.test.ts](src/test/unit/decodeOutput.test.ts) - Encoding detection and character handling (25 tests)
+   - [parseOutput.test.ts](src/test/unit/parseOutput.test.ts) - Output parser and error scenarios
+   - [runTsqllint.test.ts](src/test/unit/runTsqllint.test.ts) - CLI runner and error handling
+   - [handlers.test.ts](src/test/unit/handlers.test.ts) - File event handlers
+
+2. **E2E tests** ([src/test/e2e/](src/test/e2e/)): Test full integration with VS Code
+   - [extension.test.ts](src/test/e2e/extension.test.ts) - Extension activation and commands
+   - [localTsqllint.test.ts](src/test/e2e/localTsqllint.test.ts) - Real tsqllint CLI integration
 
 ### Test Organization
 
-- Unit tests: [parseOutput.test.ts](src/test/parseOutput.test.ts), [runTsqllint.test.ts](src/test/runTsqllint.test.ts), [handlers.test.ts](src/test/handlers.test.ts)
-- E2E tests: [extension.test.ts](src/test/extension.test.ts)
-- Test helpers: [src/test/helpers/](src/test/helpers/)
-  - `testConstants.ts` - Centralized test timeouts, delays, and constants
-  - `cleanup.ts` - File system cleanup utilities with retry logic
-  - `testFixtures.ts` - Reusable test data factories
-  - `e2eTestHarness.ts` - E2E test setup/teardown automation
-  - `fakeCli.ts` - Mock tsqllint CLI helper
+Test helpers: [src/test/helpers/](src/test/helpers/)
+- `testConstants.ts` - Centralized test timeouts, delays, and constants
+- `cleanup.ts` - File system cleanup utilities with retry logic
+- `testFixtures.ts` - Reusable test data factories
+- `e2eTestHarness.ts` - E2E test setup/teardown automation
+- `fakeCli.ts` - Mock tsqllint CLI helper
+
+### Code Coverage
+
+- Minimum targets: 50% lines, 80% functions, 75% branches, 50% statements
+- Current coverage: 52.73% overall, 79.2% in server/lint
+- Configuration: [.c8rc.json](.c8rc.json)
+- Generate report: `npm run test:unit:coverage`
 
 ### Writing Tests
 
@@ -221,6 +237,38 @@ test("my test", async function () {
 - Use test factories instead of inline scripts
 - Run `npm test` before submitting PRs
 
+## Pre-commit Hooks and Automation
+
+### Git Hooks with Husky
+
+The project uses **Husky** for pre-commit hooks to enforce code quality standards:
+
+- **Configuration**: [.husky/pre-commit](.husky/pre-commit)
+- **Installation**: Automatic via `npm install` (using `prepare` script in package.json)
+- **Actions**:
+  1. **lint-staged**: Formats and lints staged files
+     - TypeScript files: `biome format --write && biome lint --fix`
+     - JSON, Markdown, YAML: `biome format --write`
+  2. **Type checking**: Runs `npm run typecheck` for staged TypeScript files
+
+To bypass hooks (not recommended):
+```bash
+git commit --no-verify
+```
+
+### Dependency Management with Dependabot
+
+**Dependabot** automates dependency updates:
+
+- **Configuration**: [.github/dependabot.yml](.github/dependabot.yml)
+- **Schedule**: Weekly updates (Monday)
+- **NPM Dependencies**:
+  - Groups dev and production dependencies separately
+  - Only minor and patch updates (no major versions)
+  - Time: 09:00 UTC
+- **GitHub Actions**: Weekly updates (Monday UTC)
+- **PR Labeling**: Automatically labels with `dependencies` and `automated`
+
 ## Important Implementation Notes
 
 ### Windows Compatibility
@@ -254,7 +302,9 @@ The project includes two CI/CD workflows:
 
 Runs on every push and pull request:
 - Type checking and linting
-- Unit and E2E tests (cross-platform: Ubuntu, Windows, macOS)
+- Unit tests with coverage reporting (Linux only for performance)
+- E2E tests (cross-platform: Ubuntu, Windows, macOS)
+- Coverage artifact upload (Linux only)
 - Builds VSIX package on Linux
 - Uploads VSIX as artifact
 
