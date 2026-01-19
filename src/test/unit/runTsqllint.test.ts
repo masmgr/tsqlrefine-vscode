@@ -3,7 +3,10 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { defaultSettings } from "../../server/config/settings";
-import { runTsqllint } from "../../server/lint/runTsqllint";
+import {
+	runTsqllint,
+	verifyTsqllintInstallation,
+} from "../../server/lint/runTsqllint";
 import { rmWithRetry } from "../helpers/cleanup";
 import { createFakeCli } from "../helpers/fakeCli";
 
@@ -207,5 +210,73 @@ process.exit(0);
 				await rmWithRetry(tempDir);
 			}
 		});
+	});
+});
+
+suite("verifyTsqllintInstallation", () => {
+	test("returns available=true when tsqllint is found", async () => {
+		const fakeCli = await createFakeCli(`process.exit(0);`);
+		try {
+			const result = await verifyTsqllintInstallation({
+				...defaultSettings,
+				path: fakeCli.commandPath,
+			});
+			assert.strictEqual(result.available, true);
+			assert.strictEqual(result.message, undefined);
+		} finally {
+			await fakeCli.cleanup();
+		}
+	});
+
+	test("returns available=false with message when custom path not found", async () => {
+		const nonexistentPath = path.join(
+			os.tmpdir(),
+			"nonexistent-tsqllint-12345",
+		);
+		const result = await verifyTsqllintInstallation({
+			...defaultSettings,
+			path: nonexistentPath,
+		});
+		assert.strictEqual(result.available, false);
+		assert.ok(result.message);
+		assert.ok(result.message.includes("not found"));
+	});
+
+	test("returns available=false with message when path is not a file", async () => {
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "tsqllint-test-"));
+		try {
+			const result = await verifyTsqllintInstallation({
+				...defaultSettings,
+				path: tempDir,
+			});
+			assert.strictEqual(result.available, false);
+			assert.ok(result.message);
+			assert.ok(result.message.includes("not a file"));
+		} finally {
+			await rmWithRetry(tempDir);
+		}
+	});
+
+	test("returns available=false when command not in PATH", async () => {
+		const result = await verifyTsqllintInstallation(defaultSettings);
+		// Result depends on actual system PATH, but should not throw
+		assert.ok(typeof result.available === "boolean");
+		if (!result.available) {
+			assert.ok(result.message);
+			assert.ok(result.message.includes("tsqllint not found"));
+		}
+	});
+
+	test("does not throw errors when verification fails", async () => {
+		const nonexistentPath = path.join(
+			os.tmpdir(),
+			"nonexistent-tsqllint-67890",
+		);
+		// Should not throw, just return available=false
+		const result = await verifyTsqllintInstallation({
+			...defaultSettings,
+			path: nonexistentPath,
+		});
+		assert.strictEqual(result.available, false);
 	});
 });

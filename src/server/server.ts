@@ -11,7 +11,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import { defaultSettings, type TsqllintSettings } from "./config/settings";
 import { parseOutput } from "./lint/parseOutput";
-import { runTsqllint } from "./lint/runTsqllint";
+import { runTsqllint, verifyTsqllintInstallation } from "./lint/runTsqllint";
 import {
 	type LintReason,
 	LintScheduler,
@@ -54,10 +54,17 @@ connection.onInitialize((params) => {
 
 connection.onInitialized(async () => {
 	await refreshSettings();
+	await verifyInstallation();
 });
 
 connection.onDidChangeConfiguration(async () => {
+	const previousPath = settings.path;
 	await refreshSettings();
+
+	// Re-verify if path setting changed
+	if (previousPath !== settings.path) {
+		await verifyInstallation();
+	}
 });
 
 documents.onDidChangeContent((change) => {
@@ -112,6 +119,18 @@ async function refreshSettings(): Promise<void> {
 		...defaultSettings,
 		...config,
 	});
+}
+
+async function verifyInstallation(): Promise<void> {
+	const result = await verifyTsqllintInstallation(settings);
+
+	if (!result.available) {
+		const message = result.message || "tsqllint not found";
+		await connection.window.showWarningMessage(`tsqllint-lite: ${message}`);
+		connection.console.warn(`[startup] ${message}`);
+	} else {
+		connection.console.log("[startup] tsqllint installation verified");
+	}
 }
 
 async function handleDidChangeContent(document: TextDocument): Promise<void> {

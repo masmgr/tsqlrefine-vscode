@@ -194,13 +194,36 @@ async function resolveCommand(settings: TsqllintSettings): Promise<string> {
 	return command;
 }
 
+/**
+ * Verify that tsqllint is available for the given settings.
+ * This is a lightweight check used at startup and when settings change.
+ *
+ * @param settings - The tsqllint settings to verify
+ * @returns Object with available status and error message if not available
+ */
+export async function verifyTsqllintInstallation(
+	settings: TsqllintSettings,
+): Promise<{ available: boolean; message?: string }> {
+	try {
+		await resolveCommand(settings);
+		return { available: true };
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		return { available: false, message };
+	}
+}
+
 async function assertPathExists(filePath: string): Promise<void> {
 	try {
 		const stat = await fs.stat(filePath);
 		if (!stat.isFile()) {
 			throw new Error(`tsqllint.path is not a file: ${filePath}`);
 		}
-	} catch (_error) {
+	} catch (error) {
+		// Re-throw if it's already our custom error message
+		if (error instanceof Error && error.message.includes("not a file")) {
+			throw error;
+		}
 		throw new Error(`tsqllint.path not found: ${filePath}`);
 	}
 }

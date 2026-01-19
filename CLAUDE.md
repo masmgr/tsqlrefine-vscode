@@ -87,6 +87,21 @@ Executes the tsqllint CLI with proper process management:
 - **Windows handling**: Wraps `.cmd`/`.bat` files with `cmd.exe /c`
 - **Timeout protection**: Kills processes exceeding `settings.timeoutMs` (default 10s)
 - **Cancellation support**: Respects AbortSignal for clean cancellation
+- **Startup verification**: Verifies tsqllint installation at startup and on configuration changes
+
+##### Startup Verification
+
+The extension proactively verifies tsqllint installation using `verifyTsqllintInstallation()`:
+- **When verification runs**:
+  - At extension startup (after `onInitialized()` and `refreshSettings()`)
+  - When `tsqllint.path` setting changes (detected in `onDidChangeConfiguration()`)
+- **Non-blocking behavior**: Verification failures show warnings but do not prevent extension activation
+- **User-facing messages**:
+  - Not in PATH: "tsqllint not found. Set tsqllint.path or install tsqllint."
+  - Invalid path: "tsqllint.path not found: /path/to/tsqllint"
+  - Not a file: "tsqllint.path is not a file: /path/to/directory"
+- **Cache reuse**: Leverages existing 30-second command resolution cache
+- **Configuration change detection**: Only `tsqllint.path` changes trigger re-verification (other settings like `runOnSave`, `debounceMs` do not affect tsqllint availability)
 
 #### 3. Output Parser ([src/server/lint/parseOutput.ts](src/server/lint/parseOutput.ts))
 
@@ -139,6 +154,7 @@ Tests are organized into two categories under [src/test/](src/test/):
 2. **E2E tests** ([src/test/e2e/](src/test/e2e/)): Test full integration with VS Code
    - [extension.test.ts](src/test/e2e/extension.test.ts) - Extension activation and commands
    - [localTsqllint.test.ts](src/test/e2e/localTsqllint.test.ts) - Real tsqllint CLI integration
+   - [startup.test.ts](src/test/e2e/startup.test.ts) - Startup verification tests
 
 3. **Test helpers** ([src/test/helpers/](src/test/helpers/)): Shared utilities
    - `fakeCli.ts` - Mock tsqllint CLI helper
