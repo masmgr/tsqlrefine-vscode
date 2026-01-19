@@ -1,10 +1,10 @@
 import * as assert from "node:assert";
 import * as vscode from "vscode";
-import { runE2ETest, cleanupWorkspace } from "../helpers/e2eTestHarness";
+import { cleanupWorkspace, runE2ETest } from "../helpers/e2eTestHarness";
 import {
-	TEST_TIMEOUTS,
-	TEST_DELAYS,
 	FAKE_CLI_RULES,
+	TEST_DELAYS,
+	TEST_TIMEOUTS,
 } from "../helpers/testConstants";
 
 suite("Extension Test Suite", () => {
@@ -175,7 +175,7 @@ suite("Extension Test Suite", () => {
 				},
 				documentContent: "select 1;",
 			},
-			async (context, harness) => {
+			async (context, _harness) => {
 				// Wait a short time to ensure no linting happens
 				await new Promise((resolve) =>
 					setTimeout(resolve, TEST_DELAYS.DEBOUNCE_SHORT * 2),

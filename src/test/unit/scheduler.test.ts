@@ -1,9 +1,5 @@
 import * as assert from "node:assert";
-import {
-	LintScheduler,
-	type PendingLint,
-	type LintReason,
-} from "../../server/lint/scheduler";
+import { LintScheduler, type PendingLint } from "../../server/lint/scheduler";
 
 /**
  * Helper to sleep for a specified duration
@@ -473,7 +469,7 @@ suite("scheduler", () => {
 			// Should not throw - error is caught internally
 			try {
 				await scheduler.requestLint("file.sql", "manual", 1);
-			} catch (error) {
+			} catch (_error) {
 				// Manual returns the promise, so error may bubble up
 				// This is expected behavior
 			}

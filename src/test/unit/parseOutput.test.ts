@@ -1,7 +1,7 @@
 import * as assert from "node:assert";
 import * as path from "node:path";
-import { URI } from "vscode-uri";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
+import { URI } from "vscode-uri";
 import { parseOutput } from "../../server/lint/parseOutput";
 
 suite("parseOutput", () => {

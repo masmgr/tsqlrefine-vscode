@@ -1,9 +1,9 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
+import type { LanguageClient } from "vscode-languageclient/node";
 import { createLanguageClient } from "./client/client";
 import { handleDidDeleteFiles, handleDidRenameFiles } from "./client/handlers";
-import type { LanguageClient } from "vscode-languageclient/node";
 
 let client: LanguageClient | undefined;
 export let clientReady: Promise<void> = Promise.resolve();

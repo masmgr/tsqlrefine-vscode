@@ -1,9 +1,9 @@
+import { spawn } from "node:child_process";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { spawn } from "node:child_process";
 import type { TsqllintSettings } from "../config/settings";
-import type { LintRunResult } from "./types";
 import { decodeCliOutput } from "./decodeOutput";
+import type { LintRunResult } from "./types";
 
 export type RunTsqllintOptions = {
 	filePath: string;
@@ -200,7 +200,7 @@ async function assertPathExists(filePath: string): Promise<void> {
 		if (!stat.isFile()) {
 			throw new Error(`tsqllint.path is not a file: ${filePath}`);
 		}
-	} catch (error) {
+	} catch (_error) {
 		throw new Error(`tsqllint.path not found: ${filePath}`);
 	}
 }

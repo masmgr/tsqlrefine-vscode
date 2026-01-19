@@ -13,8 +13,8 @@ import { defaultSettings, type TsqllintSettings } from "./config/settings";
 import { parseOutput } from "./lint/parseOutput";
 import { runTsqllint } from "./lint/runTsqllint";
 import {
-	LintScheduler,
 	type LintReason,
+	LintScheduler,
 	type PendingLint,
 } from "./lint/scheduler";
 import type { LintRunResult } from "./lint/types";
@@ -211,7 +211,7 @@ async function runLintWithCancel(
 	return await runLintNow(uri, pending.reason);
 }
 
-async function runLintNow(uri: string, reason: LintReason): Promise<number> {
+async function runLintNow(uri: string, _reason: LintReason): Promise<number> {
 	const document = documents.get(uri);
 	if (!document) {
 		return 0;

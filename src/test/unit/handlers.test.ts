@@ -1,10 +1,10 @@
 import * as assert from "node:assert";
+import type { LanguageClient } from "vscode-languageclient/node";
 import { URI } from "vscode-uri";
 import {
 	handleDidDeleteFiles,
 	handleDidRenameFiles,
 } from "../../client/handlers";
-import type { LanguageClient } from "vscode-languageclient/node";
 
 /**
  * Notification tracking type for mock client.
@@ -116,7 +116,7 @@ suite("handlers", () => {
 			});
 
 			const mockClient = createMockLanguageClientWithBehavior(
-				(method: string, params: unknown) => {
+				(_method: string, _params: unknown) => {
 					assert.ok(
 						readyResolved,
 						"Client should be ready before sending notification",

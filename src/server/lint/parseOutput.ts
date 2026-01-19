@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import {
-	DiagnosticSeverity,
 	type Diagnostic,
+	DiagnosticSeverity,
 } from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
 

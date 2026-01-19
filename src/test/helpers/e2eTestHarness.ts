@@ -7,17 +7,17 @@ import * as assert from "node:assert";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as vscode from "vscode";
+import { type RemovalOptions, removeDirectory, sleep } from "./cleanup";
 import type { FakeCli } from "./fakeCli";
+import { TEST_DELAYS, TEST_TIMEOUTS } from "./testConstants";
 import {
-	createStandardFakeCli,
-	createCustomFakeCli,
-	createTestWorkspace,
-	createSqlDocument,
 	applyTestConfig,
+	createCustomFakeCli,
+	createSqlDocument,
+	createStandardFakeCli,
+	createTestWorkspace,
 	restoreTestConfig,
 } from "./testFixtures";
-import { removeDirectory, sleep, type RemovalOptions } from "./cleanup";
-import { TEST_TIMEOUTS, TEST_DELAYS } from "./testConstants";
 
 /**
  * Context provided to E2E tests, containing all necessary test resources.

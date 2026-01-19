@@ -1,5 +1,5 @@
-import * as iconv from "iconv-lite";
 import * as chardet from "chardet";
+import * as iconv from "iconv-lite";
 
 /**
  * Decodes a Buffer containing CLI output into a UTF-16 string using a fallback chain:
