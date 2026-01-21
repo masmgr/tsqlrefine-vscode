@@ -242,14 +242,9 @@ async function runLintNow(uri: string, _reason: LintReason): Promise<number> {
 	const controller = new AbortController();
 	inFlightByUri.set(uri, controller);
 
-	let tempInfo: { dir: string; filePath: string } | null = null;
-	let targetFilePath = filePath;
+	const tempInfo = await createTempFile(document.getText(), filePath);
+	const targetFilePath = tempInfo.filePath;
 	const isSavedFile = isSaved(document);
-
-	if (!isSavedFile) {
-		tempInfo = await createTempFile(document.getText());
-		targetFilePath = tempInfo.filePath;
-	}
 
 	const documentSettings = await getSettingsForDocument(uri);
 
@@ -301,7 +296,7 @@ async function runLintNow(uri: string, _reason: LintReason): Promise<number> {
 		uri,
 		cwd,
 		lines: document.getText().split(/\r?\n/),
-		...(tempInfo ? { targetPaths: [tempInfo.filePath] } : {}),
+		targetPaths: [tempInfo.filePath],
 		logger: {
 			log: (message: string) => connection.console.log(message),
 		},
@@ -341,11 +336,24 @@ function isSaved(document: TextDocument): boolean {
 
 async function createTempFile(
 	content: string,
+	originalPath?: string,
 ): Promise<{ dir: string; filePath: string }> {
 	const dir = await fs.mkdtemp(path.join(os.tmpdir(), "tsqllint-"));
-	const filePath = path.join(dir, "untitled.sql");
+	const filePath = path.join(dir, resolveTempFileName(originalPath));
 	await fs.writeFile(filePath, content, "utf8");
 	return { dir, filePath };
+}
+
+function resolveTempFileName(originalPath?: string): string {
+	if (!originalPath) {
+		return "untitled.sql";
+	}
+	const baseName = path.basename(originalPath);
+	const extension = path.extname(baseName);
+	if (extension) {
+		return baseName;
+	}
+	return `${baseName}.sql`;
 }
 
 async function cleanupTemp(
