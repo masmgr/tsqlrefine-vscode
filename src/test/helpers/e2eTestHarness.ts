@@ -94,18 +94,18 @@ export class E2ETestHarness {
 		);
 		this.context.tempDir = tempDir;
 
-		// Create document
-		const filename = options.filename ?? "query.sql";
-		const content = options.documentContent ?? "select 1;";
-		const documentUri = await createFile(filename, content);
-		this.context.document = await createSqlDocument(documentUri, content);
-
-		// Apply configuration
+		// Apply configuration before opening files so events honor the desired settings.
 		const config = {
 			path: this.context.fakeCli.commandPath,
 			...options.config,
 		};
 		this.context.configSnapshot = await applyTestConfig(config);
+
+		// Create document
+		const filename = options.filename ?? "query.sql";
+		const content = options.documentContent ?? "select 1;";
+		const documentUri = await createFile(filename, content);
+		this.context.document = await createSqlDocument(documentUri, content);
 
 		this.isSetup = true;
 

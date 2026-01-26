@@ -3,12 +3,14 @@ import * as os from "node:os";
 import * as path from "node:path";
 import {
 	createConnection,
+	DiagnosticSeverity,
 	ProposedFeatures,
 	TextDocumentSyncKind,
 	TextDocuments,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
+import { resolveConfigPath } from "./config/resolveConfigPath";
 import { defaultSettings, type TsqllintSettings } from "./config/settings";
 import { parseOutput } from "./lint/parseOutput";
 import { runTsqllint, verifyTsqllintInstallation } from "./lint/runTsqllint";
@@ -126,7 +128,7 @@ async function verifyInstallation(): Promise<void> {
 
 	if (!result.available) {
 		const message = result.message || "tsqllint not found";
-		await connection.window.showWarningMessage(`tsqllint-lite: ${message}`);
+		await maybeNotifyMissingTsqllint(message);
 		connection.console.warn(`[startup] ${message}`);
 	} else {
 		connection.console.log("[startup] tsqllint installation verified");
@@ -139,6 +141,7 @@ async function handleDidChangeContent(document: TextDocument): Promise<void> {
 		if (!docSettings.runOnType) {
 			return;
 		}
+		cancelInFlight(document.uri);
 		requestLint(document.uri, "type", document.version, docSettings.debounceMs);
 	} catch (error) {
 		connection.console.error(
@@ -197,6 +200,12 @@ function normalizeSettings(value: TsqllintSettings): TsqllintSettings {
 	if (normalized.rangeMode !== "character" && normalized.rangeMode !== "line") {
 		normalized.rangeMode = "character";
 	}
+	if (
+		!Number.isFinite(normalized.maxFileSizeKb) ||
+		normalized.maxFileSizeKb < 0
+	) {
+		normalized.maxFileSizeKb = 0;
+	}
 	return normalized;
 }
 
@@ -230,7 +239,7 @@ async function runLintWithCancel(
 	return await runLintNow(uri, pending.reason);
 }
 
-async function runLintNow(uri: string, _reason: LintReason): Promise<number> {
+async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 	const document = documents.get(uri);
 	if (!document) {
 		return 0;
@@ -238,39 +247,102 @@ async function runLintNow(uri: string, _reason: LintReason): Promise<number> {
 
 	const parsedUri = URI.parse(uri);
 	const filePath = parsedUri.fsPath;
-	const cwd = resolveCwd(filePath || undefined);
+	const workspaceRoot = resolveWorkspaceRoot(filePath || undefined);
+	const cwd =
+		workspaceRoot ?? (filePath ? path.dirname(filePath) : process.cwd());
+
+	const documentSettings = await getSettingsForDocument(uri);
+	const effectiveConfigPath = await resolveConfigPath({
+		configuredConfigPath: documentSettings.configPath,
+		filePath: filePath || null,
+		workspaceRoot,
+	});
+	const effectiveSettings: TsqllintSettings =
+		typeof effectiveConfigPath === "string" && effectiveConfigPath.trim()
+			? { ...documentSettings, configPath: effectiveConfigPath }
+			: documentSettings;
+
+	const isSavedFile = isSaved(document);
+	const maxBytes = maxFileSizeBytes(effectiveSettings.maxFileSizeKb);
+	if (maxBytes !== null && reason !== "manual") {
+		const sizeBytes = await getDocumentSizeBytes(
+			document,
+			filePath,
+			isSavedFile,
+		);
+		if (sizeBytes > maxBytes) {
+			const sizeKb = Math.ceil(sizeBytes / 1024);
+			connection.console.log(
+				`[runLintNow] Skipping lint: file is ${sizeKb}KB > maxFileSizeKb=${effectiveSettings.maxFileSizeKb}`,
+			);
+			connection.sendDiagnostics({
+				uri,
+				diagnostics: [
+					{
+						message: `tsqllint-lite: lint skipped (file too large: ${sizeKb}KB > maxFileSizeKb=${effectiveSettings.maxFileSizeKb}). Run "TSQLLint: Run" to lint manually or increase the limit.`,
+						severity: DiagnosticSeverity.Information,
+						range: {
+							start: { line: 0, character: 0 },
+							end: { line: 0, character: 0 },
+						},
+						source: "tsqllint-lite",
+						code: "lint-skipped-file-too-large",
+					},
+				],
+			});
+			return 0;
+		}
+	}
+
 	const controller = new AbortController();
 	inFlightByUri.set(uri, controller);
 
-	let tempInfo: { dir: string; filePath: string } | null = null;
-	let targetFilePath = filePath;
-	const isSavedFile = isSaved(document);
-
-	if (!isSavedFile) {
-		tempInfo = await createTempFile(document.getText());
-		targetFilePath = tempInfo.filePath;
-	}
-
-	const documentSettings = await getSettingsForDocument(uri);
+	const documentText = document.getText();
+	const tempInfo = await createTempFile(documentText, filePath);
+	const targetFilePath = tempInfo.filePath;
 
 	connection.console.log(`[runLintNow] URI: ${uri}`);
 	connection.console.log(`[runLintNow] File path: ${filePath}`);
 	connection.console.log(`[runLintNow] Target file path: ${targetFilePath}`);
 	connection.console.log(`[runLintNow] CWD: ${cwd}`);
 	connection.console.log(`[runLintNow] Is saved: ${isSavedFile}`);
+	connection.console.log(
+		`[runLintNow] Config path: ${effectiveConfigPath ?? "(tsqllint default)"}`,
+	);
 
 	let result: LintRunResult;
 	try {
 		result = await runTsqllint({
 			filePath: targetFilePath,
 			cwd,
-			settings: documentSettings,
+			settings: effectiveSettings,
 			signal: controller.signal,
 		});
 	} catch (error) {
 		inFlightByUri.delete(uri);
-		await notifyRunFailure(error);
-		connection.sendDiagnostics({ uri, diagnostics: [] });
+		const message = firstLine(String(error));
+		if (isMissingTsqllintError(message)) {
+			await maybeNotifyMissingTsqllint(message);
+			connection.console.warn(`tsqllint: ${message}`);
+			connection.sendDiagnostics({
+				uri,
+				diagnostics: [
+					{
+						message: `tsqllint-lite: ${message}`,
+						severity: DiagnosticSeverity.Error,
+						range: {
+							start: { line: 0, character: 0 },
+							end: { line: 0, character: 0 },
+						},
+						source: "tsqllint-lite",
+						code: "tsqllint-not-found",
+					},
+				],
+			});
+		} else {
+			await notifyRunFailure(error);
+			connection.sendDiagnostics({ uri, diagnostics: [] });
+		}
 		await cleanupTemp(tempInfo);
 		return -1;
 	}
@@ -300,8 +372,8 @@ async function runLintNow(uri: string, _reason: LintReason): Promise<number> {
 		stdout: result.stdout,
 		uri,
 		cwd,
-		lines: document.getText().split(/\r?\n/),
-		...(tempInfo ? { targetPaths: [tempInfo.filePath] } : {}),
+		lines: documentText.split(/\r?\n/),
+		targetPaths: [tempInfo.filePath],
 		logger: {
 			log: (message: string) => connection.console.log(message),
 		},
@@ -312,23 +384,48 @@ async function runLintNow(uri: string, _reason: LintReason): Promise<number> {
 	return diagnostics.length;
 }
 
-function resolveCwd(filePath: string | undefined): string {
+function maxFileSizeBytes(maxFileSizeKb: number): number | null {
+	if (!Number.isFinite(maxFileSizeKb) || maxFileSizeKb <= 0) {
+		return null;
+	}
+	return Math.floor(maxFileSizeKb * 1024);
+}
+
+async function getDocumentSizeBytes(
+	document: TextDocument,
+	filePath: string | undefined,
+	isSavedFile: boolean,
+): Promise<number> {
+	if (isSavedFile && filePath) {
+		try {
+			const stat = await fs.stat(filePath);
+			if (stat.isFile()) {
+				return stat.size;
+			}
+		} catch {
+			// fall back to in-memory content
+		}
+	}
+	return Buffer.byteLength(document.getText(), "utf8");
+}
+
+function resolveWorkspaceRoot(filePath: string | undefined): string | null {
 	if (workspaceFolders.length === 0) {
-		return filePath ? path.dirname(filePath) : process.cwd();
+		return null;
 	}
 
 	if (filePath) {
+		const normalizedFilePath = path.resolve(filePath);
 		for (const folder of workspaceFolders) {
-			const normalized = path.resolve(folder);
-			if (path.resolve(filePath).startsWith(normalized)) {
-				return normalized;
+			const normalizedFolder = path.resolve(folder);
+			if (normalizedFilePath.startsWith(normalizedFolder)) {
+				return normalizedFolder;
 			}
 		}
+		return null;
 	}
 
-	return (
-		workspaceFolders[0] ?? (filePath ? path.dirname(filePath) : process.cwd())
-	);
+	return workspaceFolders[0] ?? null;
 }
 
 function isSaved(document: TextDocument): boolean {
@@ -341,11 +438,24 @@ function isSaved(document: TextDocument): boolean {
 
 async function createTempFile(
 	content: string,
+	originalPath?: string,
 ): Promise<{ dir: string; filePath: string }> {
 	const dir = await fs.mkdtemp(path.join(os.tmpdir(), "tsqllint-"));
-	const filePath = path.join(dir, "untitled.sql");
+	const filePath = path.join(dir, resolveTempFileName(originalPath));
 	await fs.writeFile(filePath, content, "utf8");
 	return { dir, filePath };
+}
+
+function resolveTempFileName(originalPath?: string): string {
+	if (!originalPath) {
+		return "untitled.sql";
+	}
+	const baseName = path.basename(originalPath);
+	const extension = path.extname(baseName);
+	if (extension) {
+		return baseName;
+	}
+	return `${baseName}.sql`;
 }
 
 async function cleanupTemp(
@@ -369,6 +479,33 @@ async function notifyRunFailure(error: unknown): Promise<void> {
 		`tsqllint: failed to run (${message})`,
 	);
 	connection.console.warn(`tsqllint: failed to run (${message})`);
+}
+
+const missingTsqllintNoticeCooldownMs = 5 * 60 * 1000;
+let lastMissingTsqllintNoticeAtMs = 0;
+
+async function maybeNotifyMissingTsqllint(message: string): Promise<void> {
+	const now = Date.now();
+	if (now - lastMissingTsqllintNoticeAtMs < missingTsqllintNoticeCooldownMs) {
+		return;
+	}
+	lastMissingTsqllintNoticeAtMs = now;
+	const action = await connection.window.showWarningMessage(
+		`tsqllint-lite: ${message}`,
+		{ title: "Open Install Guide" },
+	);
+	if (action?.title === "Open Install Guide") {
+		connection.sendNotification("tsqllint/openInstallGuide");
+	}
+}
+
+function isMissingTsqllintError(message: string): boolean {
+	const normalized = message.toLowerCase();
+	return (
+		normalized.includes("tsqllint not found") ||
+		normalized.includes("tsqllint.path not found") ||
+		normalized.includes("tsqllint.path is not a file")
+	);
 }
 
 async function notifyStderr(stderr: string): Promise<void> {

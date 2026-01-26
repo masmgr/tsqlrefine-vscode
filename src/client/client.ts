@@ -24,10 +24,10 @@ export function createLanguageClient(
 	};
 
 	const clientOptions: LanguageClientOptions = {
-		documentSelector: [
-			{ scheme: "file", language: "sql" },
-			{ scheme: "untitled", language: "sql" },
-		],
+		documentSelector: ["sql", "tsql", "mssql"].flatMap((language) => [
+			{ scheme: "file", language },
+			{ scheme: "untitled", language },
+		]),
 		synchronize: {
 			configurationSection: "tsqllint",
 		},

@@ -12,8 +12,24 @@ export type TsqllintLiteApi = {
 	clientReady: Promise<void>;
 };
 
+const installGuideUrl =
+	"https://github.com/masmgr/tsqllint-vscode-lite#installing-tsqllint";
+
 export function activate(context: vscode.ExtensionContext): TsqllintLiteApi {
 	client = createLanguageClient(context);
+
+	const openInstallGuideCommand = vscode.commands.registerCommand(
+		"tsqllint-lite.openInstallGuide",
+		async () => {
+			await vscode.env.openExternal(vscode.Uri.parse(installGuideUrl));
+		},
+	);
+	context.subscriptions.push(openInstallGuideCommand);
+
+	client.onNotification("tsqllint/openInstallGuide", () => {
+		void vscode.commands.executeCommand("tsqllint-lite.openInstallGuide");
+	});
+
 	const startPromise = client.start();
 	const maybeReady = (client as { onReady?: () => Promise<void> }).onReady;
 	clientReady = typeof maybeReady === "function" ? maybeReady() : startPromise;

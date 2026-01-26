@@ -26,6 +26,13 @@ This extension serves as an alternative to [tsqllint-vscode-extension](https://g
 
 **TSQLLint CLI must be installed separately.** This extension is a VS Code integration for TSQLLint.
 
+### Supported Language IDs
+
+This extension runs on files with the following language IDs:
+- `sql`
+- `tsql`
+- `mssql`
+
 ### Installing TSQLLint
 
 #### Using .NET CLI (recommended):
@@ -58,8 +65,8 @@ This extension contributes the following settings under the `tsqllint` namespace
 
 ### `tsqllint.configPath`
 - **Type**: `string`
-- **Default**: `""` (uses tsqllint default)
-- **Description**: Path to your TSQLLint configuration file (`.tsqllintrc`). Passed as the `-c` argument to tsqllint.
+- **Default**: `""` (auto-detects `.tsqllintrc` in the workspace; otherwise uses tsqllint default)
+- **Description**: Path to your TSQLLint configuration file (`.tsqllintrc`). If set, passed as the `-c` argument to tsqllint. If empty, the extension searches for the nearest `.tsqllintrc` from the SQL file's folder up to the workspace root.
 - **Example**: `"${workspaceFolder}/.tsqllintrc"`
 
 ### `tsqllint.runOnSave`
@@ -72,6 +79,11 @@ This extension contributes the following settings under the `tsqllint` namespace
 - **Default**: `false`
 - **Description**: Run lint while typing (debounced). Useful for real-time feedback but may impact performance on large files.
 
+### `tsqllint.runOnOpen`
+- **Type**: `boolean`
+- **Default**: `true`
+- **Description**: Run lint when a SQL document is opened.
+
 ### `tsqllint.debounceMs`
 - **Type**: `number`
 - **Default**: `500`
@@ -81,6 +93,11 @@ This extension contributes the following settings under the `tsqllint` namespace
 - **Type**: `number`
 - **Default**: `10000` (10 seconds)
 - **Description**: Timeout in milliseconds for lint execution. If tsqllint takes longer than this, the process will be killed.
+
+### `tsqllint.maxFileSizeKb`
+- **Type**: `number`
+- **Default**: `0` (disabled)
+- **Description**: Maximum file size in KB for automatic linting (open/save/type). Manual lint still works. Set this to prevent accidental linting on very large files.
 
 ## Configuration Examples
 
@@ -124,6 +141,11 @@ This extension provides the following commands:
 - **Description**: Manually run lint on the current SQL file
 - **Usage**: Command Palette (Ctrl+Shift+P / Cmd+Shift+P) → "TSQLLint: Run"
 
+### `TSQLLint: Open Install Guide`
+- **Command ID**: `tsqllint-lite.openInstallGuide`
+- **Description**: Open the installation guide for tsqllint (TSQLLint CLI)
+- **Usage**: Command Palette → "TSQLLint: Open Install Guide"
+
 ## How It Works
 
 This extension uses the **Language Server Protocol (LSP)** architecture to provide efficient, non-blocking linting:
@@ -151,6 +173,10 @@ For detailed architecture information, see [DEVELOPMENT.md](DEVELOPMENT.md).
    }
    ```
 4. Restart VS Code after changing settings
+
+**Tips**:
+- The extension will also show a diagnostic in the Problems panel and offer an "Open Install Guide" button.
+- Check logs in the VS Code Output panel under `tsqllint-lite`.
 
 ### Linting is slow or times out
 
@@ -190,9 +216,11 @@ or
 
 ### Config file not being used
 
-**Cause**: The `configPath` is not set or points to an incorrect location.
+**Cause**: The `configPath` is not set, points to an incorrect location, or a different `.tsqllintrc` is being picked up.
 
-**Solution**: Set the config path explicitly:
+**Solutions**:
+1. Leave `tsqllint.configPath` empty to auto-detect `.tsqllintrc` (nearest to the file in the workspace)
+2. Or set the config path explicitly (overrides auto-detection):
 ```json
 {
   "tsqllint.configPath": "${workspaceFolder}/.tsqllintrc"
@@ -201,7 +229,7 @@ or
 
 ## Known Issues
 
-- The extension currently only activates for files with the "sql" language ID
+- The extension activates for language IDs: `sql`, `tsql`, `mssql`
 - On Windows, `.cmd` and `.bat` executables are wrapped with `cmd.exe /c`
 
 ## Release Notes
@@ -231,6 +259,7 @@ Issues and pull requests are welcome!
 
 - Report issues at the [GitHub repository](https://github.com/masmgr/tsqllint-vscode-lite/issues)
 - See [DEVELOPMENT.md](DEVELOPMENT.md) for setup and development guidelines
+- Run `npm run verify` to execute the full check suite (tests, typecheck, lint, format)
 
 ## License
 
