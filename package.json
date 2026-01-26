@@ -35,7 +35,9 @@
 		"lint"
 	],
 	"activationEvents": [
-		"onLanguage:sql"
+		"onLanguage:sql",
+		"onLanguage:tsql",
+		"onLanguage:mssql"
 	],
 	"main": "./dist/extension.js",
 	"contributes": {
@@ -43,6 +45,11 @@
 			{
 				"command": "tsqllint-lite.run",
 				"title": "TSQLLint: Run",
+				"category": "TSQLLint"
+			},
+			{
+				"command": "tsqllint-lite.openInstallGuide",
+				"title": "TSQLLint: Open Install Guide",
 				"category": "TSQLLint"
 			}
 		],
@@ -83,6 +90,11 @@
 					"type": "number",
 					"default": 10000,
 					"description": "Timeout in milliseconds for lint execution."
+				},
+				"tsqllint.maxFileSizeKb": {
+					"type": "number",
+					"default": 0,
+					"description": "Maximum file size (KB) for automatic linting (open/save/type). 0 disables the limit."
 				}
 			}
 		}
