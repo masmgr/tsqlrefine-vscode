@@ -259,6 +259,7 @@ Issues and pull requests are welcome!
 
 - Report issues at the [GitHub repository](https://github.com/masmgr/tsqllint-vscode-lite/issues)
 - See [DEVELOPMENT.md](DEVELOPMENT.md) for setup and development guidelines
+- Run `npm run verify` to execute the full check suite (tests, typecheck, lint, format)
 
 ## License
 

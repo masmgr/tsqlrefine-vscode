@@ -115,7 +115,8 @@
 		"test:coverage": "npm run test:unit:coverage",
 		"test:e2e": "npm run build && npm run compile:test && vscode-test",
 		"test": "npm run test:unit",
-		"prepare": "husky"
+		"prepare": "husky",
+		"verify": "npm test && npm run typecheck && npm run lint && npm run format"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.11",
