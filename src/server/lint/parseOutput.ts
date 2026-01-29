@@ -117,7 +117,7 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 			severity: mapSeverity(rawSeverity),
 			range: { start, end },
 			code: rawRule,
-			source: "tsqllint",
+			source: "tsqlrefine",
 		});
 	}
 

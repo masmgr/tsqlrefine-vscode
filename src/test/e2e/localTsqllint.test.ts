@@ -8,16 +8,16 @@ import { defaultSettings } from "../../server/config/settings";
 import { parseOutput } from "../../server/lint/parseOutput";
 import { runTsqllint } from "../../server/lint/runTsqllint";
 
-suite("E2E (local): real tsqllint binary", () => {
-	test("runs tsqllint and parses diagnostics", async function () {
+suite("E2E (local): real tsqlrefine binary", () => {
+	test("runs tsqlrefine and parses diagnostics", async function () {
 		this.timeout(60000);
 
-		const tsqllintPath = await locateTsqllint();
-		if (!tsqllintPath) {
+		const tsqlrefinePath = await locateTsqllint();
+		if (!tsqlrefinePath) {
 			this.skip();
 		}
 
-		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "tsqllint-e2e-"));
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "tsqlrefine-e2e-"));
 		const filePath = path.join(tempDir, "query.sql");
 		const fileText = "select from";
 		await fs.writeFile(filePath, fileText, "utf8");
@@ -28,7 +28,7 @@ suite("E2E (local): real tsqllint binary", () => {
 				cwd: tempDir,
 				settings: {
 					...defaultSettings,
-					path: tsqllintPath,
+					path: tsqlrefinePath,
 					timeoutMs: 20000,
 				},
 				signal: new AbortController().signal,
@@ -57,9 +57,9 @@ suite("E2E (local): real tsqllint binary", () => {
 			);
 			assert.ok(
 				diagnostics.some(
-					(diag: { source?: string }) => diag.source === "tsqllint",
+					(diag: { source?: string }) => diag.source === "tsqlrefine",
 				),
-				"Expected tsqllint as Diagnostic.source",
+				"Expected tsqlrefine as Diagnostic.source",
 			);
 		} finally {
 			await fs.rm(tempDir, { recursive: true, force: true });
@@ -69,7 +69,7 @@ suite("E2E (local): real tsqllint binary", () => {
 
 async function locateTsqllint(): Promise<string | null> {
 	const command = process.platform === "win32" ? "where.exe" : "which";
-	const args = ["tsqllint"];
+	const args = ["tsqlrefine"];
 	const result = await runCommand(command, args, 3000);
 	if (result.exitCode !== 0) {
 		return null;

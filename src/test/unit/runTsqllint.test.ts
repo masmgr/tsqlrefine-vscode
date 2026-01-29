@@ -16,9 +16,11 @@ suite("runTsqllint", () => {
 const args = process.argv.slice(2);
 process.stdout.write(JSON.stringify(args));
 `);
-		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "tsqllint-test-"));
+		const tempDir = await fs.mkdtemp(
+			path.join(os.tmpdir(), "tsqlrefine-test-"),
+		);
 		const filePath = path.join(tempDir, "query.sql");
-		const configPath = path.join(tempDir, "tsqllint.json");
+		const configPath = path.join(tempDir, "tsqlrefine.json");
 		await fs.writeFile(filePath, "select 1;", "utf8");
 		await fs.writeFile(configPath, "{}", "utf8");
 
@@ -53,7 +55,9 @@ setTimeout(() => {
 	process.stdout.write("late output");
 }, 2000);
 `);
-		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "tsqllint-test-"));
+		const tempDir = await fs.mkdtemp(
+			path.join(os.tmpdir(), "tsqlrefine-test-"),
+		);
 		const filePath = path.join(tempDir, "query.sql");
 		await fs.writeFile(filePath, "select 1;", "utf8");
 
@@ -85,7 +89,9 @@ setTimeout(() => {
 	process.stdout.write("late output");
 }, 2000);
 `);
-		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "tsqllint-test-"));
+		const tempDir = await fs.mkdtemp(
+			path.join(os.tmpdir(), "tsqlrefine-test-"),
+		);
 		const filePath = path.join(tempDir, "query.sql");
 		await fs.writeFile(filePath, "select 1;", "utf8");
 		const controller = new AbortController();
@@ -123,7 +129,7 @@ process.stderr.write("warning: deprecated option\\n");
 process.stdout.write("file.sql(1,1): error rule : message");
 `);
 			const tempDir = await fs.mkdtemp(
-				path.join(os.tmpdir(), "tsqllint-test-"),
+				path.join(os.tmpdir(), "tsqlrefine-test-"),
 			);
 			const filePath = path.join(tempDir, "query.sql");
 			await fs.writeFile(filePath, "select 1;", "utf8");
@@ -154,7 +160,7 @@ process.stdout.write("error occurred");
 process.exit(1);
 `);
 			const tempDir = await fs.mkdtemp(
-				path.join(os.tmpdir(), "tsqllint-test-"),
+				path.join(os.tmpdir(), "tsqlrefine-test-"),
 			);
 			const filePath = path.join(tempDir, "query.sql");
 			await fs.writeFile(filePath, "select 1;", "utf8");
@@ -185,7 +191,7 @@ process.exit(1);
 process.exit(0);
 `);
 			const tempDir = await fs.mkdtemp(
-				path.join(os.tmpdir(), "tsqllint-test-"),
+				path.join(os.tmpdir(), "tsqlrefine-test-"),
 			);
 			const filePath = path.join(tempDir, "query.sql");
 			await fs.writeFile(filePath, "select 1;", "utf8");
@@ -214,7 +220,7 @@ process.exit(0);
 });
 
 suite("verifyTsqllintInstallation", () => {
-	test("returns available=true when tsqllint is found", async () => {
+	test("returns available=true when tsqlrefine is found", async () => {
 		const fakeCli = await createFakeCli(`process.exit(0);`);
 		try {
 			const result = await verifyTsqllintInstallation({
@@ -231,7 +237,7 @@ suite("verifyTsqllintInstallation", () => {
 	test("returns available=false with message when custom path not found", async () => {
 		const nonexistentPath = path.join(
 			os.tmpdir(),
-			"nonexistent-tsqllint-12345",
+			"nonexistent-tsqlrefine-12345",
 		);
 		const result = await verifyTsqllintInstallation({
 			...defaultSettings,
@@ -243,7 +249,9 @@ suite("verifyTsqllintInstallation", () => {
 	});
 
 	test("returns available=false with message when path is not a file", async () => {
-		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "tsqllint-test-"));
+		const tempDir = await fs.mkdtemp(
+			path.join(os.tmpdir(), "tsqlrefine-test-"),
+		);
 		try {
 			const result = await verifyTsqllintInstallation({
 				...defaultSettings,
@@ -263,14 +271,14 @@ suite("verifyTsqllintInstallation", () => {
 		assert.ok(typeof result.available === "boolean");
 		if (!result.available) {
 			assert.ok(result.message);
-			assert.ok(result.message.includes("tsqllint not found"));
+			assert.ok(result.message.includes("tsqlrefine not found"));
 		}
 	});
 
 	test("does not throw errors when verification fails", async () => {
 		const nonexistentPath = path.join(
 			os.tmpdir(),
-			"nonexistent-tsqllint-67890",
+			"nonexistent-tsqlrefine-67890",
 		);
 		// Should not throw, just return available=false
 		const result = await verifyTsqllintInstallation({

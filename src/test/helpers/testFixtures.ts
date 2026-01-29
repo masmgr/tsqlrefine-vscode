@@ -84,7 +84,7 @@ export async function createTestWorkspace(workspaceRoot: vscode.Uri): Promise<{
 }> {
 	await fs.mkdir(workspaceRoot.fsPath, { recursive: true });
 	const tempDir = await fs.mkdtemp(
-		path.join(workspaceRoot.fsPath, "tsqllint-workspace-"),
+		path.join(workspaceRoot.fsPath, "tsqlrefine-workspace-"),
 	);
 
 	const createFile = async (
@@ -126,14 +126,14 @@ export async function createSqlDocument(
  * @returns Map of previous values for restoration
  *
  * @example
- * const snapshot = await applyTestConfig({ 'tsqllint.runOnSave': true });
+ * const snapshot = await applyTestConfig({ 'tsqlrefine.runOnSave': true });
  * // ... run tests ...
  * await restoreTestConfig(snapshot);
  */
 export async function applyTestConfig(
 	updates: Record<string, unknown>,
 ): Promise<Map<string, unknown | undefined>> {
-	const config = vscode.workspace.getConfiguration("tsqllint");
+	const config = vscode.workspace.getConfiguration("tsqlrefine");
 	const snapshot = new Map<string, unknown | undefined>();
 
 	for (const [key, value] of Object.entries(updates)) {
@@ -151,14 +151,14 @@ export async function applyTestConfig(
  * @param snapshot - Map of previous configuration values
  *
  * @example
- * const snapshot = await applyTestConfig({ 'tsqllint.runOnSave': true });
+ * const snapshot = await applyTestConfig({ 'tsqlrefine.runOnSave': true });
  * // ... run tests ...
  * await restoreTestConfig(snapshot);
  */
 export async function restoreTestConfig(
 	snapshot: Map<string, unknown | undefined>,
 ): Promise<void> {
-	const config = vscode.workspace.getConfiguration("tsqllint");
+	const config = vscode.workspace.getConfiguration("tsqlrefine");
 
 	for (const [key, value] of snapshot.entries()) {
 		// VS Code requires null (not undefined) to clear workspace-level settings

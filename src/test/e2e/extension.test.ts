@@ -38,7 +38,7 @@ suite("Extension Test Suite", () => {
 				);
 				const match = diagnostics.find(
 					(diag) =>
-						diag.source === "tsqllint" &&
+						diag.source === "tsqlrefine" &&
 						diag.code === FAKE_CLI_RULES.FAKE_RULE,
 				);
 				assert.ok(match);
@@ -47,7 +47,7 @@ suite("Extension Test Suite", () => {
 		);
 	});
 
-	test("tsqllint-lite.run updates diagnostics when runOnSave=false", async function () {
+	test("tsqlrefine.run updates diagnostics when runOnSave=false", async function () {
 		this.timeout(TEST_TIMEOUTS.MOCHA_TEST);
 
 		await runE2ETest(
@@ -62,7 +62,7 @@ suite("Extension Test Suite", () => {
 					preview: false,
 				});
 
-				await vscode.commands.executeCommand("tsqllint-lite.run");
+				await vscode.commands.executeCommand("tsqlrefine.run");
 
 				const diagnostics = await harness.waitForDiagnostics(
 					context.document.uri,
@@ -70,7 +70,7 @@ suite("Extension Test Suite", () => {
 				);
 				const match = diagnostics.find(
 					(diag) =>
-						diag.source === "tsqllint" &&
+						diag.source === "tsqlrefine" &&
 						diag.code === FAKE_CLI_RULES.MANUAL_RULE,
 				);
 				assert.ok(match);
@@ -107,7 +107,7 @@ suite("Extension Test Suite", () => {
 				);
 				const match = diagnostics.find(
 					(diag) =>
-						diag.source === "tsqllint" &&
+						diag.source === "tsqlrefine" &&
 						diag.code === FAKE_CLI_RULES.TYPE_RULE,
 				);
 				assert.ok(match);
@@ -149,7 +149,7 @@ suite("Extension Test Suite", () => {
 				);
 				const match = diagnostics.find(
 					(diag) =>
-						diag.source === "tsqllint" &&
+						diag.source === "tsqlrefine" &&
 						diag.code === FAKE_CLI_RULES.OPEN_RULE,
 				);
 				assert.ok(match);

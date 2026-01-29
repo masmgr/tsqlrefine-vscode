@@ -91,7 +91,10 @@ suite("handlers", () => {
 
 			const notifications = getMockNotifications(mockClient);
 			assert.strictEqual(notifications.length, 1);
-			assert.strictEqual(notifications[0]?.method, "tsqllint/clearDiagnostics");
+			assert.strictEqual(
+				notifications[0]?.method,
+				"tsqlrefine/clearDiagnostics",
+			);
 			assert.deepStrictEqual(notifications[0]?.params, {
 				uris: deletedUris.map((uri) => uri.toString()),
 			});
@@ -159,7 +162,10 @@ suite("handlers", () => {
 
 			const notifications = getMockNotifications(mockClient);
 			assert.strictEqual(notifications.length, 1);
-			assert.strictEqual(notifications[0]?.method, "tsqllint/clearDiagnostics");
+			assert.strictEqual(
+				notifications[0]?.method,
+				"tsqlrefine/clearDiagnostics",
+			);
 			assert.deepStrictEqual(notifications[0]?.params, {
 				uris: oldUris.map((uri) => uri.toString()),
 			});

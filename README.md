@@ -1,19 +1,19 @@
-# TSQLLint Lite
+# TSQLRefine
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/masmgr/tsqllint-vscode-lite)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.108.1+-007ACC.svg)](https://code.visualstudio.com/)
 
-A lightweight Visual Studio Code extension that integrates [TSQLLint](https://github.com/tsqllint/tsqllint) into your editor, providing real-time linting for T-SQL files with a powerful Language Server Protocol architecture.
+A lightweight Visual Studio Code extension that integrates [TSQLRefine](https://github.com/tsqlrefine/tsqlrefine) into your editor, providing real-time linting for T-SQL files with a powerful Language Server Protocol architecture.
 
 ## About This Extension
 
-This extension serves as an alternative to [tsqllint-vscode-extension](https://github.com/tsqllint/tsqllint-vscode-extension). The original extension references an outdated version of TSQLLint, so this project was created to enable integration with the latest TSQLLint releases.
+This extension serves as an alternative to [tsqlrefine-vscode-extension](https://github.com/tsqlrefine/tsqlrefine-vscode-extension). The original extension references an outdated version of TSQLRefine, so this project was created to enable integration with the latest TSQLRefine releases.
 
 ### Key Points
 
-- **TSQLLint must be installed separately** - This extension does not automatically download or bundle TSQLLint. You need to install it independently.
-- **Distinguishes errors and warnings** - This extension displays TSQLLint errors and warnings with appropriate severity levels in VS Code's diagnostic interface.
+- **TSQLRefine must be installed separately** - This extension does not automatically download or bundle TSQLRefine. You need to install it independently.
+- **Distinguishes errors and warnings** - This extension displays TSQLRefine errors and warnings with appropriate severity levels in VS Code's diagnostic interface.
 
 ## Features
 
@@ -24,7 +24,7 @@ This extension serves as an alternative to [tsqllint-vscode-extension](https://g
 
 ## Requirements
 
-**TSQLLint CLI must be installed separately.** This extension is a VS Code integration for TSQLLint.
+**TSQLRefine CLI must be installed separately.** This extension is a VS Code integration for TSQLRefine.
 
 ### Supported Language IDs
 
@@ -33,68 +33,68 @@ This extension runs on files with the following language IDs:
 - `tsql`
 - `mssql`
 
-### Installing TSQLLint
+### Installing TSQLRefine
 
 #### Using .NET CLI (recommended):
 ```bash
-dotnet tool install -g TSQLLint
+dotnet tool install -g TSQLRefine
 ```
 
 #### Using Chocolatey (Windows):
 ```bash
-choco install tsqllint
+choco install tsqlrefine
 ```
 
 #### Other options:
-Download from the [TSQLLint releases page](https://github.com/tsqllint/tsqllint/releases) or follow the [TSQLLint installation guide](https://github.com/tsqllint/tsqllint#installation).
+Download from the [TSQLRefine releases page](https://github.com/tsqlrefine/tsqlrefine/releases) or follow the [TSQLRefine installation guide](https://github.com/tsqlrefine/tsqlrefine#installation).
 
-After installation, verify TSQLLint is available:
+After installation, verify TSQLRefine is available:
 ```bash
-tsqllint --version
+tsqlrefine --version
 ```
 
 ## Extension Settings
 
-This extension contributes the following settings under the `tsqllint` namespace:
+This extension contributes the following settings under the `tsqlrefine` namespace:
 
-### `tsqllint.path`
+### `tsqlrefine.path`
 - **Type**: `string`
 - **Default**: `""` (searches PATH)
-- **Description**: Path to the tsqllint executable. Leave empty to use the tsqllint found in your PATH.
-- **Example**: `"C:\\tools\\tsqllint\\tsqllint.exe"` or `"/usr/local/bin/tsqllint"`
+- **Description**: Path to the tsqlrefine executable. Leave empty to use the tsqlrefine found in your PATH.
+- **Example**: `"C:\\tools\\tsqlrefine\\tsqlrefine.exe"` or `"/usr/local/bin/tsqlrefine"`
 
-### `tsqllint.configPath`
+### `tsqlrefine.configPath`
 - **Type**: `string`
-- **Default**: `""` (auto-detects `.tsqllintrc` in the workspace; otherwise uses tsqllint default)
-- **Description**: Path to your TSQLLint configuration file (`.tsqllintrc`). If set, passed as the `-c` argument to tsqllint. If empty, the extension searches for the nearest `.tsqllintrc` from the SQL file's folder up to the workspace root.
-- **Example**: `"${workspaceFolder}/.tsqllintrc"`
+- **Default**: `""` (auto-detects `.tsqlrefinerc` in the workspace; otherwise uses tsqlrefine default)
+- **Description**: Path to your TSQLRefine configuration file (`.tsqlrefinerc`). If set, passed as the `-c` argument to tsqlrefine. If empty, the extension searches for the nearest `.tsqlrefinerc` from the SQL file's folder up to the workspace root.
+- **Example**: `"${workspaceFolder}/.tsqlrefinerc"`
 
-### `tsqllint.runOnSave`
+### `tsqlrefine.runOnSave`
 - **Type**: `boolean`
 - **Default**: `true`
 - **Description**: Automatically run lint when a SQL document is saved.
 
-### `tsqllint.runOnType`
+### `tsqlrefine.runOnType`
 - **Type**: `boolean`
 - **Default**: `false`
 - **Description**: Run lint while typing (debounced). Useful for real-time feedback but may impact performance on large files.
 
-### `tsqllint.runOnOpen`
+### `tsqlrefine.runOnOpen`
 - **Type**: `boolean`
 - **Default**: `true`
 - **Description**: Run lint when a SQL document is opened.
 
-### `tsqllint.debounceMs`
+### `tsqlrefine.debounceMs`
 - **Type**: `number`
 - **Default**: `500`
 - **Description**: Debounce time in milliseconds for run-on-type. Higher values reduce CPU usage but increase delay before seeing lint results.
 
-### `tsqllint.timeoutMs`
+### `tsqlrefine.timeoutMs`
 - **Type**: `number`
 - **Default**: `10000` (10 seconds)
-- **Description**: Timeout in milliseconds for lint execution. If tsqllint takes longer than this, the process will be killed.
+- **Description**: Timeout in milliseconds for lint execution. If tsqlrefine takes longer than this, the process will be killed.
 
-### `tsqllint.maxFileSizeKb`
+### `tsqlrefine.maxFileSizeKb`
 - **Type**: `number`
 - **Default**: `0` (disabled)
 - **Description**: Maximum file size in KB for automatic linting (open/save/type). Manual lint still works. Set this to prevent accidental linting on very large files.
@@ -105,8 +105,8 @@ This extension contributes the following settings under the `tsqllint` namespace
 
 ```json
 {
-  "tsqllint.runOnSave": true,
-  "tsqllint.runOnType": false
+  "tsqlrefine.runOnSave": true,
+  "tsqlrefine.runOnType": false
 }
 ```
 
@@ -114,12 +114,12 @@ This extension contributes the following settings under the `tsqllint` namespace
 
 ```json
 {
-  "tsqllint.path": "C:\\tools\\tsqllint\\tsqllint.exe",
-  "tsqllint.configPath": "${workspaceFolder}/.tsqllintrc",
-  "tsqllint.runOnSave": true,
-  "tsqllint.runOnType": true,
-  "tsqllint.debounceMs": 1000,
-  "tsqllint.timeoutMs": 15000
+  "tsqlrefine.path": "C:\\tools\\tsqlrefine\\tsqlrefine.exe",
+  "tsqlrefine.configPath": "${workspaceFolder}/.tsqlrefinerc",
+  "tsqlrefine.runOnSave": true,
+  "tsqlrefine.runOnType": true,
+  "tsqlrefine.debounceMs": 1000,
+  "tsqlrefine.timeoutMs": 15000
 }
 ```
 
@@ -127,8 +127,8 @@ This extension contributes the following settings under the `tsqllint` namespace
 
 ```json
 {
-  "tsqllint.runOnType": true,
-  "tsqllint.debounceMs": 500
+  "tsqlrefine.runOnType": true,
+  "tsqlrefine.debounceMs": 500
 }
 ```
 
@@ -136,22 +136,22 @@ This extension contributes the following settings under the `tsqllint` namespace
 
 This extension provides the following commands:
 
-### `TSQLLint: Run`
-- **Command ID**: `tsqllint-lite.run`
+### `TSQLRefine: Run`
+- **Command ID**: `tsqlrefine.run`
 - **Description**: Manually run lint on the current SQL file
-- **Usage**: Command Palette (Ctrl+Shift+P / Cmd+Shift+P) → "TSQLLint: Run"
+- **Usage**: Command Palette (Ctrl+Shift+P / Cmd+Shift+P) → "TSQLRefine: Run"
 
-### `TSQLLint: Open Install Guide`
-- **Command ID**: `tsqllint-lite.openInstallGuide`
-- **Description**: Open the installation guide for tsqllint (TSQLLint CLI)
-- **Usage**: Command Palette → "TSQLLint: Open Install Guide"
+### `TSQLRefine: Open Install Guide`
+- **Command ID**: `tsqlrefine.openInstallGuide`
+- **Description**: Open the installation guide for tsqlrefine (TSQLRefine CLI)
+- **Usage**: Command Palette → "TSQLRefine: Open Install Guide"
 
 ## How It Works
 
 This extension uses the **Language Server Protocol (LSP)** architecture to provide efficient, non-blocking linting:
 
 1. Your SQL file is automatically linted when saved (or while typing if enabled)
-2. The extension spawns the TSQLLint CLI and parses its output
+2. The extension spawns the TSQLRefine CLI and parses its output
 3. Results are displayed as diagnostics (squiggles) in your editor
 4. The lint scheduler manages concurrency to prevent performance issues
 
@@ -159,24 +159,24 @@ For detailed architecture information, see [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## Troubleshooting
 
-### "tsqllint not found" or "Command failed: tsqllint"
+### "tsqlrefine not found" or "Command failed: tsqlrefine"
 
-**Cause**: The tsqllint executable is not in your PATH or the specified path is incorrect.
+**Cause**: The tsqlrefine executable is not in your PATH or the specified path is incorrect.
 
 **Solutions**:
-1. Verify tsqllint is installed: `tsqllint --version`
-2. If not installed, follow the [installation instructions](#installing-tsqllint)
-3. If installed but not in PATH, set `tsqllint.path` in your settings:
+1. Verify tsqlrefine is installed: `tsqlrefine --version`
+2. If not installed, follow the [installation instructions](#installing-tsqlrefine)
+3. If installed but not in PATH, set `tsqlrefine.path` in your settings:
    ```json
    {
-     "tsqllint.path": "C:\\path\\to\\tsqllint.exe"
+     "tsqlrefine.path": "C:\\path\\to\\tsqlrefine.exe"
    }
    ```
 4. Restart VS Code after changing settings
 
 **Tips**:
 - The extension will also show a diagnostic in the Problems panel and offer an "Open Install Guide" button.
-- Check logs in the VS Code Output panel under `tsqllint-lite`.
+- Check logs in the VS Code Output panel under `tsqlrefine`.
 
 ### Linting is slow or times out
 
@@ -186,13 +186,13 @@ For detailed architecture information, see [DEVELOPMENT.md](DEVELOPMENT.md).
 1. Increase the timeout in settings:
    ```json
    {
-     "tsqllint.timeoutMs": 30000
+     "tsqlrefine.timeoutMs": 30000
    }
    ```
 2. Disable run-on-type for large files:
    ```json
    {
-     "tsqllint.runOnType": false
+     "tsqlrefine.runOnType": false
    }
    ```
 3. Use manual lint commands instead of automatic linting
@@ -204,26 +204,26 @@ For detailed architecture information, see [DEVELOPMENT.md](DEVELOPMENT.md).
 **Solution**: Use double backslashes or forward slashes:
 ```json
 {
-  "tsqllint.path": "C:\\tools\\tsqllint.exe"
+  "tsqlrefine.path": "C:\\tools\\tsqlrefine.exe"
 }
 ```
 or
 ```json
 {
-  "tsqllint.path": "C:/tools/tsqllint.exe"
+  "tsqlrefine.path": "C:/tools/tsqlrefine.exe"
 }
 ```
 
 ### Config file not being used
 
-**Cause**: The `configPath` is not set, points to an incorrect location, or a different `.tsqllintrc` is being picked up.
+**Cause**: The `configPath` is not set, points to an incorrect location, or a different `.tsqlrefinerc` is being picked up.
 
 **Solutions**:
-1. Leave `tsqllint.configPath` empty to auto-detect `.tsqllintrc` (nearest to the file in the workspace)
+1. Leave `tsqlrefine.configPath` empty to auto-detect `.tsqlrefinerc` (nearest to the file in the workspace)
 2. Or set the config path explicitly (overrides auto-detection):
 ```json
 {
-  "tsqllint.configPath": "${workspaceFolder}/.tsqllintrc"
+  "tsqlrefine.configPath": "${workspaceFolder}/.tsqlrefinerc"
 }
 ```
 
@@ -237,7 +237,7 @@ or
 ### 1.0.0
 
 Stable release with enhanced features and improved tooling:
-- **TSQLLint installation verification**: Proactive startup check for tsqllint availability
+- **TSQLRefine installation verification**: Proactive startup check for tsqlrefine availability
 - **Comprehensive logging system**: Added logging infrastructure for better diagnostics
 - **Node.js 24 support**: Upgraded for improved performance and security
 - **Dependency updates**: Updated Biome to 2.3.11 and GitHub Actions to latest versions
@@ -246,11 +246,11 @@ Stable release with enhanced features and improved tooling:
 
 ### 0.0.2
 
-Initial release of tsqllint-lite:
+Initial release of tsqlrefine:
 - Real-time linting with LSP architecture
 - Manual lint commands
 - Configurable timeout and debouncing
-- Support for custom tsqllint paths and config files
+- Support for custom tsqlrefine paths and config files
 - Full-line diagnostic highlighting
 
 ## Contributing

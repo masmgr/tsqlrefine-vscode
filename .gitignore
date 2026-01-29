@@ -145,5 +145,5 @@ nul
 *.vsix
 
 test/fixtures/workspace/.vscode
-test/fixtures/workspace/tsqllint-*
+test/fixtures/workspace/tsqlrefine-*
 test/fixtures/workspace/*.sql

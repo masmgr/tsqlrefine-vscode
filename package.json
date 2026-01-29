@@ -1,7 +1,7 @@
 {
-	"name": "tsqllint-lite",
-	"displayName": "TSQLLint Lite",
-	"description": "Lightweight T-SQL linter integration for VS Code using TSQLLint",
+	"name": "tsqlrefine",
+	"displayName": "TSQLRefine",
+	"description": "Lightweight T-SQL linter integration for VS Code using TSQLRefine",
 	"version": "1.0.1",
 	"publisher": "masmgr",
 	"license": "MIT",
@@ -23,7 +23,7 @@
 		"Programming Languages"
 	],
 	"keywords": [
-		"tsqllint",
+		"tsqlrefine",
 		"t-sql",
 		"sql",
 		"linter",
@@ -43,55 +43,55 @@
 	"contributes": {
 		"commands": [
 			{
-				"command": "tsqllint-lite.run",
-				"title": "TSQLLint: Run",
-				"category": "TSQLLint"
+				"command": "tsqlrefine.run",
+				"title": "TSQLRefine: Run",
+				"category": "TSQLRefine"
 			},
 			{
-				"command": "tsqllint-lite.openInstallGuide",
-				"title": "TSQLLint: Open Install Guide",
-				"category": "TSQLLint"
+				"command": "tsqlrefine.openInstallGuide",
+				"title": "TSQLRefine: Open Install Guide",
+				"category": "TSQLRefine"
 			}
 		],
 		"configuration": {
-			"title": "tsqllint-lite",
+			"title": "tsqlrefine",
 			"properties": {
-				"tsqllint.path": {
+				"tsqlrefine.path": {
 					"type": "string",
 					"default": "",
-					"description": "Path to tsqllint executable."
+					"description": "Path to tsqlrefine executable."
 				},
-				"tsqllint.configPath": {
+				"tsqlrefine.configPath": {
 					"type": "string",
 					"default": "",
-					"description": "Path to tsqllint config file (passed with -c)."
+					"description": "Path to tsqlrefine config file (passed with -c)."
 				},
-				"tsqllint.runOnSave": {
+				"tsqlrefine.runOnSave": {
 					"type": "boolean",
 					"default": true,
 					"description": "Run lint when a SQL document is saved."
 				},
-				"tsqllint.runOnType": {
+				"tsqlrefine.runOnType": {
 					"type": "boolean",
 					"default": false,
 					"description": "Run lint while typing (debounced)."
 				},
-				"tsqllint.runOnOpen": {
+				"tsqlrefine.runOnOpen": {
 					"type": "boolean",
 					"default": true,
 					"description": "Run lint when a SQL document is opened."
 				},
-				"tsqllint.debounceMs": {
+				"tsqlrefine.debounceMs": {
 					"type": "number",
 					"default": 500,
 					"description": "Debounce time in milliseconds for run-on-type."
 				},
-				"tsqllint.timeoutMs": {
+				"tsqlrefine.timeoutMs": {
 					"type": "number",
 					"default": 10000,
 					"description": "Timeout in milliseconds for lint execution."
 				},
-				"tsqllint.maxFileSizeKb": {
+				"tsqlrefine.maxFileSizeKb": {
 					"type": "number",
 					"default": 0,
 					"description": "Maximum file size (KB) for automatic linting (open/save/type). 0 disables the limit."

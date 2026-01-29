@@ -18,7 +18,7 @@ suite("parseOutput", () => {
 		assert.ok(diag);
 		assert.strictEqual(diag.message, "Bad stuff");
 		assert.strictEqual(diag.severity, DiagnosticSeverity.Error);
-		assert.strictEqual(diag.source, "tsqllint");
+		assert.strictEqual(diag.source, "tsqlrefine");
 		assert.strictEqual(diag.code, "Rule-Name");
 		assert.deepStrictEqual(diag.range.start, { line: 1, character: 0 });
 		assert.deepStrictEqual(diag.range.end, { line: 1, character: 8 });

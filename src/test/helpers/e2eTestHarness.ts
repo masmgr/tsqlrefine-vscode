@@ -233,14 +233,14 @@ export async function runE2ETest(
 }
 
 /**
- * Activates the tsqllint-lite extension and waits for client to be ready.
+ * Activates the tsqlrefine extension and waits for client to be ready.
  * Should be called once at the beginning of the test suite or in each test.
  */
 export async function activateExtension(): Promise<void> {
 	const extension = vscode.extensions.all.find(
-		(ext) => ext.packageJSON?.name === "tsqllint-lite",
+		(ext) => ext.packageJSON?.name === "tsqlrefine",
 	);
-	assert.ok(extension, "Extension tsqllint-lite not found");
+	assert.ok(extension, "Extension tsqlrefine not found");
 
 	const api = (await extension.activate()) as { clientReady?: Promise<void> };
 	const clientReady = api.clientReady;
@@ -251,7 +251,7 @@ export async function activateExtension(): Promise<void> {
 
 /**
  * Cleans up VS Code workspace test artifacts.
- * Removes .vscode directory and tsqllint-workspace-* temporary directories.
+ * Removes .vscode directory and tsqlrefine-workspace-* temporary directories.
  *
  * @param workspaceRoot - The workspace root URI, or undefined if no workspace
  * @param options - Cleanup options
@@ -274,11 +274,11 @@ export async function cleanupWorkspace(
 		// Ignore errors if directory doesn't exist
 	}
 
-	// Clean up any remaining tsqllint-workspace-* directories
+	// Clean up any remaining tsqlrefine-workspace-* directories
 	try {
 		const entries = await fs.readdir(workspacePath);
 		for (const entry of entries) {
-			if (entry.startsWith("tsqllint-workspace-")) {
+			if (entry.startsWith("tsqlrefine-workspace-")) {
 				const fullPath = path.join(workspacePath, entry);
 				await removeDirectory(fullPath, options);
 			}

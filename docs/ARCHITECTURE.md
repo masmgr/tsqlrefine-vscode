@@ -13,7 +13,7 @@
 
 ## Overview
 
-TSQLLint Lite is a Visual Studio Code extension that integrates TSQLLint (a T-SQL linter) into the editor. It provides real-time linting for SQL files with support for both manual and automatic linting through a robust Language Server Protocol (LSP) architecture.
+TSQLRefine is a Visual Studio Code extension that integrates TSQLRefine (a T-SQL linter) into the editor. It provides real-time linting for SQL files with support for both manual and automatic linting through a robust Language Server Protocol (LSP) architecture.
 
 ### Key Features
 
@@ -49,7 +49,7 @@ This extension uses a **client-server architecture** based on the Language Serve
 │  │                                               │  │
 │  │  - Document Synchronization                  │  │
 │  │  - Lint Scheduler                            │  │
-│  │  - TSQLLint CLI Executor                     │  │
+│  │  - TSQLRefine CLI Executor                     │  │
 │  │  - Diagnostic Publishing                     │  │
 │  └───────────────────┬──────────────────────────┘  │
 │                      │                             │
@@ -58,7 +58,7 @@ This extension uses a **client-server architecture** based on the Language Serve
                        │ Process Spawn
                        ▼
               ┌─────────────────┐
-              │  TSQLLint CLI   │
+              │  TSQLRefine CLI   │
               │  (External)     │
               └─────────────────┘
 ```
@@ -75,7 +75,7 @@ This extension uses a **client-server architecture** based on the Language Serve
   - Document state management
   - Independent from VS Code UI thread
 
-- **TSQLLint CLI Process**: Spawned by the language server
+- **TSQLRefine CLI Process**: Spawned by the language server
   - External tool execution
   - Timeout and cancellation support
   - Short-lived per-lint operation
@@ -88,7 +88,7 @@ This extension uses a **client-server architecture** based on the Language Serve
 
 The main extension activation point that:
 - Creates and starts the language client
-- Registers the `tsqllint-lite.run` command
+- Registers the `tsqlrefine.run` command
 - Sets up file event handlers for delete/rename operations
 - Manages extension lifecycle (activate/deactivate)
 
@@ -106,7 +106,7 @@ Creates the LSP client connection:
 - **Server Module**: Loads `dist/server.js` in a separate process
 - **Transport**: Uses IPC (Inter-Process Communication)
 - **Document Selector**: Activates for SQL files (file and untitled schemes)
-- **Configuration Sync**: Synchronizes `tsqllint.*` settings
+- **Configuration Sync**: Synchronizes `tsqlrefine.*` settings
 
 **Debug Support**: Includes debug configuration with inspector on port 6009.
 
@@ -139,14 +139,14 @@ const scheduler = new LintScheduler({ ... });
 ```
 
 #### Custom LSP Requests
-- **`tsqllint/lintDocument`**: Manual lint request from client
-- **`tsqllint/clearDiagnostics`**: Clear diagnostics for specified URIs
+- **`tsqlrefine/lintDocument`**: Manual lint request from client
+- **`tsqlrefine/clearDiagnostics`**: Clear diagnostics for specified URIs
 
 #### Unsaved File Handling
 For unsaved documents (new files, modified files):
 1. Creates temporary directory in `os.tmpdir()`
 2. Writes document content to `untitled.sql`
-3. Runs tsqllint on temporary file
+3. Runs tsqlrefine on temporary file
 4. Maps results back to original URI
 5. Cleans up temporary files after completion
 
@@ -199,11 +199,11 @@ Manual lints (`reason: "manual"`) get special treatment:
 3. Wait for available slot using `semaphore.acquire()`
 4. Return result as Promise for synchronous feedback
 
-### 6. TSQLLint Runner
+### 6. TSQLRefine Runner
 
 **File**: [src/server/lint/runTsqllint.ts](../src/server/lint/runTsqllint.ts)
 
-Executes the tsqllint CLI with proper process management.
+Executes the tsqlrefine CLI with proper process management.
 
 #### Executable Resolution
 
@@ -215,7 +215,7 @@ async function findTsqllintExecutable(
 ```
 
 - **Custom Path Priority**: Uses `settings.path` if specified
-- **PATH Search**: Falls back to `which tsqllint` (Unix) or `where tsqllint` (Windows)
+- **PATH Search**: Falls back to `which tsqlrefine` (Unix) or `where tsqlrefine` (Windows)
 - **Caching**: Results cached for 30 seconds (TTL)
 - **Platform Detection**: Checks file extension for Windows `.cmd`/`.bat` files
 
@@ -275,9 +275,9 @@ signal?.addEventListener('abort', () => {
 
 **File**: [src/server/lint/parseOutput.ts](../src/server/lint/parseOutput.ts)
 
-Parses tsqllint output into VS Code diagnostics.
+Parses tsqlrefine output into VS Code diagnostics.
 
-#### TSQLLint Output Format
+#### TSQLRefine Output Format
 
 ```
 <file>(<line>,<col>): <severity> <rule> : <message>
@@ -297,7 +297,7 @@ const LINT_PATTERN = /^(.+?)\((\d+),(\d+)\):\s+(warning|error)\s+([^\s]+)\s*:\s*
 
 Extracts:
 1. **File path**: Normalized and resolved to absolute path
-2. **Line/Column**: 1-based indices from tsqllint
+2. **Line/Column**: 1-based indices from tsqlrefine
 3. **Severity**: Maps `error` → `DiagnosticSeverity.Error`, `warning` → `DiagnosticSeverity.Warning`
 4. **Rule name**: Used as diagnostic code
 5. **Message**: Full diagnostic message
@@ -306,7 +306,7 @@ Extracts:
 
 Currently fixed to **"line"** mode:
 - Highlights entire line containing the issue
-- Uses line index from tsqllint output
+- Uses line index from tsqlrefine output
 - Range: `[line, 0]` to `[line, lineLength]`
 
 #### Path Normalization
@@ -346,8 +346,8 @@ Handles encoding detection and conversion:
 
 ```typescript
 export type TsqllintSettings = {
-  path?: string;          // Custom tsqllint path (optional)
-  configPath?: string;    // TSQLLint config file (optional)
+  path?: string;          // Custom tsqlrefine path (optional)
+  configPath?: string;    // TSQLRefine config file (optional)
   runOnSave: boolean;     // Auto-lint on save
   runOnType: boolean;     // Auto-lint while typing
   runOnOpen: boolean;     // Auto-lint on open
@@ -372,7 +372,7 @@ Settings are:
 │    - User saves file                                    │
 │    - User types (if runOnType enabled)                  │
 │    - User opens file (if runOnOpen enabled)             │
-│    - User runs command "TSQLLint: Run"                  │
+│    - User runs command "TSQLRefine: Run"                  │
 └────────────────────────┬────────────────────────────────┘
                          │
                          ▼
@@ -538,7 +538,7 @@ private readonly queuedUris: string[] = [];
 async function getSettingsForDocument(uri: string): Promise<TsqllintSettings> {
   const scopedConfig = await connection.workspace.getConfiguration({
     scopeUri: uri,
-    section: "tsqllint",
+    section: "tsqlrefine",
   });
   return normalizeSettings({
     ...defaultSettings,
@@ -581,9 +581,9 @@ Test individual functions in isolation:
 
 **Location**: [src/test/e2e/](../src/test/e2e/)
 
-Test full integration with VS Code and tsqllint CLI:
+Test full integration with VS Code and tsqlrefine CLI:
 - **extension.test.ts**: Extension activation, command registration, client lifecycle
-- **localTsqllint.test.ts**: Tests with real tsqllint installation
+- **localTsqllint.test.ts**: Tests with real tsqlrefine installation
 
 **Run Command**: `npm run test:e2e`
 
@@ -591,7 +591,7 @@ Test full integration with VS Code and tsqllint CLI:
 - `@vscode/test-cli` and `@vscode/test-electron` for VS Code instance
 - `.vscode-test.mjs` configuration
 
-**Prerequisites**: For localTsqllint tests, TSQLLint must be installed and available in PATH
+**Prerequisites**: For localTsqllint tests, TSQLRefine must be installed and available in PATH
 
 ### Test Helpers
 
@@ -645,12 +645,12 @@ Provides:
 - Cleanup on success/failure
 
 #### fakeCli.ts
-Mock tsqllint CLI helper for unit tests:
+Mock tsqlrefine CLI helper for unit tests:
 ```typescript
 function createFakeCli(outputLines: string[]): string
 ```
 
-Generates a Node.js script that mimics tsqllint output.
+Generates a Node.js script that mimics tsqlrefine output.
 
 ### Test Organization Best Practices
 
@@ -676,7 +676,7 @@ npm run compile:test   # Compile test files to out/ (tsc)
 
 Contains:
 - Sample SQL files for testing
-- Configuration files (`.tsqllintrc`)
+- Configuration files (`.tsqlrefinerc`)
 - Test workspace settings
 
 ## Build System
@@ -886,7 +886,7 @@ Tests run on both platforms via GitHub Actions (if configured):
    - Cleans up resources
    - No user notification (expected behavior)
 
-5. **TSQLLint Errors** (stderr output)
+5. **TSQLRefine Errors** (stderr output)
    - Shows first line as warning
    - Logs full stderr to console
    - Still publishes diagnostics from stdout
@@ -894,7 +894,7 @@ Tests run on both platforms via GitHub Actions (if configured):
 ### Error Propagation
 
 ```
-TSQLLint Error → runTsqllint() throws
+TSQLRefine Error → runTsqllint() throws
                 ↓
            runLintNow() catches
                 ↓
@@ -917,7 +917,7 @@ TSQLLint Error → runTsqllint() throws
 
 The architecture supports adding:
 
-1. **Custom Lint Rules**: Via tsqllint config files
+1. **Custom Lint Rules**: Via tsqlrefine config files
 2. **Code Actions**: Fix suggestions based on rule violations
 3. **Range Mode**: Character-level highlighting (currently line-level)
 4. **Multiple File Types**: Extend beyond SQL files
@@ -941,7 +941,7 @@ Potential additions:
 
 - [Language Server Protocol Specification](https://microsoft.github.io/language-server-protocol/)
 - [VS Code Extension API](https://code.visualstudio.com/api)
-- [TSQLLint Documentation](https://github.com/tsqllint/tsqllint)
+- [TSQLRefine Documentation](https://github.com/tsqlrefine/tsqlrefine)
 - [esbuild Documentation](https://esbuild.github.io/)
 
 ---

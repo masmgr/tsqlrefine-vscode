@@ -9,7 +9,7 @@ suite("Startup Verification Test Suite", () => {
 		await cleanupWorkspace(workspaceRoot);
 	});
 
-	test("verifies tsqllint installation at startup without crashing", async function () {
+	test("verifies tsqlrefine installation at startup without crashing", async function () {
 		this.timeout(TEST_TIMEOUTS.MOCHA_TEST);
 
 		await runE2ETest(
@@ -46,7 +46,7 @@ suite("Startup Verification Test Suite", () => {
 				});
 
 				// Execute manual lint command to verify extension is functional
-				await vscode.commands.executeCommand("tsqllint-lite.run");
+				await vscode.commands.executeCommand("tsqlrefine.run");
 
 				// Wait for diagnostics to verify linting works
 				const diagnostics = await harness.waitForDiagnostics(
@@ -55,7 +55,7 @@ suite("Startup Verification Test Suite", () => {
 				);
 				const match = diagnostics.find(
 					(diag) =>
-						diag.source === "tsqllint" &&
+						diag.source === "tsqlrefine" &&
 						diag.code === FAKE_CLI_RULES.MANUAL_RULE,
 				);
 				assert.ok(match);

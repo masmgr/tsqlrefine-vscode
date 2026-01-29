@@ -90,7 +90,7 @@ documents.onDidClose((change) => {
 });
 
 connection.onRequest(
-	"tsqllint/lintDocument",
+	"tsqlrefine/lintDocument",
 	async (params: { uri: string }) => {
 		const issues = await requestLint(params.uri, "manual", null);
 		return { ok: issues >= 0, issues: Math.max(0, issues) };
@@ -98,7 +98,7 @@ connection.onRequest(
 );
 
 connection.onNotification(
-	"tsqllint/clearDiagnostics",
+	"tsqlrefine/clearDiagnostics",
 	(params: { uris: string[] }) => {
 		for (const uri of params.uris) {
 			scheduler.clear(uri);
@@ -115,7 +115,7 @@ connection.listen();
 async function refreshSettings(): Promise<void> {
 	const config =
 		(await connection.workspace.getConfiguration({
-			section: "tsqllint",
+			section: "tsqlrefine",
 		})) ?? {};
 	settings = normalizeSettings({
 		...defaultSettings,
@@ -127,11 +127,11 @@ async function verifyInstallation(): Promise<void> {
 	const result = await verifyTsqllintInstallation(settings);
 
 	if (!result.available) {
-		const message = result.message || "tsqllint not found";
+		const message = result.message || "tsqlrefine not found";
 		await maybeNotifyMissingTsqllint(message);
 		connection.console.warn(`[startup] ${message}`);
 	} else {
-		connection.console.log("[startup] tsqllint installation verified");
+		connection.console.log("[startup] tsqlrefine installation verified");
 	}
 }
 
@@ -145,7 +145,7 @@ async function handleDidChangeContent(document: TextDocument): Promise<void> {
 		requestLint(document.uri, "type", document.version, docSettings.debounceMs);
 	} catch (error) {
 		connection.console.error(
-			`tsqllint: failed to react to change (${String(error)})`,
+			`tsqlrefine: failed to react to change (${String(error)})`,
 		);
 	}
 }
@@ -160,7 +160,7 @@ async function handleDidSave(document: TextDocument): Promise<void> {
 		}
 	} catch (error) {
 		connection.console.error(
-			`tsqllint: failed to react to save (${String(error)})`,
+			`tsqlrefine: failed to react to save (${String(error)})`,
 		);
 	}
 }
@@ -178,7 +178,7 @@ async function handleDidOpen(document: TextDocument): Promise<void> {
 		}
 	} catch (error) {
 		connection.console.error(
-			`tsqllint: failed to react to open (${String(error)})`,
+			`tsqlrefine: failed to react to open (${String(error)})`,
 		);
 	}
 }
@@ -186,7 +186,7 @@ async function handleDidOpen(document: TextDocument): Promise<void> {
 async function getSettingsForDocument(uri: string): Promise<TsqllintSettings> {
 	const scopedConfig = ((await connection.workspace.getConfiguration({
 		scopeUri: uri,
-		section: "tsqllint",
+		section: "tsqlrefine",
 	})) ?? {}) as Partial<TsqllintSettings>;
 	return normalizeSettings({
 		...defaultSettings,
@@ -279,13 +279,13 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 				uri,
 				diagnostics: [
 					{
-						message: `tsqllint-lite: lint skipped (file too large: ${sizeKb}KB > maxFileSizeKb=${effectiveSettings.maxFileSizeKb}). Run "TSQLLint: Run" to lint manually or increase the limit.`,
+						message: `tsqlrefine: lint skipped (file too large: ${sizeKb}KB > maxFileSizeKb=${effectiveSettings.maxFileSizeKb}). Run "TSQLRefine: Run" to lint manually or increase the limit.`,
 						severity: DiagnosticSeverity.Information,
 						range: {
 							start: { line: 0, character: 0 },
 							end: { line: 0, character: 0 },
 						},
-						source: "tsqllint-lite",
+						source: "tsqlrefine",
 						code: "lint-skipped-file-too-large",
 					},
 				],
@@ -307,7 +307,7 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 	connection.console.log(`[runLintNow] CWD: ${cwd}`);
 	connection.console.log(`[runLintNow] Is saved: ${isSavedFile}`);
 	connection.console.log(
-		`[runLintNow] Config path: ${effectiveConfigPath ?? "(tsqllint default)"}`,
+		`[runLintNow] Config path: ${effectiveConfigPath ?? "(tsqlrefine default)"}`,
 	);
 
 	let result: LintRunResult;
@@ -323,19 +323,19 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 		const message = firstLine(String(error));
 		if (isMissingTsqllintError(message)) {
 			await maybeNotifyMissingTsqllint(message);
-			connection.console.warn(`tsqllint: ${message}`);
+			connection.console.warn(`tsqlrefine: ${message}`);
 			connection.sendDiagnostics({
 				uri,
 				diagnostics: [
 					{
-						message: `tsqllint-lite: ${message}`,
+						message: `tsqlrefine: ${message}`,
 						severity: DiagnosticSeverity.Error,
 						range: {
 							start: { line: 0, character: 0 },
 							end: { line: 0, character: 0 },
 						},
-						source: "tsqllint-lite",
-						code: "tsqllint-not-found",
+						source: "tsqlrefine",
+						code: "tsqlrefine-not-found",
 					},
 				],
 			});
@@ -352,8 +352,8 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 	}
 
 	if (result.timedOut) {
-		await connection.window.showWarningMessage("tsqllint: lint timed out.");
-		connection.console.warn("tsqllint: lint timed out.");
+		await connection.window.showWarningMessage("tsqlrefine: lint timed out.");
+		connection.console.warn("tsqlrefine: lint timed out.");
 		connection.sendDiagnostics({ uri, diagnostics: [] });
 		await cleanupTemp(tempInfo);
 		return -1;
@@ -440,7 +440,7 @@ async function createTempFile(
 	content: string,
 	originalPath?: string,
 ): Promise<{ dir: string; filePath: string }> {
-	const dir = await fs.mkdtemp(path.join(os.tmpdir(), "tsqllint-"));
+	const dir = await fs.mkdtemp(path.join(os.tmpdir(), "tsqlrefine-"));
 	const filePath = path.join(dir, resolveTempFileName(originalPath));
 	await fs.writeFile(filePath, content, "utf8");
 	return { dir, filePath };
@@ -468,7 +468,7 @@ async function cleanupTemp(
 		await fs.rm(tempInfo.dir, { recursive: true, force: true });
 	} catch (error) {
 		connection.console.warn(
-			`tsqllint: failed to remove temp dir (${String(error)})`,
+			`tsqlrefine: failed to remove temp dir (${String(error)})`,
 		);
 	}
 }
@@ -476,9 +476,9 @@ async function cleanupTemp(
 async function notifyRunFailure(error: unknown): Promise<void> {
 	const message = String(error);
 	await connection.window.showWarningMessage(
-		`tsqllint: failed to run (${message})`,
+		`tsqlrefine: failed to run (${message})`,
 	);
-	connection.console.warn(`tsqllint: failed to run (${message})`);
+	connection.console.warn(`tsqlrefine: failed to run (${message})`);
 }
 
 const missingTsqllintNoticeCooldownMs = 5 * 60 * 1000;
@@ -491,20 +491,20 @@ async function maybeNotifyMissingTsqllint(message: string): Promise<void> {
 	}
 	lastMissingTsqllintNoticeAtMs = now;
 	const action = await connection.window.showWarningMessage(
-		`tsqllint-lite: ${message}`,
+		`tsqlrefine: ${message}`,
 		{ title: "Open Install Guide" },
 	);
 	if (action?.title === "Open Install Guide") {
-		connection.sendNotification("tsqllint/openInstallGuide");
+		connection.sendNotification("tsqlrefine/openInstallGuide");
 	}
 }
 
 function isMissingTsqllintError(message: string): boolean {
 	const normalized = message.toLowerCase();
 	return (
-		normalized.includes("tsqllint not found") ||
-		normalized.includes("tsqllint.path not found") ||
-		normalized.includes("tsqllint.path is not a file")
+		normalized.includes("tsqlrefine not found") ||
+		normalized.includes("tsqlrefine.path not found") ||
+		normalized.includes("tsqlrefine.path is not a file")
 	);
 }
 
@@ -513,7 +513,9 @@ async function notifyStderr(stderr: string): Promise<void> {
 	if (!trimmed) {
 		return;
 	}
-	await connection.window.showWarningMessage(`tsqllint: ${firstLine(trimmed)}`);
+	await connection.window.showWarningMessage(
+		`tsqlrefine: ${firstLine(trimmed)}`,
+	);
 	connection.console.warn(trimmed);
 }
 

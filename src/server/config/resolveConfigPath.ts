@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
-const defaultConfigFileNames = [".tsqllintrc"];
+const defaultConfigFileNames = [".tsqlrefinerc"];
 const cacheTtlMs = 5000;
 
 type CacheEntry = {

@@ -168,7 +168,7 @@ async function resolveCommand(settings: TsqllintSettings): Promise<string> {
 		await assertPathExists(configuredPath);
 		return configuredPath;
 	}
-	const command = "tsqllint";
+	const command = "tsqlrefine";
 	if (
 		cachedCommandAvailability &&
 		cachedCommandAvailability.command === command
@@ -177,7 +177,7 @@ async function resolveCommand(settings: TsqllintSettings): Promise<string> {
 			Date.now() - cachedCommandAvailability.checkedAt < commandCacheTtlMs;
 		if (!cachedCommandAvailability.available && isFresh) {
 			throw new Error(
-				"tsqllint not found. Set tsqllint.path or install tsqllint.",
+				"tsqlrefine not found. Set tsqlrefine.path or install tsqlrefine.",
 			);
 		}
 		if (cachedCommandAvailability.available) {
@@ -188,17 +188,17 @@ async function resolveCommand(settings: TsqllintSettings): Promise<string> {
 	cachedCommandAvailability = { command, available, checkedAt: Date.now() };
 	if (!available) {
 		throw new Error(
-			"tsqllint not found. Set tsqllint.path or install tsqllint.",
+			"tsqlrefine not found. Set tsqlrefine.path or install tsqlrefine.",
 		);
 	}
 	return command;
 }
 
 /**
- * Verify that tsqllint is available for the given settings.
+ * Verify that tsqlrefine is available for the given settings.
  * This is a lightweight check used at startup and when settings change.
  *
- * @param settings - The tsqllint settings to verify
+ * @param settings - The tsqlrefine settings to verify
  * @returns Object with available status and error message if not available
  */
 export async function verifyTsqllintInstallation(
@@ -217,14 +217,14 @@ async function assertPathExists(filePath: string): Promise<void> {
 	try {
 		const stat = await fs.stat(filePath);
 		if (!stat.isFile()) {
-			throw new Error(`tsqllint.path is not a file: ${filePath}`);
+			throw new Error(`tsqlrefine.path is not a file: ${filePath}`);
 		}
 	} catch (error) {
 		// Re-throw if it's already our custom error message
 		if (error instanceof Error && error.message.includes("not a file")) {
 			throw error;
 		}
-		throw new Error(`tsqllint.path not found: ${filePath}`);
+		throw new Error(`tsqlrefine.path not found: ${filePath}`);
 	}
 }
 

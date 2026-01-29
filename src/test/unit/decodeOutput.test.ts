@@ -164,7 +164,7 @@ suite("decodeOutput", () => {
 	});
 
 	suite("Real-world scenarios", () => {
-		test("handles tsqllint error output (UTF-8)", () => {
+		test("handles tsqlrefine error output (UTF-8)", () => {
 			const output = "file.sql(10,5): error rule-name : Invalid syntax";
 			const buffer = Buffer.from(output, "utf8");
 

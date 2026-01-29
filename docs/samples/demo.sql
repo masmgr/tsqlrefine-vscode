@@ -1,4 +1,4 @@
--- TSQLLint Demo Query
+-- TSQLRefine Demo Query
 -- This file demonstrates various T-SQL linting issues that the extension will catch
 -- Save this file or enable "runOnType" to see real-time linting in action
 

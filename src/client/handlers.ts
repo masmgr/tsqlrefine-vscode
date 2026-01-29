@@ -21,7 +21,7 @@ export async function handleDidDeleteFiles(
 		await clientReady;
 	}
 	const uris = event.files.map((file) => file.toString());
-	client.sendNotification("tsqllint/clearDiagnostics", { uris });
+	client.sendNotification("tsqlrefine/clearDiagnostics", { uris });
 }
 
 /**
@@ -44,5 +44,5 @@ export async function handleDidRenameFiles(
 		await clientReady;
 	}
 	const uris = event.files.map((file) => file.oldUri.toString());
-	client.sendNotification("tsqllint/clearDiagnostics", { uris });
+	client.sendNotification("tsqlrefine/clearDiagnostics", { uris });
 }

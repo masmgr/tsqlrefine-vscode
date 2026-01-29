@@ -13,21 +13,21 @@ export type TsqllintLiteApi = {
 };
 
 const installGuideUrl =
-	"https://github.com/masmgr/tsqllint-vscode-lite#installing-tsqllint";
+	"https://github.com/masmgr/tsqllint-vscode-lite#installing-tsqlrefine";
 
 export function activate(context: vscode.ExtensionContext): TsqllintLiteApi {
 	client = createLanguageClient(context);
 
 	const openInstallGuideCommand = vscode.commands.registerCommand(
-		"tsqllint-lite.openInstallGuide",
+		"tsqlrefine.openInstallGuide",
 		async () => {
 			await vscode.env.openExternal(vscode.Uri.parse(installGuideUrl));
 		},
 	);
 	context.subscriptions.push(openInstallGuideCommand);
 
-	client.onNotification("tsqllint/openInstallGuide", () => {
-		void vscode.commands.executeCommand("tsqllint-lite.openInstallGuide");
+	client.onNotification("tsqlrefine/openInstallGuide", () => {
+		void vscode.commands.executeCommand("tsqlrefine.openInstallGuide");
 	});
 
 	const startPromise = client.start();
@@ -40,7 +40,7 @@ export function activate(context: vscode.ExtensionContext): TsqllintLiteApi {
 	});
 
 	const lintCommand = vscode.commands.registerCommand(
-		"tsqllint-lite.run",
+		"tsqlrefine.run",
 		async () => {
 			const activeEditor = vscode.window.activeTextEditor;
 			if (!activeEditor) {
@@ -49,7 +49,7 @@ export function activate(context: vscode.ExtensionContext): TsqllintLiteApi {
 			if (clientReady) {
 				await clientReady;
 			}
-			await client?.sendRequest("tsqllint/lintDocument", {
+			await client?.sendRequest("tsqlrefine/lintDocument", {
 				uri: activeEditor.document.uri.toString(),
 			});
 		},

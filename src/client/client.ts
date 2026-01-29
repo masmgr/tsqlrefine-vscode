@@ -29,13 +29,13 @@ export function createLanguageClient(
 			{ scheme: "untitled", language },
 		]),
 		synchronize: {
-			configurationSection: "tsqllint",
+			configurationSection: "tsqlrefine",
 		},
 	};
 
 	return new LanguageClient(
-		"tsqllintLite",
-		"tsqllint-lite",
+		"tsqlrefineLite",
+		"tsqlrefine",
 		serverOptions,
 		clientOptions,
 	);

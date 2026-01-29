@@ -1,7 +1,7 @@
-# Agent Guide: tsqllint-vscode-lite
+# Agent Guide: tsqlrefine-vscode-lite
 
 ## Purpose
-- VS Code extension named `tsqllint-lite`.
+- VS Code extension named `tsqlrefine`.
 - Source is in `src/`; compiled output goes to `out/`.
 
 ## Key paths

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is `tsqllint-lite`, a VS Code extension that integrates TSQLLint (a T-SQL linter) into the editor. It provides real-time linting for SQL files with support for both manual and automatic linting.
+This is `tsqlrefine`, a VS Code extension that integrates TSQLRefine (a T-SQL linter) into the editor. It provides real-time linting for SQL files with support for both manual and automatic linting.
 
 ## Build and Test Commands
 
@@ -53,7 +53,7 @@ This extension uses the **Language Server Protocol (LSP)** architecture with sep
 
 - **Client** ([src/client/client.ts](src/client/client.ts)): Runs in the VS Code extension host
   - Creates and manages the LanguageClient connection
-  - Registers commands (`tsqllint-lite.run`)
+  - Registers commands (`tsqlrefine.run`)
   - Handles file lifecycle events (delete, rename)
 
 - **Server** ([src/server/server.ts](src/server/server.ts)): Runs in a separate Node.js process
@@ -80,32 +80,32 @@ The scheduler handles four lint reasons:
 - `"manual"`: Triggered by explicit commands
 - `"open"`: Triggered when document is opened (if `runOnOpen` is enabled)
 
-#### 2. TSQLLint Runner ([src/server/lint/runTsqllint.ts](src/server/lint/runTsqllint.ts))
+#### 2. TSQLRefine Runner ([src/server/lint/runTsqllint.ts](src/server/lint/runTsqllint.ts))
 
-Executes the tsqllint CLI with proper process management:
-- **Executable resolution**: Finds tsqllint via `settings.path` or PATH with caching (30s TTL)
+Executes the tsqlrefine CLI with proper process management:
+- **Executable resolution**: Finds tsqlrefine via `settings.path` or PATH with caching (30s TTL)
 - **Windows handling**: Wraps `.cmd`/`.bat` files with `cmd.exe /c`
 - **Timeout protection**: Kills processes exceeding `settings.timeoutMs` (default 10s)
 - **Cancellation support**: Respects AbortSignal for clean cancellation
-- **Startup verification**: Verifies tsqllint installation at startup and on configuration changes
+- **Startup verification**: Verifies tsqlrefine installation at startup and on configuration changes
 
 ##### Startup Verification
 
-The extension proactively verifies tsqllint installation using `verifyTsqllintInstallation()`:
+The extension proactively verifies tsqlrefine installation using `verifyTsqllintInstallation()`:
 - **When verification runs**:
   - At extension startup (after `onInitialized()` and `refreshSettings()`)
-  - When `tsqllint.path` setting changes (detected in `onDidChangeConfiguration()`)
+  - When `tsqlrefine.path` setting changes (detected in `onDidChangeConfiguration()`)
 - **Non-blocking behavior**: Verification failures show warnings but do not prevent extension activation
 - **User-facing messages**:
-  - Not in PATH: "tsqllint not found. Set tsqllint.path or install tsqllint."
-  - Invalid path: "tsqllint.path not found: /path/to/tsqllint"
-  - Not a file: "tsqllint.path is not a file: /path/to/directory"
+  - Not in PATH: "tsqlrefine not found. Set tsqlrefine.path or install tsqlrefine."
+  - Invalid path: "tsqlrefine.path not found: /path/to/tsqlrefine"
+  - Not a file: "tsqlrefine.path is not a file: /path/to/directory"
 - **Cache reuse**: Leverages existing 30-second command resolution cache
-- **Configuration change detection**: Only `tsqllint.path` changes trigger re-verification (other settings like `runOnSave`, `debounceMs` do not affect tsqllint availability)
+- **Configuration change detection**: Only `tsqlrefine.path` changes trigger re-verification (other settings like `runOnSave`, `debounceMs` do not affect tsqlrefine availability)
 
 #### 3. Output Parser ([src/server/lint/parseOutput.ts](src/server/lint/parseOutput.ts))
 
-Parses tsqllint output into VS Code diagnostics:
+Parses tsqlrefine output into VS Code diagnostics:
 - **Pattern**: `<file>(<line>,<col>): <severity> <rule> : <message>`
 - **Range mode**: Always highlights entire line (fixed to "line" mode)
 - **Path normalization**: Handles Windows case-insensitivity and path resolution
@@ -130,10 +130,10 @@ The server tracks document state throughout its lifecycle:
 
 ## Configuration
 
-The extension contributes these settings (namespace: `tsqllint`):
+The extension contributes these settings (namespace: `tsqlrefine`):
 
-- `path`: Custom tsqllint executable path (default: searches PATH)
-- `configPath`: TSQLLint config file path (passed as `-c` argument)
+- `path`: Custom tsqlrefine executable path (default: searches PATH)
+- `configPath`: TSQLRefine config file path (passed as `-c` argument)
 - `runOnSave`: Auto-lint on save (default: true)
 - `runOnType`: Lint while typing (default: false)
 - `runOnOpen`: Auto-lint on open (default: true)
@@ -153,11 +153,11 @@ Tests are organized into two categories under [src/test/](src/test/):
 
 2. **E2E tests** ([src/test/e2e/](src/test/e2e/)): Test full integration with VS Code
    - [extension.test.ts](src/test/e2e/extension.test.ts) - Extension activation and commands
-   - [localTsqllint.test.ts](src/test/e2e/localTsqllint.test.ts) - Real tsqllint CLI integration
+   - [localTsqllint.test.ts](src/test/e2e/localTsqllint.test.ts) - Real tsqlrefine CLI integration
    - [startup.test.ts](src/test/e2e/startup.test.ts) - Startup verification tests
 
 3. **Test helpers** ([src/test/helpers/](src/test/helpers/)): Shared utilities
-   - `fakeCli.ts` - Mock tsqllint CLI helper
+   - `fakeCli.ts` - Mock tsqlrefine CLI helper
    - `testFixtures.ts` - Reusable test data factories
    - `e2eTestHarness.ts` - E2E test setup/teardown automation
    - `testConstants.ts` - Centralized timeouts and constants
@@ -287,7 +287,7 @@ Pull requests created by Dependabot are labeled with `dependencies` and `automat
 - In-flight requests are tracked in `inFlightByUri` map and cancelled when superseded
 
 ### Error Handling
-- TSQLLint errors go to stderr and are shown as warnings
+- TSQLRefine errors go to stderr and are shown as warnings
 - CLI spawn errors reject the promise and clear diagnostics
 
 ### TypeScript Configuration

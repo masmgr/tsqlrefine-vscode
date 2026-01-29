@@ -7,14 +7,16 @@ import { rmWithRetry } from "../helpers/cleanup";
 
 suite("resolveConfigPath", () => {
 	test("prefers configuredConfigPath and expands placeholders", async () => {
-		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "tsqllint-test-"));
+		const tempDir = await fs.mkdtemp(
+			path.join(os.tmpdir(), "tsqlrefine-test-"),
+		);
 		try {
 			const workspaceRoot = path.join(tempDir, "workspace");
 			const filePath = path.join(workspaceRoot, "src", "query.sql");
 			await fs.mkdir(path.dirname(filePath), { recursive: true });
 
 			const resolved = await resolveConfigPath({
-				configuredConfigPath: `\${workspaceFolder}/.tsqllintrc`,
+				configuredConfigPath: `\${workspaceFolder}/.tsqlrefinerc`,
 				filePath,
 				workspaceRoot,
 			});
@@ -22,20 +24,22 @@ suite("resolveConfigPath", () => {
 			assert.ok(resolved);
 			assert.strictEqual(
 				path.normalize(resolved),
-				path.normalize(path.join(workspaceRoot, ".tsqllintrc")),
+				path.normalize(path.join(workspaceRoot, ".tsqlrefinerc")),
 			);
 		} finally {
 			await rmWithRetry(tempDir);
 		}
 	});
 
-	test("finds nearest .tsqllintrc when not configured", async () => {
-		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "tsqllint-test-"));
+	test("finds nearest .tsqlrefinerc when not configured", async () => {
+		const tempDir = await fs.mkdtemp(
+			path.join(os.tmpdir(), "tsqlrefine-test-"),
+		);
 		try {
 			const workspaceRoot = path.join(tempDir, "workspace");
-			const rootConfig = path.join(workspaceRoot, ".tsqllintrc");
+			const rootConfig = path.join(workspaceRoot, ".tsqlrefinerc");
 			const nestedDir = path.join(workspaceRoot, "src", "nested");
-			const nestedConfig = path.join(nestedDir, ".tsqllintrc");
+			const nestedConfig = path.join(nestedDir, ".tsqlrefinerc");
 			const filePath = path.join(nestedDir, "query.sql");
 
 			await fs.mkdir(nestedDir, { recursive: true });

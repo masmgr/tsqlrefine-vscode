@@ -1,12 +1,12 @@
 # Development Guide
 
-This document provides guidance for developers working on the tsqllint-lite VS Code extension.
+This document provides guidance for developers working on the tsqlrefine VS Code extension.
 
 ## Project Overview
 
-**tsqllint-lite** is a VS Code extension that integrates [TSQLLint](https://github.com/tsqllint/tsqllint) into the editor. It provides real-time linting for SQL files with support for both manual and automatic linting using a Language Server Protocol (LSP) architecture.
+**tsqlrefine** is a VS Code extension that integrates [TSQLRefine](https://github.com/tsqlrefine/tsqlrefine) into the editor. It provides real-time linting for SQL files with support for both manual and automatic linting using a Language Server Protocol (LSP) architecture.
 
-**Note**: This project was built from scratch and is not forked from [tsqllint-vscode-extension](https://github.com/tsqllint/tsqllint-vscode-extension). The codebase is independently developed to support the latest TSQLLint versions and LSP architecture.
+**Note**: This project was built from scratch and is not forked from [tsqlrefine-vscode-extension](https://github.com/tsqlrefine/tsqlrefine-vscode-extension). The codebase is independently developed to support the latest TSQLRefine versions and LSP architecture.
 
 ## Prerequisites
 
@@ -20,7 +20,7 @@ This document provides guidance for developers working on the tsqllint-lite VS C
 1. Clone the repository:
 ```bash
 git clone https://github.com/masmgr/tsqllint-vscode-lite.git
-cd tsqllint-vscode-lite
+cd tsqlrefine-vscode-lite
 ```
 
 2. Install dependencies:
@@ -71,7 +71,7 @@ npm run vscode:prepublish # Production build with optimizations
 ## Project Structure
 
 ```
-tsqllint-lite/
+tsqlrefine/
 ├── src/
 │   ├── client/
 │   │   └── client.ts          # VS Code extension host (LSP client)
@@ -79,7 +79,7 @@ tsqllint-lite/
 │   │   ├── server.ts          # LSP server process
 │   │   └── lint/
 │   │       ├── scheduler.ts    # Concurrency-controlled lint scheduler
-│   │       ├── runTsqllint.ts  # TSQLLint CLI executor
+│   │       ├── runTsqllint.ts  # TSQLRefine CLI executor
 │   │       └── parseOutput.ts  # Output parser to VS Code diagnostics
 │   ├── test/                  # Unit tests
 │   └── e2e/                   # End-to-end tests
@@ -101,7 +101,7 @@ This extension uses the **Language Server Protocol (LSP)** architecture with sep
 
 - **Client** ([src/client/client.ts](src/client/client.ts)): Runs in the VS Code extension host
   - Creates and manages the LanguageClient connection
-  - Registers commands (`tsqllint-lite.run`)
+  - Registers commands (`tsqlrefine.run`)
   - Handles file lifecycle events (delete, rename)
 
 - **Server** ([src/server/server.ts](src/server/server.ts)): Runs in a separate Node.js process
@@ -128,17 +128,17 @@ The scheduler handles four lint reasons:
 - `"manual"`: Triggered by explicit commands
 - `"open"`: Triggered when document is opened (if `runOnOpen` is enabled)
 
-#### 2. TSQLLint Runner ([src/server/lint/runTsqllint.ts](src/server/lint/runTsqllint.ts))
+#### 2. TSQLRefine Runner ([src/server/lint/runTsqllint.ts](src/server/lint/runTsqllint.ts))
 
-Executes the tsqllint CLI with proper process management:
-- **Executable resolution**: Finds tsqllint via `settings.path` or PATH with caching (30s TTL)
+Executes the tsqlrefine CLI with proper process management:
+- **Executable resolution**: Finds tsqlrefine via `settings.path` or PATH with caching (30s TTL)
 - **Windows handling**: Wraps `.cmd`/`.bat` files with `cmd.exe /c`
 - **Timeout protection**: Kills processes exceeding `settings.timeoutMs` (default 10s)
 - **Cancellation support**: Respects AbortSignal for clean cancellation
 
 #### 3. Output Parser ([src/server/lint/parseOutput.ts](src/server/lint/parseOutput.ts))
 
-Parses tsqllint output into VS Code diagnostics:
+Parses tsqlrefine output into VS Code diagnostics:
 - **Pattern**: `<file>(<line>,<col>): <severity> <rule> : <message>`
 - **Range mode**: Always highlights entire line (fixed to "line" mode)
 - **Path normalization**: Handles Windows case-insensitivity and path resolution
@@ -163,10 +163,10 @@ The server tracks document state throughout its lifecycle:
 
 ## Configuration
 
-The extension contributes these settings (namespace: `tsqllint`):
+The extension contributes these settings (namespace: `tsqlrefine`):
 
-- `path`: Custom tsqllint executable path (default: searches PATH)
-- `configPath`: TSQLLint config file path (passed as `-c` argument)
+- `path`: Custom tsqlrefine executable path (default: searches PATH)
+- `configPath`: TSQLRefine config file path (passed as `-c` argument)
 - `runOnSave`: Auto-lint on save (default: true)
 - `runOnType`: Lint while typing (default: false)
 - `runOnOpen`: Auto-lint on open (default: true)
@@ -186,7 +186,7 @@ Tests are organized into two main categories under [src/test/](src/test/) with c
 
 2. **E2E tests** ([src/test/e2e/](src/test/e2e/)): Test full integration with VS Code
    - [extension.test.ts](src/test/e2e/extension.test.ts) - Extension activation and commands
-   - [localTsqllint.test.ts](src/test/e2e/localTsqllint.test.ts) - Real tsqllint CLI integration
+   - [localTsqllint.test.ts](src/test/e2e/localTsqllint.test.ts) - Real tsqlrefine CLI integration
 
 ### Test Organization
 
@@ -195,7 +195,7 @@ Test helpers: [src/test/helpers/](src/test/helpers/)
 - `cleanup.ts` - File system cleanup utilities with retry logic
 - `testFixtures.ts` - Reusable test data factories
 - `e2eTestHarness.ts` - E2E test setup/teardown automation
-- `fakeCli.ts` - Mock tsqllint CLI helper
+- `fakeCli.ts` - Mock tsqlrefine CLI helper
 
 ### Code Coverage
 
@@ -206,7 +206,7 @@ Test helpers: [src/test/helpers/](src/test/helpers/)
 
 ### Writing Tests
 
-Use the fake CLI helper for mocking tsqllint:
+Use the fake CLI helper for mocking tsqlrefine:
 
 ```typescript
 import { runE2ETest } from './helpers/e2eTestHarness';
@@ -282,7 +282,7 @@ git commit --no-verify
 - In-flight requests are tracked in `inFlightByUri` map and cancelled when superseded
 
 ### Error Handling
-- TSQLLint errors go to stderr and are shown as warnings
+- TSQLRefine errors go to stderr and are shown as warnings
 - CLI spawn errors reject the promise and clear diagnostics
 
 ### TypeScript Configuration
@@ -340,7 +340,7 @@ Runs when a release is published on GitHub:
 
 3. Ensure publisher ID is set in `package.json`:
    ```json
-   "publisher": "tsqllint-lite"
+   "publisher": "tsqlrefine"
    ```
 
 #### Release Process
@@ -409,7 +409,7 @@ vsce publish --packagePath *.vsix --pat <YOUR_PAT>
 
 - [Language Server Protocol](https://microsoft.github.io/language-server-protocol/)
 - [VS Code Extension API](https://code.visualstudio.com/api)
-- [TSQLLint Documentation](https://github.com/tsqllint/tsqllint)
+- [TSQLRefine Documentation](https://github.com/tsqlrefine/tsqlrefine)
 - [esbuild Documentation](https://esbuild.github.io/)
 - [TypeScript Documentation](https://www.typescriptlang.org/docs/)
 

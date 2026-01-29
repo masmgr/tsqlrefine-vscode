@@ -1,15 +1,15 @@
 # Change Log
 
-All notable changes to the "tsqllint-lite" extension will be documented in this file.
+All notable changes to the "tsqlrefine" extension will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [1.0.1] - 2026-01-27
 
 ### Added
-- **Auto-detection of `.tsqllintrc` config file**: The extension now automatically searches for `.tsqllintrc` from the SQL file's folder up to the workspace root when `tsqllint.configPath` is not explicitly set
-- **TSQLLint installation guide command**: New `TSQLLint: Open Install Guide` command to help users install TSQLLint CLI
-- **File size limit setting**: New `tsqllint.maxFileSizeKb` setting to prevent automatic linting on large files (manual lint still works)
+- **Auto-detection of `.tsqlrefinerc` config file**: The extension now automatically searches for `.tsqlrefinerc` from the SQL file's folder up to the workspace root when `tsqlrefine.configPath` is not explicitly set
+- **TSQLRefine installation guide command**: New `TSQLRefine: Open Install Guide` command to help users install TSQLRefine CLI
+- **File size limit setting**: New `tsqlrefine.maxFileSizeKb` setting to prevent automatic linting on large files (manual lint still works)
 - **Multi-language support**: Extension now activates for `sql`, `tsql`, and `mssql` language IDs
 - **Verification script**: Added `npm run verify` script to run tests, typecheck, lint, and format in one command
 
@@ -26,7 +26,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/), and this 
 ## [1.0.0] - 2026-01-20
 
 ### Added
-- **TSQLLint installation verification**: Proactive startup check for tsqllint availability with user-friendly error messages
+- **TSQLRefine installation verification**: Proactive startup check for tsqlrefine availability with user-friendly error messages
 - **Comprehensive logging system**: Added logging infrastructure for better debugging and diagnostics
 - **Updated Node.js support**: Upgraded to Node.js 24 for improved performance and security
 
@@ -58,28 +58,28 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/), and this 
 ## [0.0.1] - 2026-01-18
 
 ### Added
-- **Real-time T-SQL linting** with TSQLLint integration
+- **Real-time T-SQL linting** with TSQLRefine integration
 - **Language Server Protocol (LSP) architecture** for non-blocking, efficient operation
   - Client-server architecture with separate processes
   - Supports document synchronization and lifecycle management
 - **Automatic linting triggers**:
-  - On save (`tsqllint.runOnSave` setting, enabled by default)
-  - On open (`tsqllint.runOnOpen` setting, enabled by default)
-  - While typing (`tsqllint.runOnType` setting, disabled by default)
-- **Manual lint command**: `TSQLLint: Run` for on-demand linting
+  - On save (`tsqlrefine.runOnSave` setting, enabled by default)
+  - On open (`tsqlrefine.runOnOpen` setting, enabled by default)
+  - While typing (`tsqlrefine.runOnType` setting, disabled by default)
+- **Manual lint command**: `TSQLRefine: Run` for on-demand linting
 - **Intelligent lint scheduling**:
   - Concurrent execution control (max 4 simultaneous lint processes)
   - Smart queuing for pending lint requests
-  - Debouncing for typing events (configurable via `tsqllint.debounceMs`)
+  - Debouncing for typing events (configurable via `tsqlrefine.debounceMs`)
   - Document version tracking to ensure accuracy
 - **Customizable diagnostic display**:
   - Full-line highlighting for all diagnostics (rangeMode removed for simplicity)
 - **Flexible configuration options**:
-  - Custom TSQLLint executable path (`tsqllint.path`)
-  - Custom TSQLLint config file path (`tsqllint.configPath`)
-  - Configurable timeout (`tsqllint.timeoutMs`, default 10 seconds)
-  - Configurable debounce delay (`tsqllint.debounceMs`, default 500ms)
-  - Auto-lint on open setting (`tsqllint.runOnOpen`)
+  - Custom TSQLRefine executable path (`tsqlrefine.path`)
+  - Custom TSQLRefine config file path (`tsqlrefine.configPath`)
+  - Configurable timeout (`tsqlrefine.timeoutMs`, default 10 seconds)
+  - Configurable debounce delay (`tsqlrefine.debounceMs`, default 500ms)
+  - Auto-lint on open setting (`tsqlrefine.runOnOpen`)
 - **Cross-platform support**:
   - Windows, macOS, and Linux compatibility
   - Proper handling of Windows `.cmd` and `.bat` executables
@@ -114,7 +114,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/), and this 
 
 ### Requirements
 - VS Code version 1.108.1 or higher
-- TSQLLint CLI must be installed separately (via .NET CLI, Chocolatey, or manual installation)
+- TSQLRefine CLI must be installed separately (via .NET CLI, Chocolatey, or manual installation)
 
 ---
 
