@@ -48,6 +48,79 @@ process.stdout.write(JSON.stringify(args));
 		}
 	});
 
+	test("passes content via stdin when stdin option is provided", async () => {
+		const fakeCli = await createFakeCli(`
+let stdinData = '';
+process.stdin.on('data', chunk => { stdinData += chunk; });
+process.stdin.on('end', () => {
+	const args = process.argv.slice(2);
+	process.stdout.write(JSON.stringify({ args, stdin: stdinData }));
+});
+`);
+		const tempDir = await fs.mkdtemp(
+			path.join(os.tmpdir(), "tsqlrefine-test-"),
+		);
+		const configPath = path.join(tempDir, "tsqlrefine.json");
+		await fs.writeFile(configPath, "{}", "utf8");
+		const stdinContent = "SELECT * FROM users;";
+
+		try {
+			const result = await runTsqllint({
+				filePath: "untitled.sql",
+				cwd: tempDir,
+				settings: {
+					...defaultSettings,
+					path: fakeCli.commandPath,
+					configPath,
+					timeoutMs: 2000,
+				},
+				signal: new AbortController().signal,
+				stdin: stdinContent,
+			});
+
+			const output = JSON.parse(result.stdout);
+			assert.deepStrictEqual(output.args, ["-c", configPath, "-"]);
+			assert.strictEqual(output.stdin, stdinContent);
+			assert.strictEqual(result.exitCode, 0);
+		} finally {
+			await fakeCli.cleanup();
+			await rmWithRetry(tempDir);
+		}
+	});
+
+	test("reads from file when stdin is null", async () => {
+		const fakeCli = await createFakeCli(`
+const args = process.argv.slice(2);
+process.stdout.write(JSON.stringify(args));
+`);
+		const tempDir = await fs.mkdtemp(
+			path.join(os.tmpdir(), "tsqlrefine-test-"),
+		);
+		const filePath = path.join(tempDir, "query.sql");
+		await fs.writeFile(filePath, "select 1;", "utf8");
+
+		try {
+			const result = await runTsqllint({
+				filePath,
+				cwd: tempDir,
+				settings: {
+					...defaultSettings,
+					path: fakeCli.commandPath,
+					timeoutMs: 2000,
+				},
+				signal: new AbortController().signal,
+				stdin: null,
+			});
+
+			const args = JSON.parse(result.stdout);
+			assert.deepStrictEqual(args, [filePath]);
+			assert.strictEqual(result.exitCode, 0);
+		} finally {
+			await fakeCli.cleanup();
+			await rmWithRetry(tempDir);
+		}
+	});
+
 	test("returns timedOut when process exceeds timeout", async function () {
 		this.timeout(5000);
 		const fakeCli = await createFakeCli(`

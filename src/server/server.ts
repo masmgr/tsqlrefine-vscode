@@ -1,5 +1,4 @@
 import * as fs from "node:fs/promises";
-import * as os from "node:os";
 import * as path from "node:path";
 import {
 	createConnection,
@@ -262,6 +261,7 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 			? { ...documentSettings, configPath: effectiveConfigPath }
 			: documentSettings;
 
+	const documentText = document.getText();
 	const isSavedFile = isSaved(document);
 	const maxBytes = maxFileSizeBytes(effectiveSettings.maxFileSizeKb);
 	if (maxBytes !== null && reason !== "manual") {
@@ -297,15 +297,16 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 	const controller = new AbortController();
 	inFlightByUri.set(uri, controller);
 
-	const documentText = document.getText();
-	const tempInfo = await createTempFile(documentText, filePath);
-	const targetFilePath = tempInfo.filePath;
+	// Use stdin for unsaved files, file path for saved files
+	const useStdin = !isSavedFile;
+	const targetFilePath = useStdin ? filePath || "untitled.sql" : filePath;
 
 	connection.console.log(`[runLintNow] URI: ${uri}`);
 	connection.console.log(`[runLintNow] File path: ${filePath}`);
 	connection.console.log(`[runLintNow] Target file path: ${targetFilePath}`);
 	connection.console.log(`[runLintNow] CWD: ${cwd}`);
 	connection.console.log(`[runLintNow] Is saved: ${isSavedFile}`);
+	connection.console.log(`[runLintNow] Using stdin: ${useStdin}`);
 	connection.console.log(
 		`[runLintNow] Config path: ${effectiveConfigPath ?? "(tsqlrefine default)"}`,
 	);
@@ -317,6 +318,7 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 			cwd,
 			settings: effectiveSettings,
 			signal: controller.signal,
+			stdin: useStdin ? documentText : null,
 		});
 	} catch (error) {
 		inFlightByUri.delete(uri);
@@ -343,7 +345,6 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 			await notifyRunFailure(error);
 			connection.sendDiagnostics({ uri, diagnostics: [] });
 		}
-		await cleanupTemp(tempInfo);
 		return -1;
 	}
 
@@ -355,12 +356,10 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 		await connection.window.showWarningMessage("tsqlrefine: lint timed out.");
 		connection.console.warn("tsqlrefine: lint timed out.");
 		connection.sendDiagnostics({ uri, diagnostics: [] });
-		await cleanupTemp(tempInfo);
 		return -1;
 	}
 
 	if (controller.signal.aborted || result.cancelled) {
-		await cleanupTemp(tempInfo);
 		return -1;
 	}
 
@@ -373,14 +372,13 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 		uri,
 		cwd,
 		lines: documentText.split(/\r?\n/),
-		targetPaths: [tempInfo.filePath],
+		targetPaths: [targetFilePath],
 		logger: {
 			log: (message: string) => connection.console.log(message),
 		},
 	});
 
 	connection.sendDiagnostics({ uri, diagnostics });
-	await cleanupTemp(tempInfo);
 	return diagnostics.length;
 }
 
@@ -434,43 +432,6 @@ function isSaved(document: TextDocument): boolean {
 	}
 	const savedVersion = savedVersionByUri.get(document.uri);
 	return savedVersion !== undefined && savedVersion === document.version;
-}
-
-async function createTempFile(
-	content: string,
-	originalPath?: string,
-): Promise<{ dir: string; filePath: string }> {
-	const dir = await fs.mkdtemp(path.join(os.tmpdir(), "tsqlrefine-"));
-	const filePath = path.join(dir, resolveTempFileName(originalPath));
-	await fs.writeFile(filePath, content, "utf8");
-	return { dir, filePath };
-}
-
-function resolveTempFileName(originalPath?: string): string {
-	if (!originalPath) {
-		return "untitled.sql";
-	}
-	const baseName = path.basename(originalPath);
-	const extension = path.extname(baseName);
-	if (extension) {
-		return baseName;
-	}
-	return `${baseName}.sql`;
-}
-
-async function cleanupTemp(
-	tempInfo: { dir: string; filePath: string } | null,
-): Promise<void> {
-	if (!tempInfo) {
-		return;
-	}
-	try {
-		await fs.rm(tempInfo.dir, { recursive: true, force: true });
-	} catch (error) {
-		connection.console.warn(
-			`tsqlrefine: failed to remove temp dir (${String(error)})`,
-		);
-	}
 }
 
 async function notifyRunFailure(error: unknown): Promise<void> {

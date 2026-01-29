@@ -10,6 +10,8 @@ export type RunTsqllintOptions = {
 	cwd: string;
 	settings: TsqllintSettings;
 	signal: AbortSignal;
+	/** Document content to pass via stdin. If null, tsqlrefine will read from filePath. */
+	stdin?: string | null;
 };
 
 export async function runTsqllint(
@@ -39,8 +41,14 @@ export async function runTsqllint(
 
 		const child = spawn(spawnSpec.command, spawnSpec.args, {
 			cwd: options.cwd,
-			stdio: ["ignore", "pipe", "pipe"],
+			stdio: [options.stdin != null ? "pipe" : "ignore", "pipe", "pipe"],
 		});
+
+		// Write stdin content if provided
+		if (options.stdin != null && child.stdin) {
+			child.stdin.write(options.stdin, "utf8");
+			child.stdin.end();
+		}
 
 		const finish = (result: LintRunResult) => {
 			if (settled) {
@@ -105,10 +113,10 @@ export async function runTsqllint(
 			{ once: true },
 		);
 
-		child.stdout.on("data", (data: Buffer) => {
+		child.stdout?.on("data", (data: Buffer) => {
 			stdoutChunks.push(data);
 		});
-		child.stderr.on("data", (data: Buffer) => {
+		child.stderr?.on("data", (data: Buffer) => {
 			stderrChunks.push(data);
 		});
 
@@ -158,7 +166,12 @@ function buildArgs(options: RunTsqllintOptions): string[] {
 	if (configPath) {
 		args.push("-c", configPath);
 	}
-	args.push(options.filePath);
+	// Use "-" to read from stdin if stdin content is provided
+	if (options.stdin != null) {
+		args.push("-");
+	} else {
+		args.push(options.filePath);
+	}
 	return args;
 }
 

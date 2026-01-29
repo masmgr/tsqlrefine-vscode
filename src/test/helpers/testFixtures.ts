@@ -27,8 +27,21 @@ export async function createStandardFakeCli(
 	const msg = message ?? `${ruleName.replace("Rule", "")} issue`;
 	const scriptBody = `
 const args = process.argv.slice(2);
-const filePath = args[args.length - 1] || "";
-process.stdout.write(\`\${filePath}(1,1): ${severity} ${ruleName} : ${msg}.\`);
+const lastArg = args[args.length - 1] || "";
+
+// Handle stdin input (when last arg is "-")
+if (lastArg === "-") {
+	let stdinData = '';
+	process.stdin.on('data', chunk => { stdinData += chunk; });
+	process.stdin.on('end', () => {
+		// Use a generic filename for stdin
+		process.stdout.write(\`untitled.sql(1,1): ${severity} ${ruleName} : ${msg}.\`);
+	});
+} else {
+	// Use file path from args
+	const filePath = lastArg;
+	process.stdout.write(\`\${filePath}(1,1): ${severity} ${ruleName} : ${msg}.\`);
+}
 `;
 	return createFakeCli(scriptBody);
 }
