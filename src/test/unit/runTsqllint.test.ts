@@ -38,7 +38,7 @@ process.stdout.write(JSON.stringify(args));
 			});
 
 			const args = JSON.parse(result.stdout);
-			assert.deepStrictEqual(args, ["-c", configPath, filePath]);
+			assert.deepStrictEqual(args, ["lint", "-c", configPath, filePath]);
 			assert.strictEqual(result.exitCode, 0);
 			assert.strictEqual(result.timedOut, false);
 			assert.strictEqual(result.cancelled, false);
@@ -79,7 +79,12 @@ process.stdin.on('end', () => {
 			});
 
 			const output = JSON.parse(result.stdout);
-			assert.deepStrictEqual(output.args, ["-c", configPath, "-"]);
+			assert.deepStrictEqual(output.args, [
+				"lint",
+				"-c",
+				configPath,
+				"--stdin",
+			]);
 			assert.strictEqual(output.stdin, stdinContent);
 			assert.strictEqual(result.exitCode, 0);
 		} finally {
@@ -113,7 +118,7 @@ process.stdout.write(JSON.stringify(args));
 			});
 
 			const args = JSON.parse(result.stdout);
-			assert.deepStrictEqual(args, [filePath]);
+			assert.deepStrictEqual(args, ["lint", filePath]);
 			assert.strictEqual(result.exitCode, 0);
 		} finally {
 			await fakeCli.cleanup();
