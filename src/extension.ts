@@ -49,7 +49,11 @@ export function activate(context: vscode.ExtensionContext): TsqllintLiteApi {
 			if (clientReady) {
 				await clientReady;
 			}
-			await client?.sendRequest("tsqlrefine/lintDocument", {
+			if (!client) {
+				console.error("tsqlrefine: Language client is not initialized");
+				return;
+			}
+			await client.sendRequest("tsqlrefine/lintDocument", {
 				uri: activeEditor.document.uri.toString(),
 			});
 		},
@@ -81,7 +85,11 @@ export function activate(context: vscode.ExtensionContext): TsqllintLiteApi {
 			if (clientReady) {
 				await clientReady;
 			}
-			await client?.sendRequest("tsqlrefine/fixDocument", {
+			if (!client) {
+				console.error("tsqlrefine: Language client is not initialized");
+				return;
+			}
+			await client.sendRequest("tsqlrefine/fixDocument", {
 				uri: activeEditor.document.uri.toString(),
 			});
 		},

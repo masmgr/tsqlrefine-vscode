@@ -62,21 +62,36 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 			continue;
 		}
 		const match = pattern.exec(line);
-		const groups = match?.groups as
-			| {
-					file: string;
-					line: string;
-					col: string;
-					severity: string;
-					message: string;
-					rule: string;
-			  }
-			| undefined;
+		const groups = match?.groups;
 		if (!groups) {
 			continue;
 		}
 
-		const rawPath = groups.file;
+		// Type guard: verify all required properties exist and are strings
+		// biome-ignore lint/complexity/useLiteralKeys: TypeScript requires bracket notation for index signatures
+		const rawPath = groups["file"];
+		// biome-ignore lint/complexity/useLiteralKeys: TypeScript requires bracket notation for index signatures
+		const rawLine = groups["line"];
+		// biome-ignore lint/complexity/useLiteralKeys: TypeScript requires bracket notation for index signatures
+		const rawCol = groups["col"];
+		// biome-ignore lint/complexity/useLiteralKeys: TypeScript requires bracket notation for index signatures
+		const rawSeverity = groups["severity"];
+		// biome-ignore lint/complexity/useLiteralKeys: TypeScript requires bracket notation for index signatures
+		const rawMessage = groups["message"];
+		// biome-ignore lint/complexity/useLiteralKeys: TypeScript requires bracket notation for index signatures
+		const rawRule = groups["rule"];
+
+		if (
+			typeof rawPath !== "string" ||
+			typeof rawLine !== "string" ||
+			typeof rawCol !== "string" ||
+			typeof rawSeverity !== "string" ||
+			typeof rawMessage !== "string" ||
+			typeof rawRule !== "string"
+		) {
+			continue;
+		}
+
 		if (!rawPath) {
 			continue;
 		}
@@ -91,15 +106,6 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 		);
 		if (!targetPaths.has(resolvedPath)) {
 			options.logger?.log(`[parseOutput] Path not in target paths, skipping`);
-			continue;
-		}
-
-		const rawLine = groups.line;
-		const rawCol = groups.col;
-		const rawSeverity = groups.severity;
-		const rawMessage = groups.message;
-		const rawRule = groups.rule;
-		if (!rawLine || !rawCol || !rawSeverity || !rawMessage || !rawRule) {
 			continue;
 		}
 
