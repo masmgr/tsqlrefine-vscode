@@ -8,7 +8,7 @@ suite("parseOutput", () => {
 	test("parses diagnostics for matching path", () => {
 		const filePath = path.resolve("workspace", "query.sql");
 		const uri = URI.file(filePath).toString();
-		const stdout = `${filePath}(2,5): error Rule-Name : Bad stuff.`;
+		const stdout = `${filePath}:2:5: Error: Bad stuff (Rule-Name)`;
 		const lines = ["select 1;", "select *"];
 
 		const diagnostics = parseOutput({ stdout, uri, cwd: null, lines });
@@ -28,7 +28,7 @@ suite("parseOutput", () => {
 		const cwd = path.resolve("workspace");
 		const filePath = path.join(cwd, "query.sql");
 		const uri = URI.file(filePath).toString();
-		const stdout = "query.sql(1,1): warning RuleX : Heads up.";
+		const stdout = "query.sql:1:1: Warning: Heads up (RuleX)";
 		const lines = ["select 1;"];
 
 		const diagnostics = parseOutput({ stdout, uri, cwd, lines });
@@ -45,7 +45,7 @@ suite("parseOutput", () => {
 		const cwd = path.resolve("workspace");
 		const filePath = path.join(cwd, "query.sql");
 		const uri = URI.file(filePath).toString();
-		const stdout = "query.sql(1,99): error RuleX : Heads up.";
+		const stdout = "query.sql:1:99: Error: Heads up (RuleX)";
 		const lines = ["select 1;"];
 
 		const diagnostics = parseOutput({
@@ -66,7 +66,7 @@ suite("parseOutput", () => {
 		const cwd = path.resolve("workspace");
 		const filePath = path.join(cwd, "query.sql");
 		const uri = URI.file(filePath).toString();
-		const stdout = "query.sql(1,20): warning RuleX : Heads up.";
+		const stdout = "query.sql:1:20: Warning: Heads up (RuleX)";
 		const lines = ["select 1;"];
 
 		const diagnostics = parseOutput({ stdout, uri, cwd, lines });
@@ -82,7 +82,7 @@ suite("parseOutput", () => {
 		const cwd = path.resolve("workspace");
 		const filePath = path.join(cwd, "query.sql");
 		const uri = URI.file(filePath).toString();
-		const stdout = "other.sql(1,1): warning RuleY : Not for this file.";
+		const stdout = "other.sql:1:1: Warning: Not for this file (RuleY)";
 		const lines = ["select 1;"];
 
 		const diagnostics = parseOutput({ stdout, uri, cwd, lines });
@@ -113,7 +113,7 @@ suite("parseOutput", () => {
 		const filePath = path.join(cwd, "query.sql");
 		const tempPath = path.join(cwd, "temp.sql");
 		const uri = URI.file(filePath).toString();
-		const stdout = `${tempPath}(1,2): warning RuleZ : Temp hit.`;
+		const stdout = `${tempPath}:1:2: Warning: Temp hit (RuleZ)`;
 		const lines = ["select 1;"];
 
 		const diagnostics = parseOutput({
@@ -131,11 +131,44 @@ suite("parseOutput", () => {
 		assert.strictEqual(diag.message, "Temp hit");
 	});
 
-	test("allows missing trailing period and extra severity tokens", () => {
+	test("handles Hint severity", () => {
 		const cwd = path.resolve("workspace");
 		const filePath = path.join(cwd, "query.sql");
 		const uri = URI.file(filePath).toString();
-		const stdout = "query.sql(1,1): warning style RuleX : Heads up";
+		const stdout = "query.sql:1:1: Hint: Consider using alias (style/alias)";
+		const lines = ["select 1;"];
+
+		const diagnostics = parseOutput({ stdout, uri, cwd, lines });
+
+		assert.strictEqual(diagnostics.length, 1);
+		const diag = diagnostics[0];
+		assert.ok(diag);
+		assert.strictEqual(diag.severity, DiagnosticSeverity.Hint);
+		assert.strictEqual(diag.code, "style/alias");
+	});
+
+	test("handles Information severity", () => {
+		const cwd = path.resolve("workspace");
+		const filePath = path.join(cwd, "query.sql");
+		const uri = URI.file(filePath).toString();
+		const stdout = "query.sql:1:1: Information: FYI message (info-rule)";
+		const lines = ["select 1;"];
+
+		const diagnostics = parseOutput({ stdout, uri, cwd, lines });
+
+		assert.strictEqual(diagnostics.length, 1);
+		const diag = diagnostics[0];
+		assert.ok(diag);
+		assert.strictEqual(diag.severity, DiagnosticSeverity.Information);
+		assert.strictEqual(diag.code, "info-rule");
+	});
+
+	test("handles rule IDs with slashes", () => {
+		const cwd = path.resolve("workspace");
+		const filePath = path.join(cwd, "query.sql");
+		const uri = URI.file(filePath).toString();
+		const stdout =
+			"query.sql:1:1: Warning: Schema qualify tables (semantic/schema-qualify)";
 		const lines = ["select 1;"];
 
 		const diagnostics = parseOutput({ stdout, uri, cwd, lines });
@@ -144,23 +177,7 @@ suite("parseOutput", () => {
 		const diag = diagnostics[0];
 		assert.ok(diag);
 		assert.strictEqual(diag.severity, DiagnosticSeverity.Warning);
-		assert.strictEqual(diag.code, "RuleX");
-	});
-
-	test("handles file paths with parentheses", () => {
-		const cwd = path.resolve("workspace");
-		const filePath = path.join(cwd, "query(1).sql");
-		const uri = URI.file(filePath).toString();
-		const stdout = `${filePath}(3,2): error RuleP : Paren path.`;
-		const lines = ["select 1;", "select 2;", "select 3;"];
-
-		const diagnostics = parseOutput({ stdout, uri, cwd, lines });
-
-		assert.strictEqual(diagnostics.length, 1);
-		const diag = diagnostics[0];
-		assert.ok(diag);
-		assert.strictEqual(diag.severity, DiagnosticSeverity.Error);
-		assert.strictEqual(diag.code, "RuleP");
+		assert.strictEqual(diag.code, "semantic/schema-qualify");
 	});
 
 	suite("Error scenarios", () => {
@@ -175,10 +192,10 @@ suite("parseOutput", () => {
 			assert.strictEqual(diagnostics.length, 0);
 		});
 
-		test("handles malformed line (missing colon)", () => {
+		test("handles malformed line (missing parentheses for rule)", () => {
 			const filePath = path.resolve("workspace", "query.sql");
 			const uri = URI.file(filePath).toString();
-			const stdout = "query.sql(1,1) error RuleX Invalid format";
+			const stdout = "query.sql:1:1: Error: Invalid format without rule";
 			const lines = ["select 1;"];
 
 			const diagnostics = parseOutput({
@@ -196,7 +213,7 @@ suite("parseOutput", () => {
 			const cwd = path.resolve("workspace");
 			const filePath = path.join(cwd, "query.sql");
 			const uri = URI.file(filePath).toString();
-			const stdout = "query.sql(1,1): error RuleX : エラーメッセージ";
+			const stdout = "query.sql:1:1: Error: エラーメッセージ (RuleX)";
 			const lines = ["select 1;"];
 
 			const diagnostics = parseOutput({ stdout, uri, cwd, lines });
@@ -209,7 +226,7 @@ suite("parseOutput", () => {
 			const cwd = path.resolve("workspace");
 			const filePath = path.join(cwd, "query.sql");
 			const uri = URI.file(filePath).toString();
-			const stdout = `${filePath}(1,1): error Rule : Message`;
+			const stdout = `${filePath}:1:1: Error: Message (Rule)`;
 			const lines = ["select 1;"];
 
 			const diagnostics = parseOutput({ stdout, uri, cwd, lines });

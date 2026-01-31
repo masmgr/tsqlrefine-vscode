@@ -10,6 +10,7 @@ import { createFakeCli, type FakeCli } from "./fakeCli";
 
 /**
  * Creates a standard fake CLI that outputs a diagnostic for the linted file.
+ * Output format: <filepath>:<line>:<column>: <Severity>: <message> (<rule-id>)
  *
  * @param ruleName - The rule name to include in the diagnostic
  * @param severity - The severity level (default: "error")
@@ -21,10 +22,13 @@ import { createFakeCli, type FakeCli } from "./fakeCli";
  */
 export async function createStandardFakeCli(
 	ruleName: string,
-	severity: "error" | "warning" = "error",
+	severity: "error" | "warning" | "hint" | "information" = "error",
 	message?: string,
 ): Promise<FakeCli> {
 	const msg = message ?? `${ruleName.replace("Rule", "")} issue`;
+	// Capitalize first letter for severity in output (e.g., "error" -> "Error")
+	const severityCapitalized =
+		severity.charAt(0).toUpperCase() + severity.slice(1);
 	const scriptBody = `
 const args = process.argv.slice(2);
 const lastArg = args[args.length - 1] || "";
@@ -35,12 +39,14 @@ if (lastArg === "-") {
 	process.stdin.on('data', chunk => { stdinData += chunk; });
 	process.stdin.on('end', () => {
 		// Use a generic filename for stdin
-		process.stdout.write(\`untitled.sql(1,1): ${severity} ${ruleName} : ${msg}.\`);
+		// New format: <filepath>:<line>:<column>: <Severity>: <message> (<rule-id>)
+		process.stdout.write(\`untitled.sql:1:1: ${severityCapitalized}: ${msg} (${ruleName})\`);
 	});
 } else {
 	// Use file path from args
 	const filePath = lastArg;
-	process.stdout.write(\`\${filePath}(1,1): ${severity} ${ruleName} : ${msg}.\`);
+	// New format: <filepath>:<line>:<column>: <Severity>: <message> (<rule-id>)
+	process.stdout.write(\`\${filePath}:1:1: ${severityCapitalized}: ${msg} (${ruleName})\`);
 }
 `;
 	return createFakeCli(scriptBody);

@@ -367,12 +367,19 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 		await notifyStderr(result.stderr);
 	}
 
+	// When using stdin, also accept "untitled.sql" as a valid path in output
+	// since the CLI may not know the actual file path.
+	// We include both the raw name and the resolved path to handle path resolution.
+	const targetPaths = useStdin
+		? [targetFilePath, "untitled.sql", path.resolve(cwd, "untitled.sql")]
+		: [targetFilePath];
+
 	const diagnostics = parseOutput({
 		stdout: result.stdout,
 		uri,
 		cwd,
 		lines: documentText.split(/\r?\n/),
-		targetPaths: [targetFilePath],
+		targetPaths,
 		logger: {
 			log: (message: string) => connection.console.log(message),
 		},
