@@ -1,0 +1,85 @@
+import * as path from "node:path";
+import { URI } from "vscode-uri";
+import type { TextDocument } from "vscode-languageserver-textdocument";
+import { resolveConfigPath } from "../config/resolveConfigPath";
+import type { TsqllintSettings } from "../config/settings";
+
+export type DocumentContext = {
+	uri: string;
+	filePath: string;
+	workspaceRoot: string | null;
+	cwd: string;
+	effectiveSettings: TsqllintSettings;
+	effectiveConfigPath: string | undefined;
+	documentText: string;
+	isSavedFile: boolean;
+};
+
+export type DocumentContextOptions = {
+	document: TextDocument;
+	documentSettings: TsqllintSettings;
+	workspaceFolders: string[];
+	isSavedFn: (document: TextDocument) => boolean;
+};
+
+export async function createDocumentContext(
+	options: DocumentContextOptions,
+): Promise<DocumentContext> {
+	const { document, documentSettings, workspaceFolders, isSavedFn } = options;
+	const uri = document.uri;
+	const parsedUri = URI.parse(uri);
+	const filePath = parsedUri.fsPath;
+	const workspaceRoot = resolveWorkspaceRoot(
+		filePath || undefined,
+		workspaceFolders,
+	);
+	const cwd =
+		workspaceRoot ?? (filePath ? path.dirname(filePath) : process.cwd());
+
+	const effectiveConfigPath = await resolveConfigPath({
+		configuredConfigPath: documentSettings.configPath,
+		filePath: filePath || null,
+		workspaceRoot,
+	});
+
+	const effectiveSettings: TsqllintSettings =
+		typeof effectiveConfigPath === "string" && effectiveConfigPath.trim()
+			? { ...documentSettings, configPath: effectiveConfigPath }
+			: documentSettings;
+
+	const documentText = document.getText();
+	const isSavedFile = isSavedFn(document);
+
+	return {
+		uri,
+		filePath,
+		workspaceRoot,
+		cwd,
+		effectiveSettings,
+		effectiveConfigPath,
+		documentText,
+		isSavedFile,
+	};
+}
+
+function resolveWorkspaceRoot(
+	filePath: string | undefined,
+	workspaceFolders: string[],
+): string | null {
+	if (workspaceFolders.length === 0) {
+		return null;
+	}
+
+	if (filePath) {
+		const normalizedFilePath = path.resolve(filePath);
+		for (const folder of workspaceFolders) {
+			const normalizedFolder = path.resolve(folder);
+			if (normalizedFilePath.startsWith(normalizedFolder)) {
+				return normalizedFolder;
+			}
+		}
+		return null;
+	}
+
+	return workspaceFolders[0] ?? null;
+}
