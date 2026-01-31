@@ -12,6 +12,9 @@ export const COMMAND_CHECK_TIMEOUT_MS = 3000;
 /** Cache TTL for config file resolution (5 seconds) */
 export const CONFIG_CACHE_TTL_MS = 5000;
 
+/** Maximum entries in config path cache */
+export const CONFIG_CACHE_MAX_SIZE = 100;
+
 /** Maximum concurrent lint operations */
 export const MAX_CONCURRENT_RUNS = 4;
 

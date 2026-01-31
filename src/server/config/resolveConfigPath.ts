@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { CONFIG_CACHE_MAX_SIZE, CONFIG_CACHE_TTL_MS } from "./constants";
 import { normalizeForCompare } from "../shared/normalize";
-import { CONFIG_CACHE_TTL_MS } from "./constants";
 
 const defaultConfigFileNames = [".tsqlrefinerc"];
 
@@ -11,6 +11,30 @@ type CacheEntry = {
 };
 
 const cache = new Map<string, CacheEntry>();
+
+/**
+ * Evict expired entries and limit cache size to prevent memory leaks.
+ */
+function evictStaleEntries(): void {
+	const now = Date.now();
+
+	// Remove expired entries
+	for (const [key, entry] of cache) {
+		if (now - entry.checkedAtMs >= CONFIG_CACHE_TTL_MS) {
+			cache.delete(key);
+		}
+	}
+
+	// If still over limit, remove oldest entries
+	if (cache.size > CONFIG_CACHE_MAX_SIZE) {
+		const entries = Array.from(cache.entries());
+		entries.sort((a, b) => a[1].checkedAtMs - b[1].checkedAtMs);
+		const toRemove = entries.slice(0, cache.size - CONFIG_CACHE_MAX_SIZE);
+		for (const [key] of toRemove) {
+			cache.delete(key);
+		}
+	}
+}
 
 export type ResolveConfigPathOptions = {
 	configuredConfigPath: string | undefined;
@@ -102,6 +126,9 @@ async function findNearestConfigFile(
 	if (existing && Date.now() - existing.checkedAtMs < CONFIG_CACHE_TTL_MS) {
 		return existing.value;
 	}
+
+	// Evict stale entries before adding new ones
+	evictStaleEntries();
 
 	const resolved = await findNearestConfigFileUncached({
 		startDir,
