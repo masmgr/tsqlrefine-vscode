@@ -1,4 +1,3 @@
-import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { Connection, Diagnostic } from "vscode-languageserver/node";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
@@ -43,11 +42,7 @@ export async function executeLint(
 	// Check file size limit
 	const maxBytes = maxFileSizeBytes(effectiveSettings.maxFileSizeKb);
 	if (maxBytes !== null && reason !== "manual") {
-		const sizeBytes = await getDocumentSizeBytes(
-			document,
-			filePath,
-			isSavedFile,
-		);
+		const sizeBytes = getDocumentSizeBytes(document);
 		if (sizeBytes > maxBytes) {
 			const sizeKb = Math.ceil(sizeBytes / 1024);
 			notificationManager.log(
@@ -143,21 +138,7 @@ function maxFileSizeBytes(maxFileSizeKb: number): number | null {
 	return Math.floor(maxFileSizeKb * 1024);
 }
 
-async function getDocumentSizeBytes(
-	document: TextDocument,
-	filePath: string | undefined,
-	isSavedFile: boolean,
-): Promise<number> {
-	if (isSavedFile && filePath) {
-		try {
-			const stat = await fs.stat(filePath);
-			if (stat.isFile()) {
-				return stat.size;
-			}
-		} catch {
-			// fall back to in-memory content
-		}
-	}
+function getDocumentSizeBytes(document: TextDocument): number {
 	return Buffer.byteLength(document.getText(), "utf8");
 }
 
