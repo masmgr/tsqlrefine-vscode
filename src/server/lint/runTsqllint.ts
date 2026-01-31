@@ -5,7 +5,7 @@ import {
 	runProcess,
 	verifyInstallation,
 } from "../shared/processRunner";
-import type { LintRunResult } from "./types";
+import { type ProcessRunResult, createCancelledResult } from "../shared/types";
 
 export type RunTsqllintOptions = {
 	filePath: string;
@@ -48,15 +48,9 @@ function buildArgs(options: RunTsqllintOptions): string[] {
  */
 export async function runTsqllint(
 	options: RunTsqllintOptions,
-): Promise<LintRunResult> {
+): Promise<ProcessRunResult> {
 	if (options.signal.aborted) {
-		return {
-			stdout: "",
-			stderr: "",
-			exitCode: null,
-			timedOut: false,
-			cancelled: true,
-		};
+		return createCancelledResult();
 	}
 
 	const command = await resolveCommand(options.settings);

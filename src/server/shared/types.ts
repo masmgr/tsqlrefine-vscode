@@ -11,6 +11,19 @@ export type ProcessRunResult = {
 };
 
 /**
+ * Create a ProcessRunResult representing a cancelled operation.
+ */
+export function createCancelledResult(): ProcessRunResult {
+	return {
+		stdout: "",
+		stderr: "",
+		exitCode: null,
+		timedOut: false,
+		cancelled: true,
+	};
+}
+
+/**
  * Base options for running any CLI process.
  */
 export type BaseProcessOptions = {

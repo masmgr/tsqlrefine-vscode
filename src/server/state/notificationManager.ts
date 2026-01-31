@@ -1,5 +1,6 @@
 import type { Connection } from "vscode-languageserver/node";
 import { MISSING_TSQLLINT_NOTICE_COOLDOWN_MS } from "../config/constants";
+import { firstLine } from "../shared/textUtils";
 
 /**
  * Manages user notifications with cooldown support.
@@ -87,15 +88,4 @@ export class NotificationManager {
 	error(message: string): void {
 		this.connection.console.error(message);
 	}
-}
-
-/**
- * Get the first line of a string.
- */
-function firstLine(text: string): string {
-	const index = text.indexOf("\n");
-	if (index === -1) {
-		return text;
-	}
-	return text.slice(0, index);
 }

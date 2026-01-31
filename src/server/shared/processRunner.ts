@@ -8,7 +8,11 @@ import {
 } from "../config/constants";
 import { decodeCliOutput } from "../lint/decodeOutput";
 import { normalizeExecutablePath } from "./normalize";
-import type { BaseProcessOptions, ProcessRunResult } from "./types";
+import {
+	type BaseProcessOptions,
+	type ProcessRunResult,
+	createCancelledResult,
+} from "./types";
 
 /**
  * Command availability cache (shared between lint and format operations).
@@ -123,13 +127,7 @@ export function runProcess(
 	options: BaseProcessOptions,
 ): Promise<ProcessRunResult> {
 	if (options.signal.aborted) {
-		return Promise.resolve({
-			stdout: "",
-			stderr: "",
-			exitCode: null,
-			timedOut: false,
-			cancelled: true,
-		});
+		return Promise.resolve(createCancelledResult());
 	}
 
 	return new Promise((resolve, reject) => {

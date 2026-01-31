@@ -1,7 +1,7 @@
 import type { TsqllintSettings } from "../config/settings";
 import { normalizeConfigPath } from "../shared/normalize";
 import { resolveCommand, runProcess } from "../shared/processRunner";
-import type { ProcessRunResult } from "../shared/types";
+import { type ProcessRunResult, createCancelledResult } from "../shared/types";
 
 export type RunFormatterOptions = {
 	filePath: string;
@@ -33,13 +33,7 @@ export async function runFormatter(
 	options: RunFormatterOptions,
 ): Promise<ProcessRunResult> {
 	if (options.signal.aborted) {
-		return {
-			stdout: "",
-			stderr: "",
-			exitCode: null,
-			timedOut: false,
-			cancelled: true,
-		};
+		return createCancelledResult();
 	}
 
 	const command = await resolveCommand(options.settings);

@@ -3,13 +3,15 @@ import type { Connection, Diagnostic } from "vscode-languageserver/node";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { DocumentContext } from "../shared/documentContext";
+import { logOperationContext } from "../shared/logging";
+import { firstLine, resolveTargetFilePath } from "../shared/textUtils";
+import type { ProcessRunResult } from "../shared/types";
 import type { DocumentStateManager } from "../state/documentStateManager";
 import type { NotificationManager } from "../state/notificationManager";
 import { type EndOfLine, normalizeLineEndings } from "./decodeOutput";
 import { parseOutput } from "./parseOutput";
 import { runTsqllint } from "./runTsqllint";
 import type { LintReason } from "./scheduler";
-import type { LintRunResult } from "./types";
 
 export type LintOperationDeps = {
 	connection: Connection;
@@ -61,19 +63,19 @@ export async function executeLint(
 	const controller = new AbortController();
 	lintStateManager.setInFlight(uri, controller);
 
-	const targetFilePath = filePath || "untitled.sql";
+	const targetFilePath = resolveTargetFilePath(filePath);
 
-	logLintContext(
-		notificationManager,
+	logOperationContext(notificationManager, {
+		operation: "Lint",
 		uri,
 		filePath,
-		targetFilePath,
 		cwd,
+		configPath: effectiveConfigPath,
+		targetFilePath,
 		isSavedFile,
-		effectiveConfigPath,
-	);
+	});
 
-	let result: LintRunResult;
+	let result: ProcessRunResult;
 	try {
 		result = await runTsqllint({
 			filePath: targetFilePath,
@@ -159,25 +161,6 @@ function createFileTooLargeDiagnostic(
 	};
 }
 
-function logLintContext(
-	notificationManager: NotificationManager,
-	uri: string,
-	filePath: string,
-	targetFilePath: string,
-	cwd: string,
-	isSavedFile: boolean,
-	effectiveConfigPath: string | undefined,
-): void {
-	notificationManager.log(`[executeLint] URI: ${uri}`);
-	notificationManager.log(`[executeLint] File path: ${filePath}`);
-	notificationManager.log(`[executeLint] Target file path: ${targetFilePath}`);
-	notificationManager.log(`[executeLint] CWD: ${cwd}`);
-	notificationManager.log(`[executeLint] Is saved: ${isSavedFile}`);
-	notificationManager.log(
-		`[executeLint] Config path: ${effectiveConfigPath ?? "(tsqlrefine default)"}`,
-	);
-}
-
 async function handleLintError(
 	error: unknown,
 	uri: string,
@@ -211,12 +194,4 @@ function createMissingTsqllintDiagnostic(message: string): Diagnostic {
 		source: "tsqlrefine",
 		code: "tsqlrefine-not-found",
 	};
-}
-
-function firstLine(text: string): string {
-	const index = text.indexOf("\n");
-	if (index === -1) {
-		return text;
-	}
-	return text.slice(0, index);
 }

@@ -1,9 +1,13 @@
 import type { Connection, TextEdit } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { DocumentContext } from "../shared/documentContext";
+import { createFullDocumentEdit } from "../shared/documentEdit";
+import { handleOperationError } from "../shared/errorHandling";
+import { logOperationContext } from "../shared/logging";
+import { firstLine, resolveTargetFilePath } from "../shared/textUtils";
+import type { ProcessRunResult } from "../shared/types";
 import type { DocumentStateManager } from "../state/documentStateManager";
 import type { NotificationManager } from "../state/notificationManager";
-import type { ProcessRunResult } from "../shared/types";
 import { runFormatter } from "./runFormatter";
 
 export type FormatOperationDeps = {
@@ -30,15 +34,15 @@ export async function executeFormat(
 	const controller = new AbortController();
 	formatStateManager.setInFlight(uri, controller);
 
-	const targetFilePath = filePath || "untitled.sql";
+	const targetFilePath = resolveTargetFilePath(filePath);
 
-	logFormatContext(
-		notificationManager,
+	logOperationContext(notificationManager, {
+		operation: "Format",
 		uri,
 		filePath,
 		cwd,
-		effectiveConfigPath,
-	);
+		configPath: effectiveConfigPath,
+	});
 
 	let result: ProcessRunResult;
 	try {
@@ -93,63 +97,10 @@ export async function executeFormat(
 	return [createFullDocumentEdit(document, formattedText)];
 }
 
-function logFormatContext(
-	notificationManager: NotificationManager,
-	uri: string,
-	filePath: string,
-	cwd: string,
-	effectiveConfigPath: string | undefined,
-): void {
-	notificationManager.log(`[executeFormat] URI: ${uri}`);
-	notificationManager.log(`[executeFormat] File path: ${filePath}`);
-	notificationManager.log(`[executeFormat] CWD: ${cwd}`);
-	notificationManager.log(
-		`[executeFormat] Config path: ${effectiveConfigPath ?? "(tsqlrefine default)"}`,
-	);
-}
-
 async function handleFormatError(
 	error: unknown,
 	deps: FormatOperationDeps,
 ): Promise<null> {
-	const { connection, notificationManager } = deps;
-	const message = firstLine(String(error));
-
-	if (notificationManager.isMissingTsqllintError(message)) {
-		await notificationManager.maybeNotifyMissingTsqllint(message);
-		notificationManager.warn(`tsqlrefine format: ${message}`);
-	} else {
-		await connection.window.showWarningMessage(
-			`tsqlrefine: format failed (${message})`,
-		);
-		notificationManager.warn(`tsqlrefine: format failed (${message})`);
-	}
+	await handleOperationError(error, deps, "format");
 	return null;
-}
-
-function createFullDocumentEdit(
-	document: TextDocument,
-	newText: string,
-): TextEdit {
-	const lastLineIndex = document.lineCount - 1;
-	const lastLine = document.getText({
-		start: { line: lastLineIndex, character: 0 },
-		end: { line: lastLineIndex, character: Number.MAX_SAFE_INTEGER },
-	});
-
-	return {
-		range: {
-			start: { line: 0, character: 0 },
-			end: { line: lastLineIndex, character: lastLine.length },
-		},
-		newText,
-	};
-}
-
-function firstLine(text: string): string {
-	const index = text.indexOf("\n");
-	if (index === -1) {
-		return text;
-	}
-	return text.slice(0, index);
 }

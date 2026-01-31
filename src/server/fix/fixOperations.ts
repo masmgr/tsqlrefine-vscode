@@ -1,9 +1,13 @@
 import type { Connection, TextEdit } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { DocumentContext } from "../shared/documentContext";
+import { createFullDocumentEdit } from "../shared/documentEdit";
+import { handleOperationError } from "../shared/errorHandling";
+import { logOperationContext } from "../shared/logging";
+import { firstLine, resolveTargetFilePath } from "../shared/textUtils";
+import type { ProcessRunResult } from "../shared/types";
 import type { DocumentStateManager } from "../state/documentStateManager";
 import type { NotificationManager } from "../state/notificationManager";
-import type { ProcessRunResult } from "../shared/types";
 import { runFixer } from "./runFixer";
 
 export type FixOperationDeps = {
@@ -30,9 +34,15 @@ export async function executeFix(
 	const controller = new AbortController();
 	fixStateManager.setInFlight(uri, controller);
 
-	const targetFilePath = filePath || "untitled.sql";
+	const targetFilePath = resolveTargetFilePath(filePath);
 
-	logFixContext(notificationManager, uri, filePath, cwd, effectiveConfigPath);
+	logOperationContext(notificationManager, {
+		operation: "Fix",
+		uri,
+		filePath,
+		cwd,
+		configPath: effectiveConfigPath,
+	});
 
 	let result: ProcessRunResult;
 	try {
@@ -87,63 +97,10 @@ export async function executeFix(
 	return [createFullDocumentEdit(document, fixedText)];
 }
 
-function logFixContext(
-	notificationManager: NotificationManager,
-	uri: string,
-	filePath: string,
-	cwd: string,
-	effectiveConfigPath: string | undefined,
-): void {
-	notificationManager.log(`[executeFix] URI: ${uri}`);
-	notificationManager.log(`[executeFix] File path: ${filePath}`);
-	notificationManager.log(`[executeFix] CWD: ${cwd}`);
-	notificationManager.log(
-		`[executeFix] Config path: ${effectiveConfigPath ?? "(tsqlrefine default)"}`,
-	);
-}
-
 async function handleFixError(
 	error: unknown,
 	deps: FixOperationDeps,
 ): Promise<null> {
-	const { connection, notificationManager } = deps;
-	const message = firstLine(String(error));
-
-	if (notificationManager.isMissingTsqllintError(message)) {
-		await notificationManager.maybeNotifyMissingTsqllint(message);
-		notificationManager.warn(`tsqlrefine fix: ${message}`);
-	} else {
-		await connection.window.showWarningMessage(
-			`tsqlrefine: fix failed (${message})`,
-		);
-		notificationManager.warn(`tsqlrefine: fix failed (${message})`);
-	}
+	await handleOperationError(error, deps, "fix");
 	return null;
-}
-
-function createFullDocumentEdit(
-	document: TextDocument,
-	newText: string,
-): TextEdit {
-	const lastLineIndex = document.lineCount - 1;
-	const lastLine = document.getText({
-		start: { line: lastLineIndex, character: 0 },
-		end: { line: lastLineIndex, character: Number.MAX_SAFE_INTEGER },
-	});
-
-	return {
-		range: {
-			start: { line: 0, character: 0 },
-			end: { line: lastLineIndex, character: lastLine.length },
-		},
-		newText,
-	};
-}
-
-function firstLine(text: string): string {
-	const index = text.indexOf("\n");
-	if (index === -1) {
-		return text;
-	}
-	return text.slice(0, index);
 }
