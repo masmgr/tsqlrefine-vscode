@@ -21,14 +21,13 @@ export async function handleOperationError(
 
 	if (notificationManager.isMissingTsqllintError(message)) {
 		await notificationManager.maybeNotifyMissingTsqllint(message);
-		notificationManager.warn(`tsqlrefine ${operationName}: ${message}`);
-	} else {
-		// Don't await - warning message may block in some environments
-		void connection.window.showWarningMessage(
-			`tsqlrefine: ${operationName} failed (${message})`,
-		);
 		notificationManager.warn(
 			`tsqlrefine: ${operationName} failed (${message})`,
 		);
+	} else {
+		const formatted = `tsqlrefine: ${operationName} failed (${message})`;
+		// Don't await - warning message may block in some environments
+		void connection.window.showWarningMessage(formatted);
+		notificationManager.warn(formatted);
 	}
 }

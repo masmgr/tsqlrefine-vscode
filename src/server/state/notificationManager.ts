@@ -36,11 +36,10 @@ export class NotificationManager {
 	 */
 	notifyRunFailure(error: unknown): void {
 		const message = String(error);
+		const formatted = `tsqlrefine: run failed (${message})`;
 		// Don't await - warning message may block in some environments
-		void this.connection.window.showWarningMessage(
-			`tsqlrefine: failed to run (${message})`,
-		);
-		this.connection.console.warn(`tsqlrefine: failed to run (${message})`);
+		void this.connection.window.showWarningMessage(formatted);
+		this.connection.console.warn(formatted);
 	}
 
 	/**

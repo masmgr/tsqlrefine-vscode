@@ -16,6 +16,14 @@ export type FixOperationDeps = {
 	fixStateManager: DocumentStateManager;
 };
 
+/**
+ * Execute fix operation on a document.
+ *
+ * @param context - Document context containing URI, settings, and text
+ * @param document - The TextDocument to fix
+ * @param deps - Dependencies including connection and managers
+ * @returns Array of TextEdits to apply, empty if no changes, null on error
+ */
 export async function executeFix(
 	context: DocumentContext,
 	document: TextDocument,
@@ -63,9 +71,10 @@ export async function executeFix(
 	}
 
 	if (result.timedOut) {
+		const formatted = "tsqlrefine: fix timed out";
 		// Don't await - warning message may block in some environments
-		void connection.window.showWarningMessage("tsqlrefine: fix timed out.");
-		notificationManager.warn("tsqlrefine: fix timed out.");
+		void connection.window.showWarningMessage(formatted);
+		notificationManager.warn(formatted);
 		return null;
 	}
 

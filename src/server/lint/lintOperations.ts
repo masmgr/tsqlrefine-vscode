@@ -24,6 +24,15 @@ export type LintResult = {
 	success: boolean;
 };
 
+/**
+ * Execute lint operation on a document.
+ *
+ * @param context - Document context containing URI, settings, and text
+ * @param document - The TextDocument to lint
+ * @param reason - The reason for linting (save, type, manual, open)
+ * @param deps - Dependencies including connection and managers
+ * @returns Lint result with diagnostics count and success status
+ */
 export async function executeLint(
 	context: DocumentContext,
 	document: TextDocument,
@@ -94,9 +103,10 @@ export async function executeLint(
 	}
 
 	if (result.timedOut) {
+		const formatted = "tsqlrefine: lint timed out";
 		// Don't await - warning message may block in some environments
-		void connection.window.showWarningMessage("tsqlrefine: lint timed out.");
-		notificationManager.warn("tsqlrefine: lint timed out.");
+		void connection.window.showWarningMessage(formatted);
+		notificationManager.warn(formatted);
 		connection.sendDiagnostics({ uri, diagnostics: [] });
 		return { diagnosticsCount: -1, success: false };
 	}

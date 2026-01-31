@@ -16,6 +16,14 @@ export type FormatOperationDeps = {
 	formatStateManager: DocumentStateManager;
 };
 
+/**
+ * Execute format operation on a document.
+ *
+ * @param context - Document context containing URI, settings, and text
+ * @param document - The TextDocument to format
+ * @param deps - Dependencies including connection and managers
+ * @returns Array of TextEdits to apply, empty if no changes, null on error
+ */
 export async function executeFormat(
 	context: DocumentContext,
 	document: TextDocument,
@@ -63,9 +71,10 @@ export async function executeFormat(
 	}
 
 	if (result.timedOut) {
+		const formatted = "tsqlrefine: format timed out";
 		// Don't await - warning message may block in some environments
-		void connection.window.showWarningMessage("tsqlrefine: format timed out.");
-		notificationManager.warn("tsqlrefine: format timed out.");
+		void connection.window.showWarningMessage(formatted);
+		notificationManager.warn(formatted);
 		return null;
 	}
 

@@ -132,7 +132,7 @@ suite("NotificationManager", () => {
 			manager.notifyRunFailure(new Error("spawn ENOENT"));
 
 			assert.strictEqual(calls.showWarningMessage.length, 1);
-			assert.ok(calls.showWarningMessage[0]?.message.includes("failed to run"));
+			assert.ok(calls.showWarningMessage[0]?.message.includes("run failed"));
 		});
 
 		test("logs error to console", () => {
@@ -142,7 +142,7 @@ suite("NotificationManager", () => {
 			manager.notifyRunFailure("some error");
 
 			assert.strictEqual(calls.consoleWarn.length, 1);
-			assert.ok(calls.consoleWarn[0]?.includes("failed to run"));
+			assert.ok(calls.consoleWarn[0]?.includes("run failed"));
 		});
 
 		test("handles non-string errors", () => {
