@@ -9,6 +9,7 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import { MAX_CONCURRENT_RUNS } from "./config/constants";
+import { executeFix, type FixOperationDeps } from "./fix/fixOperations";
 import {
 	executeFormat,
 	type FormatOperationDeps,
@@ -36,6 +37,7 @@ const settingsManager = new SettingsManager(connection);
 const notificationManager = new NotificationManager(connection);
 const lintStateManager = new DocumentStateManager();
 const formatStateManager = new DocumentStateManager();
+const fixStateManager = new DocumentStateManager();
 
 let workspaceFolders: string[] = [];
 
@@ -53,6 +55,12 @@ const formatDeps: FormatOperationDeps = {
 	connection,
 	notificationManager,
 	formatStateManager,
+};
+
+const fixDeps: FixOperationDeps = {
+	connection,
+	notificationManager,
+	fixStateManager,
 };
 
 // ============================================================================
@@ -160,6 +168,17 @@ connection.onRequest(
 		const edits = await formatDocument(params.uri);
 		if (edits === null) {
 			return { ok: false, error: "Format failed" };
+		}
+		return { ok: true };
+	},
+);
+
+connection.onRequest(
+	"tsqlrefine/fixDocument",
+	async (params: { uri: string }): Promise<{ ok: boolean; error?: string }> => {
+		const edits = await fixDocument(params.uri);
+		if (edits === null) {
+			return { ok: false, error: "Fix failed" };
 		}
 		return { ok: true };
 	},
@@ -320,4 +339,27 @@ function isSaved(document: TextDocument): boolean {
 		return false;
 	}
 	return lintStateManager.isSaved(document.uri, document.version);
+}
+
+// ============================================================================
+// Fix Operations
+// ============================================================================
+
+async function fixDocument(uri: string): Promise<TextEdit[] | null> {
+	const document = documents.get(uri);
+	if (!document) {
+		return null;
+	}
+
+	fixStateManager.cancelInFlight(uri);
+
+	const documentSettings = await settingsManager.getSettingsForDocument(uri);
+	const context = await createDocumentContext({
+		document,
+		documentSettings,
+		workspaceFolders,
+		isSavedFn: (doc) => isSaved(doc),
+	});
+
+	return await executeFix(context, document, fixDeps);
 }

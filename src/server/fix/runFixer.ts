@@ -1,0 +1,58 @@
+import type { TsqllintSettings } from "../config/settings";
+import { normalizeConfigPath } from "../shared/normalize";
+import { resolveCommand, runProcess } from "../shared/processRunner";
+import type { ProcessRunResult } from "../shared/types";
+
+export type RunFixerOptions = {
+	filePath: string;
+	cwd: string;
+	settings: TsqllintSettings;
+	signal: AbortSignal;
+	/** Document content to pass via stdin. */
+	stdin: string;
+};
+
+/**
+ * Build command-line arguments for tsqlrefine fix operation.
+ */
+function buildArgs(options: RunFixerOptions): string[] {
+	const args: string[] = ["fix"];
+	const configPath = normalizeConfigPath(options.settings.configPath);
+	if (configPath) {
+		args.push("-c", configPath);
+	}
+	// Use --stdin to read content from stdin
+	args.push("--stdin");
+	return args;
+}
+
+/**
+ * Run tsqlrefine fix on stdin content.
+ */
+export async function runFixer(
+	options: RunFixerOptions,
+): Promise<ProcessRunResult> {
+	if (options.signal.aborted) {
+		return {
+			stdout: "",
+			stderr: "",
+			exitCode: null,
+			timedOut: false,
+			cancelled: true,
+		};
+	}
+
+	const command = await resolveCommand(options.settings);
+	const args = buildArgs(options);
+	const timeoutMs =
+		options.settings.formatTimeoutMs ?? options.settings.timeoutMs;
+
+	return runProcess({
+		command,
+		args,
+		cwd: options.cwd,
+		timeoutMs,
+		signal: options.signal,
+		stdin: options.stdin,
+	});
+}

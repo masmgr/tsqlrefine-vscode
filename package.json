@@ -54,6 +54,11 @@
 				"category": "TSQLRefine"
 			},
 			{
+				"command": "tsqlrefine.fix",
+				"title": "TSQLRefine: Fix",
+				"category": "TSQLRefine"
+			},
+			{
 				"command": "tsqlrefine.openInstallGuide",
 				"title": "TSQLRefine: Open Install Guide",
 				"category": "TSQLRefine"

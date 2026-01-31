@@ -71,6 +71,23 @@ export function activate(context: vscode.ExtensionContext): TsqllintLiteApi {
 	);
 	context.subscriptions.push(formatCommand);
 
+	const fixCommand = vscode.commands.registerCommand(
+		"tsqlrefine.fix",
+		async () => {
+			const activeEditor = vscode.window.activeTextEditor;
+			if (!activeEditor) {
+				return;
+			}
+			if (clientReady) {
+				await clientReady;
+			}
+			await client?.sendRequest("tsqlrefine/fixDocument", {
+				uri: activeEditor.document.uri.toString(),
+			});
+		},
+	);
+	context.subscriptions.push(fixCommand);
+
 	context.subscriptions.push(
 		vscode.workspace.onDidDeleteFiles(async (event) => {
 			await handleDidDeleteFiles(event, client, clientReady);
