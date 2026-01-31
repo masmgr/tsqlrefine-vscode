@@ -5,7 +5,7 @@
 			"**",
 			"!node_modules",
 			"!out",
-			"!!dist",
+			"!dist",
 			"!.vscode-test",
 			"!.nyc_output",
 			"!coverage",
