@@ -33,14 +33,14 @@ export async function verifyTsqllintInstallation(
  * Build command-line arguments for tsqlrefine lint operation.
  */
 function buildArgs(options: RunTsqllintOptions): string[] {
-	const args: string[] = [];
+	const args: string[] = ["lint"];
 	const configPath = normalizeConfigPath(options.settings.configPath);
 	if (configPath) {
 		args.push("-c", configPath);
 	}
-	// Use "-" to read from stdin if stdin content is provided
+	// Use "--stdin" to read from stdin if stdin content is provided
 	if (options.stdin != null) {
-		args.push("-");
+		args.push("--stdin");
 	} else {
 		args.push(options.filePath);
 	}
