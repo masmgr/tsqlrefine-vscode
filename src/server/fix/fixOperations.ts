@@ -63,7 +63,8 @@ export async function executeFix(
 	}
 
 	if (result.timedOut) {
-		await connection.window.showWarningMessage("tsqlrefine: fix timed out.");
+		// Don't await - warning message may block in some environments
+		void connection.window.showWarningMessage("tsqlrefine: fix timed out.");
 		notificationManager.warn("tsqlrefine: fix timed out.");
 		return null;
 	}
@@ -79,7 +80,8 @@ export async function executeFix(
 	if (result.exitCode !== 0) {
 		const errorMessage =
 			result.stderr.trim() || `Exit code: ${result.exitCode}`;
-		await connection.window.showWarningMessage(
+		// Don't await - warning message may block in some environments
+		void connection.window.showWarningMessage(
 			`tsqlrefine: fix failed (${firstLine(errorMessage)})`,
 		);
 		notificationManager.warn(

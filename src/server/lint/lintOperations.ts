@@ -94,7 +94,8 @@ export async function executeLint(
 	}
 
 	if (result.timedOut) {
-		await connection.window.showWarningMessage("tsqlrefine: lint timed out.");
+		// Don't await - warning message may block in some environments
+		void connection.window.showWarningMessage("tsqlrefine: lint timed out.");
 		notificationManager.warn("tsqlrefine: lint timed out.");
 		connection.sendDiagnostics({ uri, diagnostics: [] });
 		return { diagnosticsCount: -1, success: false };
@@ -105,7 +106,7 @@ export async function executeLint(
 	}
 
 	if (result.stderr.trim()) {
-		await notificationManager.notifyStderr(result.stderr);
+		notificationManager.notifyStderr(result.stderr);
 	}
 
 	// Detect EOL from document and normalize stdout line endings
@@ -177,7 +178,7 @@ async function handleLintError(
 			diagnostics: [createMissingTsqllintDiagnostic(message)],
 		});
 	} else {
-		await notificationManager.notifyRunFailure(error);
+		notificationManager.notifyRunFailure(error);
 		connection.sendDiagnostics({ uri, diagnostics: [] });
 	}
 	return { diagnosticsCount: -1, success: false };

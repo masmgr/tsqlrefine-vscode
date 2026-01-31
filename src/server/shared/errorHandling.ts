@@ -23,7 +23,8 @@ export async function handleOperationError(
 		await notificationManager.maybeNotifyMissingTsqllint(message);
 		notificationManager.warn(`tsqlrefine ${operationName}: ${message}`);
 	} else {
-		await connection.window.showWarningMessage(
+		// Don't await - warning message may block in some environments
+		void connection.window.showWarningMessage(
 			`tsqlrefine: ${operationName} failed (${message})`,
 		);
 		notificationManager.warn(

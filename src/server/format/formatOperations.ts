@@ -63,7 +63,8 @@ export async function executeFormat(
 	}
 
 	if (result.timedOut) {
-		await connection.window.showWarningMessage("tsqlrefine: format timed out.");
+		// Don't await - warning message may block in some environments
+		void connection.window.showWarningMessage("tsqlrefine: format timed out.");
 		notificationManager.warn("tsqlrefine: format timed out.");
 		return null;
 	}
@@ -79,7 +80,8 @@ export async function executeFormat(
 	if (result.exitCode !== 0) {
 		const errorMessage =
 			result.stderr.trim() || `Exit code: ${result.exitCode}`;
-		await connection.window.showWarningMessage(
+		// Don't await - warning message may block in some environments
+		void connection.window.showWarningMessage(
 			`tsqlrefine: format failed (${firstLine(errorMessage)})`,
 		);
 		notificationManager.warn(

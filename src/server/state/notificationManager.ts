@@ -34,9 +34,10 @@ export class NotificationManager {
 	/**
 	 * Notify about a general run failure.
 	 */
-	async notifyRunFailure(error: unknown): Promise<void> {
+	notifyRunFailure(error: unknown): void {
 		const message = String(error);
-		await this.connection.window.showWarningMessage(
+		// Don't await - warning message may block in some environments
+		void this.connection.window.showWarningMessage(
 			`tsqlrefine: failed to run (${message})`,
 		);
 		this.connection.console.warn(`tsqlrefine: failed to run (${message})`);
@@ -45,12 +46,13 @@ export class NotificationManager {
 	/**
 	 * Notify about stderr output from the CLI.
 	 */
-	async notifyStderr(stderr: string): Promise<void> {
+	notifyStderr(stderr: string): void {
 		const trimmed = stderr.trim();
 		if (!trimmed) {
 			return;
 		}
-		await this.connection.window.showWarningMessage(
+		// Don't await - warning message may block in some environments
+		void this.connection.window.showWarningMessage(
 			`tsqlrefine: ${firstLine(trimmed)}`,
 		);
 		this.connection.console.warn(trimmed);

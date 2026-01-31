@@ -186,6 +186,18 @@ connection.onRequest(
 		if (edits === null) {
 			return { ok: false, error: "Fix failed" };
 		}
+		if (edits.length === 0) {
+			return { ok: true };
+		}
+		// Apply the edits to the document
+		const result = await connection.workspace.applyEdit({
+			changes: {
+				[params.uri]: edits,
+			},
+		});
+		if (!result.applied) {
+			return { ok: false, error: "Failed to apply edits" };
+		}
 		return { ok: true };
 	},
 );
