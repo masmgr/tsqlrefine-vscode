@@ -6,11 +6,14 @@ import {
 	ProposedFeatures,
 	TextDocumentSyncKind,
 	TextDocuments,
+	type DocumentFormattingParams,
+	type TextEdit,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import { resolveConfigPath } from "./config/resolveConfigPath";
 import { defaultSettings, type TsqllintSettings } from "./config/settings";
+import { runFormatter, type FormatResult } from "./format/runFormatter";
 import { parseOutput } from "./lint/parseOutput";
 import { runTsqllint, verifyTsqllintInstallation } from "./lint/runTsqllint";
 import {
@@ -49,6 +52,7 @@ connection.onInitialize((params) => {
 				change: TextDocumentSyncKind.Incremental,
 				save: { includeText: false },
 			},
+			documentFormattingProvider: true,
 		},
 	};
 });
@@ -105,6 +109,23 @@ connection.onNotification(
 			savedVersionByUri.delete(uri);
 			connection.sendDiagnostics({ uri, diagnostics: [] });
 		}
+	},
+);
+
+connection.onDocumentFormatting(
+	async (params: DocumentFormattingParams): Promise<TextEdit[] | null> => {
+		return await formatDocument(params.textDocument.uri);
+	},
+);
+
+connection.onRequest(
+	"tsqlrefine/formatDocument",
+	async (params: { uri: string }): Promise<{ ok: boolean; error?: string }> => {
+		const edits = await formatDocument(params.uri);
+		if (edits === null) {
+			return { ok: false, error: "Format failed" };
+		}
+		return { ok: true };
 	},
 );
 
@@ -493,4 +514,132 @@ function firstLine(text: string): string {
 		return text;
 	}
 	return text.slice(0, index);
+}
+
+const formatInFlightByUri = new Map<string, AbortController>();
+
+async function formatDocument(uri: string): Promise<TextEdit[] | null> {
+	const document = documents.get(uri);
+	if (!document) {
+		return null;
+	}
+
+	// Cancel any in-flight format for this document
+	const existingController = formatInFlightByUri.get(uri);
+	if (existingController) {
+		existingController.abort();
+		formatInFlightByUri.delete(uri);
+	}
+
+	const parsedUri = URI.parse(uri);
+	const filePath = parsedUri.fsPath;
+	const workspaceRoot = resolveWorkspaceRoot(filePath || undefined);
+	const cwd =
+		workspaceRoot ?? (filePath ? path.dirname(filePath) : process.cwd());
+
+	const documentSettings = await getSettingsForDocument(uri);
+	const effectiveConfigPath = await resolveConfigPath({
+		configuredConfigPath: documentSettings.configPath,
+		filePath: filePath || null,
+		workspaceRoot,
+	});
+	const effectiveSettings: TsqllintSettings =
+		typeof effectiveConfigPath === "string" && effectiveConfigPath.trim()
+			? { ...documentSettings, configPath: effectiveConfigPath }
+			: documentSettings;
+
+	const documentText = document.getText();
+	const targetFilePath = filePath || "untitled.sql";
+
+	const controller = new AbortController();
+	formatInFlightByUri.set(uri, controller);
+
+	connection.console.log(`[formatDocument] URI: ${uri}`);
+	connection.console.log(`[formatDocument] File path: ${filePath}`);
+	connection.console.log(`[formatDocument] CWD: ${cwd}`);
+	connection.console.log(
+		`[formatDocument] Config path: ${effectiveConfigPath ?? "(tsqlrefine default)"}`,
+	);
+
+	let result: FormatResult;
+	try {
+		result = await runFormatter({
+			filePath: targetFilePath,
+			cwd,
+			settings: effectiveSettings,
+			signal: controller.signal,
+			stdin: documentText,
+		});
+	} catch (error) {
+		formatInFlightByUri.delete(uri);
+		const message = firstLine(String(error));
+		if (isMissingTsqllintError(message)) {
+			await maybeNotifyMissingTsqllint(message);
+			connection.console.warn(`tsqlrefine format: ${message}`);
+		} else {
+			await connection.window.showWarningMessage(
+				`tsqlrefine: format failed (${message})`,
+			);
+			connection.console.warn(`tsqlrefine: format failed (${message})`);
+		}
+		return null;
+	}
+
+	if (formatInFlightByUri.get(uri) === controller) {
+		formatInFlightByUri.delete(uri);
+	}
+
+	if (result.timedOut) {
+		await connection.window.showWarningMessage("tsqlrefine: format timed out.");
+		connection.console.warn("tsqlrefine: format timed out.");
+		return null;
+	}
+
+	if (controller.signal.aborted || result.cancelled) {
+		return null;
+	}
+
+	if (result.stderr.trim()) {
+		connection.console.warn(`tsqlrefine format stderr: ${result.stderr}`);
+	}
+
+	// Exit code 0 means success
+	// Exit code 2 means parse error - return null
+	// Exit code 3 means config error - return null
+	// Exit code 4 means runtime error - return null
+	if (result.exitCode !== 0) {
+		const errorMessage =
+			result.stderr.trim() || `Exit code: ${result.exitCode}`;
+		await connection.window.showWarningMessage(
+			`tsqlrefine: format failed (${firstLine(errorMessage)})`,
+		);
+		connection.console.warn(
+			`tsqlrefine: format failed with exit code ${result.exitCode}`,
+		);
+		return null;
+	}
+
+	const formattedText = result.stdout;
+
+	// If the formatted text is the same as the original, return empty array
+	if (formattedText === documentText) {
+		return [];
+	}
+
+	// Return a single TextEdit that replaces the entire document
+	const lastLineIndex = document.lineCount - 1;
+	const lastLine = document.getText({
+		start: { line: lastLineIndex, character: 0 },
+		end: { line: lastLineIndex, character: Number.MAX_SAFE_INTEGER },
+	});
+
+	return [
+		{
+			range: {
+				start: { line: 0, character: 0 },
+				end: { line: lastLineIndex, character: lastLine.length },
+			},
+			newText: formattedText,
+		},
+	];
 }

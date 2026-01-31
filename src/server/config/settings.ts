@@ -8,6 +8,7 @@ export type TsqllintSettings = {
 	timeoutMs: number;
 	maxFileSizeKb: number;
 	rangeMode: "character" | "line";
+	formatTimeoutMs?: number;
 };
 
 export const defaultSettings: TsqllintSettings = {
@@ -18,4 +19,5 @@ export const defaultSettings: TsqllintSettings = {
 	timeoutMs: 10000,
 	maxFileSizeKb: 0,
 	rangeMode: "character",
+	formatTimeoutMs: 10000,
 };

@@ -56,6 +56,21 @@ export function activate(context: vscode.ExtensionContext): TsqllintLiteApi {
 	);
 	context.subscriptions.push(lintCommand);
 
+	const formatCommand = vscode.commands.registerCommand(
+		"tsqlrefine.format",
+		async () => {
+			const activeEditor = vscode.window.activeTextEditor;
+			if (!activeEditor) {
+				return;
+			}
+			if (clientReady) {
+				await clientReady;
+			}
+			await vscode.commands.executeCommand("editor.action.formatDocument");
+		},
+	);
+	context.subscriptions.push(formatCommand);
+
 	context.subscriptions.push(
 		vscode.workspace.onDidDeleteFiles(async (event) => {
 			await handleDidDeleteFiles(event, client, clientReady);

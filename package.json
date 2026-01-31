@@ -20,6 +20,7 @@
 	},
 	"categories": [
 		"Linters",
+		"Formatters",
 		"Programming Languages"
 	],
 	"keywords": [
@@ -45,6 +46,11 @@
 			{
 				"command": "tsqlrefine.run",
 				"title": "TSQLRefine: Run",
+				"category": "TSQLRefine"
+			},
+			{
+				"command": "tsqlrefine.format",
+				"title": "TSQLRefine: Format",
 				"category": "TSQLRefine"
 			},
 			{
@@ -95,9 +101,34 @@
 					"type": "number",
 					"default": 0,
 					"description": "Maximum file size (KB) for automatic linting (open/save/type). 0 disables the limit."
+				},
+				"tsqlrefine.formatTimeoutMs": {
+					"type": "number",
+					"default": 10000,
+					"description": "Timeout in milliseconds for format execution."
 				}
 			}
-		}
+		},
+		"languages": [
+			{
+				"id": "sql",
+				"extensions": [
+					".sql"
+				]
+			},
+			{
+				"id": "tsql",
+				"extensions": [
+					".sql"
+				]
+			},
+			{
+				"id": "mssql",
+				"extensions": [
+					".sql"
+				]
+			}
+		]
 	},
 	"scripts": {
 		"typecheck": "tsc -p tsconfig.json --noEmit",
