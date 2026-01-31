@@ -45,8 +45,7 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 	const extraTargets = options.targetPaths ?? [];
 	const targetPaths = new Set(
 		[targetPath, ...extraTargets].map((filePath) =>
-			// Don't normalize the stdin marker - it's a special value
-			filePath === STDIN_MARKER ? STDIN_MARKER : normalizeForCompare(filePath),
+			normalizeForCompare(filePath),
 		),
 	);
 	const cwd = options.cwd ?? path.dirname(targetPath);
@@ -95,10 +94,10 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 		if (!rawPath) {
 			continue;
 		}
-		// Don't resolve the stdin marker - check it directly
+		// Map stdin marker to the target file path for comparison
 		const resolvedPath =
 			rawPath === STDIN_MARKER
-				? STDIN_MARKER
+				? targetPath
 				: normalizeForCompare(path.resolve(cwd, rawPath));
 		options.logger?.log(`[parseOutput] Line: ${line}`);
 		options.logger?.log(

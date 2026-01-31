@@ -127,7 +127,6 @@ export async function executeLint(
 		targetFilePath,
 		"untitled.sql",
 		path.resolve(cwd, "untitled.sql"),
-		"<stdin>", // tsqlrefine outputs this path when reading from stdin
 	];
 
 	const diagnostics = parseOutput({
