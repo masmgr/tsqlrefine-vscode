@@ -22,7 +22,6 @@ function createTestSettings(
 		debounceMs: 500,
 		timeoutMs: 10000,
 		maxFileSizeKb: 0,
-		rangeMode: "character",
 		...overrides,
 	};
 }

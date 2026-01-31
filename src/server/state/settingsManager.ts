@@ -51,12 +51,6 @@ export class SettingsManager {
 	private normalizeSettings(value: TsqllintSettings): TsqllintSettings {
 		const normalized = { ...value };
 		if (
-			normalized.rangeMode !== "character" &&
-			normalized.rangeMode !== "line"
-		) {
-			normalized.rangeMode = "character";
-		}
-		if (
 			!Number.isFinite(normalized.maxFileSizeKb) ||
 			normalized.maxFileSizeKb < 0
 		) {

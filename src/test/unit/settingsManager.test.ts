@@ -142,42 +142,6 @@ suite("SettingsManager", () => {
 	});
 
 	suite("normalizeSettings", () => {
-		test("normalizes invalid rangeMode to character", async () => {
-			const { connection } = createMockConnection({
-				rangeMode: "invalid",
-			});
-			const manager = new SettingsManager(connection);
-
-			await manager.refreshSettings();
-			const settings = manager.getSettings();
-
-			assert.strictEqual(settings.rangeMode, "character");
-		});
-
-		test("preserves valid rangeMode character", async () => {
-			const { connection } = createMockConnection({
-				rangeMode: "character",
-			});
-			const manager = new SettingsManager(connection);
-
-			await manager.refreshSettings();
-			const settings = manager.getSettings();
-
-			assert.strictEqual(settings.rangeMode, "character");
-		});
-
-		test("preserves valid rangeMode line", async () => {
-			const { connection } = createMockConnection({
-				rangeMode: "line",
-			});
-			const manager = new SettingsManager(connection);
-
-			await manager.refreshSettings();
-			const settings = manager.getSettings();
-
-			assert.strictEqual(settings.rangeMode, "line");
-		});
-
 		test("normalizes negative maxFileSizeKb to 0", async () => {
 			const { connection } = createMockConnection({
 				maxFileSizeKb: -10,
