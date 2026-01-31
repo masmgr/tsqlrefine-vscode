@@ -166,9 +166,10 @@ export function runProcess(
 			stdio: [options.stdin != null ? "pipe" : "ignore", "pipe", "pipe"],
 		});
 
-		// Write stdin content if provided
+		// Write stdin content if provided (as UTF-8 encoded Buffer)
 		if (options.stdin != null && child.stdin) {
-			child.stdin.write(options.stdin, "utf8");
+			const stdinBuffer = Buffer.from(options.stdin, "utf8");
+			child.stdin.write(stdinBuffer);
 			child.stdin.end();
 		}
 

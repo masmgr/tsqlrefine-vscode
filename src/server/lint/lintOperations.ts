@@ -6,6 +6,7 @@ import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { DocumentContext } from "../shared/documentContext";
 import type { DocumentStateManager } from "../state/documentStateManager";
 import type { NotificationManager } from "../state/notificationManager";
+import { type EndOfLine, normalizeLineEndings } from "./decodeOutput";
 import { parseOutput } from "./parseOutput";
 import { runTsqllint } from "./runTsqllint";
 import type { LintReason } from "./scheduler";
@@ -112,12 +113,16 @@ export async function executeLint(
 		await notificationManager.notifyStderr(result.stderr);
 	}
 
+	// Detect EOL from document and normalize stdout line endings
+	const eol: EndOfLine = documentText.includes("\r\n") ? "CRLF" : "LF";
+	const normalizedStdout = normalizeLineEndings(result.stdout, eol);
+
 	const targetPaths = useStdin
 		? [targetFilePath, "untitled.sql", path.resolve(cwd, "untitled.sql")]
 		: [targetFilePath];
 
 	const diagnostics = parseOutput({
-		stdout: result.stdout,
+		stdout: normalizedStdout,
 		uri,
 		cwd,
 		lines: documentText.split(/\r?\n/),

@@ -173,8 +173,6 @@
 		"*.json": "biome format --write"
 	},
 	"dependencies": {
-		"chardet": "^2.1.1",
-		"iconv-lite": "^0.7.2",
 		"vscode-languageclient": "^9.0.1",
 		"vscode-languageserver": "^9.0.1",
 		"vscode-languageserver-textdocument": "^1.0.11",
