@@ -11,8 +11,9 @@ import {
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
+import { MAX_CONCURRENT_RUNS } from "./config/constants";
 import { resolveConfigPath } from "./config/resolveConfigPath";
-import { defaultSettings, type TsqllintSettings } from "./config/settings";
+import type { TsqllintSettings } from "./config/settings";
 import { runFormatter, type FormatResult } from "./format/runFormatter";
 import { parseOutput } from "./lint/parseOutput";
 import { runTsqllint, verifyTsqllintInstallation } from "./lint/runTsqllint";
@@ -22,24 +23,36 @@ import {
 	type PendingLint,
 } from "./lint/scheduler";
 import type { LintRunResult } from "./lint/types";
+import { DocumentStateManager } from "./state/documentStateManager";
+import { NotificationManager } from "./state/notificationManager";
+import { SettingsManager } from "./state/settingsManager";
 
+// LSP connection and document manager
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
-let workspaceFolders: string[] = [];
-let settings: TsqllintSettings = defaultSettings;
+// State managers
+const settingsManager = new SettingsManager(connection);
+const notificationManager = new NotificationManager(connection);
+const lintStateManager = new DocumentStateManager();
+const formatStateManager = new DocumentStateManager();
 
-const inFlightByUri = new Map<string, AbortController>();
-const savedVersionByUri = new Map<string, number>();
-const maxConcurrentRuns = 4;
+// Workspace state
+let workspaceFolders: string[] = [];
+
+// Lint scheduler
 const scheduler = new LintScheduler({
-	maxConcurrentRuns,
+	maxConcurrentRuns: MAX_CONCURRENT_RUNS,
 	getDocumentVersion: (uri) => {
 		const document = documents.get(uri);
 		return document ? document.version : null;
 	},
 	runLint: (uri, pending) => runLintWithCancel(uri, pending),
 });
+
+// ============================================================================
+// LSP Lifecycle Handlers
+// ============================================================================
 
 connection.onInitialize((params) => {
 	workspaceFolders =
@@ -58,19 +71,23 @@ connection.onInitialize((params) => {
 });
 
 connection.onInitialized(async () => {
-	await refreshSettings();
+	await settingsManager.refreshSettings();
 	await verifyInstallation();
 });
 
 connection.onDidChangeConfiguration(async () => {
-	const previousPath = settings.path;
-	await refreshSettings();
+	const previousPath = settingsManager.getSettings().path;
+	await settingsManager.refreshSettings();
 
 	// Re-verify if path setting changed
-	if (previousPath !== settings.path) {
+	if (previousPath !== settingsManager.getSettings().path) {
 		await verifyInstallation();
 	}
 });
+
+// ============================================================================
+// Document Event Handlers
+// ============================================================================
 
 documents.onDidChangeContent((change) => {
 	void handleDidChangeContent(change.document);
@@ -87,10 +104,13 @@ documents.onDidSave((change) => {
 documents.onDidClose((change) => {
 	const uri = change.document.uri;
 	scheduler.clear(uri);
-	cancelInFlight(uri);
-	savedVersionByUri.delete(uri);
+	lintStateManager.clearAll(uri);
 	connection.sendDiagnostics({ uri, diagnostics: [] });
 });
+
+// ============================================================================
+// LSP Request/Notification Handlers
+// ============================================================================
 
 connection.onRequest(
 	"tsqlrefine/lintDocument",
@@ -105,8 +125,7 @@ connection.onNotification(
 	(params: { uris: string[] }) => {
 		for (const uri of params.uris) {
 			scheduler.clear(uri);
-			cancelInFlight(uri);
-			savedVersionByUri.delete(uri);
+			lintStateManager.clearAll(uri);
 			connection.sendDiagnostics({ uri, diagnostics: [] });
 		}
 	},
@@ -129,42 +148,40 @@ connection.onRequest(
 	},
 );
 
+// Start listening
 documents.listen(connection);
 connection.listen();
 
-async function refreshSettings(): Promise<void> {
-	const config =
-		(await connection.workspace.getConfiguration({
-			section: "tsqlrefine",
-		})) ?? {};
-	settings = normalizeSettings({
-		...defaultSettings,
-		...config,
-	});
-}
+// ============================================================================
+// Document Event Handler Implementations
+// ============================================================================
 
 async function verifyInstallation(): Promise<void> {
-	const result = await verifyTsqllintInstallation(settings);
+	const result = await verifyTsqllintInstallation(
+		settingsManager.getSettings(),
+	);
 
 	if (!result.available) {
 		const message = result.message || "tsqlrefine not found";
-		await maybeNotifyMissingTsqllint(message);
-		connection.console.warn(`[startup] ${message}`);
+		await notificationManager.maybeNotifyMissingTsqllint(message);
+		notificationManager.warn(`[startup] ${message}`);
 	} else {
-		connection.console.log("[startup] tsqlrefine installation verified");
+		notificationManager.log("[startup] tsqlrefine installation verified");
 	}
 }
 
 async function handleDidChangeContent(document: TextDocument): Promise<void> {
 	try {
-		const docSettings = await getSettingsForDocument(document.uri);
+		const docSettings = await settingsManager.getSettingsForDocument(
+			document.uri,
+		);
 		if (!docSettings.runOnType) {
 			return;
 		}
-		cancelInFlight(document.uri);
+		lintStateManager.cancelInFlight(document.uri);
 		requestLint(document.uri, "type", document.version, docSettings.debounceMs);
 	} catch (error) {
-		connection.console.error(
+		notificationManager.error(
 			`tsqlrefine: failed to react to change (${String(error)})`,
 		);
 	}
@@ -173,13 +190,13 @@ async function handleDidChangeContent(document: TextDocument): Promise<void> {
 async function handleDidSave(document: TextDocument): Promise<void> {
 	try {
 		const uri = document.uri;
-		savedVersionByUri.set(uri, document.version);
-		const docSettings = await getSettingsForDocument(uri);
+		lintStateManager.setSavedVersion(uri, document.version);
+		const docSettings = await settingsManager.getSettingsForDocument(uri);
 		if (docSettings.runOnSave) {
 			requestLint(uri, "save", document.version);
 		}
 	} catch (error) {
-		connection.console.error(
+		notificationManager.error(
 			`tsqlrefine: failed to react to save (${String(error)})`,
 		);
 	}
@@ -189,45 +206,23 @@ async function handleDidOpen(document: TextDocument): Promise<void> {
 	try {
 		const uri = document.uri;
 		if (URI.parse(uri).scheme === "file") {
-			savedVersionByUri.set(uri, document.version);
+			lintStateManager.setSavedVersion(uri, document.version);
 		}
 
-		const docSettings = await getSettingsForDocument(uri);
+		const docSettings = await settingsManager.getSettingsForDocument(uri);
 		if (docSettings.runOnOpen) {
 			requestLint(uri, "open", document.version);
 		}
 	} catch (error) {
-		connection.console.error(
+		notificationManager.error(
 			`tsqlrefine: failed to react to open (${String(error)})`,
 		);
 	}
 }
 
-async function getSettingsForDocument(uri: string): Promise<TsqllintSettings> {
-	const scopedConfig = ((await connection.workspace.getConfiguration({
-		scopeUri: uri,
-		section: "tsqlrefine",
-	})) ?? {}) as Partial<TsqllintSettings>;
-	return normalizeSettings({
-		...defaultSettings,
-		...settings,
-		...scopedConfig,
-	});
-}
-
-function normalizeSettings(value: TsqllintSettings): TsqllintSettings {
-	const normalized = { ...value };
-	if (normalized.rangeMode !== "character" && normalized.rangeMode !== "line") {
-		normalized.rangeMode = "character";
-	}
-	if (
-		!Number.isFinite(normalized.maxFileSizeKb) ||
-		normalized.maxFileSizeKb < 0
-	) {
-		normalized.maxFileSizeKb = 0;
-	}
-	return normalized;
-}
+// ============================================================================
+// Lint Operations
+// ============================================================================
 
 async function requestLint(
 	uri: string,
@@ -243,19 +238,11 @@ async function requestLint(
 	return await scheduler.requestLint(uri, reason, finalVersion, debounceMs);
 }
 
-function cancelInFlight(uri: string): void {
-	const controller = inFlightByUri.get(uri);
-	if (controller) {
-		controller.abort();
-		inFlightByUri.delete(uri);
-	}
-}
-
 async function runLintWithCancel(
 	uri: string,
 	pending: PendingLint,
 ): Promise<number> {
-	cancelInFlight(uri);
+	lintStateManager.cancelInFlight(uri);
 	return await runLintNow(uri, pending.reason);
 }
 
@@ -271,7 +258,7 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 	const cwd =
 		workspaceRoot ?? (filePath ? path.dirname(filePath) : process.cwd());
 
-	const documentSettings = await getSettingsForDocument(uri);
+	const documentSettings = await settingsManager.getSettingsForDocument(uri);
 	const effectiveConfigPath = await resolveConfigPath({
 		configuredConfigPath: documentSettings.configPath,
 		filePath: filePath || null,
@@ -293,7 +280,7 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 		);
 		if (sizeBytes > maxBytes) {
 			const sizeKb = Math.ceil(sizeBytes / 1024);
-			connection.console.log(
+			notificationManager.log(
 				`[runLintNow] Skipping lint: file is ${sizeKb}KB > maxFileSizeKb=${effectiveSettings.maxFileSizeKb}`,
 			);
 			connection.sendDiagnostics({
@@ -316,19 +303,19 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 	}
 
 	const controller = new AbortController();
-	inFlightByUri.set(uri, controller);
+	lintStateManager.setInFlight(uri, controller);
 
 	// Use stdin for unsaved files, file path for saved files
 	const useStdin = !isSavedFile;
 	const targetFilePath = useStdin ? filePath || "untitled.sql" : filePath;
 
-	connection.console.log(`[runLintNow] URI: ${uri}`);
-	connection.console.log(`[runLintNow] File path: ${filePath}`);
-	connection.console.log(`[runLintNow] Target file path: ${targetFilePath}`);
-	connection.console.log(`[runLintNow] CWD: ${cwd}`);
-	connection.console.log(`[runLintNow] Is saved: ${isSavedFile}`);
-	connection.console.log(`[runLintNow] Using stdin: ${useStdin}`);
-	connection.console.log(
+	notificationManager.log(`[runLintNow] URI: ${uri}`);
+	notificationManager.log(`[runLintNow] File path: ${filePath}`);
+	notificationManager.log(`[runLintNow] Target file path: ${targetFilePath}`);
+	notificationManager.log(`[runLintNow] CWD: ${cwd}`);
+	notificationManager.log(`[runLintNow] Is saved: ${isSavedFile}`);
+	notificationManager.log(`[runLintNow] Using stdin: ${useStdin}`);
+	notificationManager.log(
 		`[runLintNow] Config path: ${effectiveConfigPath ?? "(tsqlrefine default)"}`,
 	);
 
@@ -342,11 +329,11 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 			stdin: useStdin ? documentText : null,
 		});
 	} catch (error) {
-		inFlightByUri.delete(uri);
+		lintStateManager.clearInFlight(uri);
 		const message = firstLine(String(error));
-		if (isMissingTsqllintError(message)) {
-			await maybeNotifyMissingTsqllint(message);
-			connection.console.warn(`tsqlrefine: ${message}`);
+		if (notificationManager.isMissingTsqllintError(message)) {
+			await notificationManager.maybeNotifyMissingTsqllint(message);
+			notificationManager.warn(`tsqlrefine: ${message}`);
 			connection.sendDiagnostics({
 				uri,
 				diagnostics: [
@@ -363,19 +350,19 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 				],
 			});
 		} else {
-			await notifyRunFailure(error);
+			await notificationManager.notifyRunFailure(error);
 			connection.sendDiagnostics({ uri, diagnostics: [] });
 		}
 		return -1;
 	}
 
-	if (inFlightByUri.get(uri) === controller) {
-		inFlightByUri.delete(uri);
+	if (lintStateManager.isCurrentInFlight(uri, controller)) {
+		lintStateManager.clearInFlight(uri);
 	}
 
 	if (result.timedOut) {
 		await connection.window.showWarningMessage("tsqlrefine: lint timed out.");
-		connection.console.warn("tsqlrefine: lint timed out.");
+		notificationManager.warn("tsqlrefine: lint timed out.");
 		connection.sendDiagnostics({ uri, diagnostics: [] });
 		return -1;
 	}
@@ -385,7 +372,7 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 	}
 
 	if (result.stderr.trim()) {
-		await notifyStderr(result.stderr);
+		await notificationManager.notifyStderr(result.stderr);
 	}
 
 	// When using stdin, also accept "untitled.sql" as a valid path in output
@@ -402,13 +389,143 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 		lines: documentText.split(/\r?\n/),
 		targetPaths,
 		logger: {
-			log: (message: string) => connection.console.log(message),
+			log: (message: string) => notificationManager.log(message),
 		},
 	});
 
 	connection.sendDiagnostics({ uri, diagnostics });
 	return diagnostics.length;
 }
+
+// ============================================================================
+// Format Operations
+// ============================================================================
+
+async function formatDocument(uri: string): Promise<TextEdit[] | null> {
+	const document = documents.get(uri);
+	if (!document) {
+		return null;
+	}
+
+	// Cancel any in-flight format for this document
+	formatStateManager.cancelInFlight(uri);
+
+	const parsedUri = URI.parse(uri);
+	const filePath = parsedUri.fsPath;
+	const workspaceRoot = resolveWorkspaceRoot(filePath || undefined);
+	const cwd =
+		workspaceRoot ?? (filePath ? path.dirname(filePath) : process.cwd());
+
+	const documentSettings = await settingsManager.getSettingsForDocument(uri);
+	const effectiveConfigPath = await resolveConfigPath({
+		configuredConfigPath: documentSettings.configPath,
+		filePath: filePath || null,
+		workspaceRoot,
+	});
+	const effectiveSettings: TsqllintSettings =
+		typeof effectiveConfigPath === "string" && effectiveConfigPath.trim()
+			? { ...documentSettings, configPath: effectiveConfigPath }
+			: documentSettings;
+
+	const documentText = document.getText();
+	const targetFilePath = filePath || "untitled.sql";
+
+	const controller = new AbortController();
+	formatStateManager.setInFlight(uri, controller);
+
+	notificationManager.log(`[formatDocument] URI: ${uri}`);
+	notificationManager.log(`[formatDocument] File path: ${filePath}`);
+	notificationManager.log(`[formatDocument] CWD: ${cwd}`);
+	notificationManager.log(
+		`[formatDocument] Config path: ${effectiveConfigPath ?? "(tsqlrefine default)"}`,
+	);
+
+	let result: FormatResult;
+	try {
+		result = await runFormatter({
+			filePath: targetFilePath,
+			cwd,
+			settings: effectiveSettings,
+			signal: controller.signal,
+			stdin: documentText,
+		});
+	} catch (error) {
+		formatStateManager.clearInFlight(uri);
+		const message = firstLine(String(error));
+		if (notificationManager.isMissingTsqllintError(message)) {
+			await notificationManager.maybeNotifyMissingTsqllint(message);
+			notificationManager.warn(`tsqlrefine format: ${message}`);
+		} else {
+			await connection.window.showWarningMessage(
+				`tsqlrefine: format failed (${message})`,
+			);
+			notificationManager.warn(`tsqlrefine: format failed (${message})`);
+		}
+		return null;
+	}
+
+	if (formatStateManager.isCurrentInFlight(uri, controller)) {
+		formatStateManager.clearInFlight(uri);
+	}
+
+	if (result.timedOut) {
+		await connection.window.showWarningMessage("tsqlrefine: format timed out.");
+		notificationManager.warn("tsqlrefine: format timed out.");
+		return null;
+	}
+
+	if (controller.signal.aborted || result.cancelled) {
+		return null;
+	}
+
+	if (result.stderr.trim()) {
+		notificationManager.warn(`tsqlrefine format stderr: ${result.stderr}`);
+	}
+
+	// Exit code 0 means success
+	// Exit code 2 means parse error - return null
+	// Exit code 3 means config error - return null
+	// Exit code 4 means runtime error - return null
+	if (result.exitCode !== 0) {
+		const errorMessage =
+			result.stderr.trim() || `Exit code: ${result.exitCode}`;
+		await connection.window.showWarningMessage(
+			`tsqlrefine: format failed (${firstLine(errorMessage)})`,
+		);
+		notificationManager.warn(
+			`tsqlrefine: format failed with exit code ${result.exitCode}`,
+		);
+		return null;
+	}
+
+	const formattedText = result.stdout;
+
+	// If the formatted text is the same as the original, return empty array
+	if (formattedText === documentText) {
+		return [];
+	}
+
+	// Return a single TextEdit that replaces the entire document
+	const lastLineIndex = document.lineCount - 1;
+	const lastLine = document.getText({
+		start: { line: lastLineIndex, character: 0 },
+		end: { line: lastLineIndex, character: Number.MAX_SAFE_INTEGER },
+	});
+
+	return [
+		{
+			range: {
+				start: { line: 0, character: 0 },
+				end: { line: lastLineIndex, character: lastLine.length },
+			},
+			newText: formattedText,
+		},
+	];
+}
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
 
 function maxFileSizeBytes(maxFileSizeKb: number): number | null {
 	if (!Number.isFinite(maxFileSizeKb) || maxFileSizeKb <= 0) {
@@ -458,54 +575,7 @@ function isSaved(document: TextDocument): boolean {
 	if (URI.parse(document.uri).scheme !== "file") {
 		return false;
 	}
-	const savedVersion = savedVersionByUri.get(document.uri);
-	return savedVersion !== undefined && savedVersion === document.version;
-}
-
-async function notifyRunFailure(error: unknown): Promise<void> {
-	const message = String(error);
-	await connection.window.showWarningMessage(
-		`tsqlrefine: failed to run (${message})`,
-	);
-	connection.console.warn(`tsqlrefine: failed to run (${message})`);
-}
-
-const missingTsqllintNoticeCooldownMs = 5 * 60 * 1000;
-let lastMissingTsqllintNoticeAtMs = 0;
-
-async function maybeNotifyMissingTsqllint(message: string): Promise<void> {
-	const now = Date.now();
-	if (now - lastMissingTsqllintNoticeAtMs < missingTsqllintNoticeCooldownMs) {
-		return;
-	}
-	lastMissingTsqllintNoticeAtMs = now;
-	const action = await connection.window.showWarningMessage(
-		`tsqlrefine: ${message}`,
-		{ title: "Open Install Guide" },
-	);
-	if (action?.title === "Open Install Guide") {
-		connection.sendNotification("tsqlrefine/openInstallGuide");
-	}
-}
-
-function isMissingTsqllintError(message: string): boolean {
-	const normalized = message.toLowerCase();
-	return (
-		normalized.includes("tsqlrefine not found") ||
-		normalized.includes("tsqlrefine.path not found") ||
-		normalized.includes("tsqlrefine.path is not a file")
-	);
-}
-
-async function notifyStderr(stderr: string): Promise<void> {
-	const trimmed = stderr.trim();
-	if (!trimmed) {
-		return;
-	}
-	await connection.window.showWarningMessage(
-		`tsqlrefine: ${firstLine(trimmed)}`,
-	);
-	connection.console.warn(trimmed);
+	return lintStateManager.isSaved(document.uri, document.version);
 }
 
 function firstLine(text: string): string {
@@ -514,132 +584,4 @@ function firstLine(text: string): string {
 		return text;
 	}
 	return text.slice(0, index);
-}
-
-const formatInFlightByUri = new Map<string, AbortController>();
-
-async function formatDocument(uri: string): Promise<TextEdit[] | null> {
-	const document = documents.get(uri);
-	if (!document) {
-		return null;
-	}
-
-	// Cancel any in-flight format for this document
-	const existingController = formatInFlightByUri.get(uri);
-	if (existingController) {
-		existingController.abort();
-		formatInFlightByUri.delete(uri);
-	}
-
-	const parsedUri = URI.parse(uri);
-	const filePath = parsedUri.fsPath;
-	const workspaceRoot = resolveWorkspaceRoot(filePath || undefined);
-	const cwd =
-		workspaceRoot ?? (filePath ? path.dirname(filePath) : process.cwd());
-
-	const documentSettings = await getSettingsForDocument(uri);
-	const effectiveConfigPath = await resolveConfigPath({
-		configuredConfigPath: documentSettings.configPath,
-		filePath: filePath || null,
-		workspaceRoot,
-	});
-	const effectiveSettings: TsqllintSettings =
-		typeof effectiveConfigPath === "string" && effectiveConfigPath.trim()
-			? { ...documentSettings, configPath: effectiveConfigPath }
-			: documentSettings;
-
-	const documentText = document.getText();
-	const targetFilePath = filePath || "untitled.sql";
-
-	const controller = new AbortController();
-	formatInFlightByUri.set(uri, controller);
-
-	connection.console.log(`[formatDocument] URI: ${uri}`);
-	connection.console.log(`[formatDocument] File path: ${filePath}`);
-	connection.console.log(`[formatDocument] CWD: ${cwd}`);
-	connection.console.log(
-		`[formatDocument] Config path: ${effectiveConfigPath ?? "(tsqlrefine default)"}`,
-	);
-
-	let result: FormatResult;
-	try {
-		result = await runFormatter({
-			filePath: targetFilePath,
-			cwd,
-			settings: effectiveSettings,
-			signal: controller.signal,
-			stdin: documentText,
-		});
-	} catch (error) {
-		formatInFlightByUri.delete(uri);
-		const message = firstLine(String(error));
-		if (isMissingTsqllintError(message)) {
-			await maybeNotifyMissingTsqllint(message);
-			connection.console.warn(`tsqlrefine format: ${message}`);
-		} else {
-			await connection.window.showWarningMessage(
-				`tsqlrefine: format failed (${message})`,
-			);
-			connection.console.warn(`tsqlrefine: format failed (${message})`);
-		}
-		return null;
-	}
-
-	if (formatInFlightByUri.get(uri) === controller) {
-		formatInFlightByUri.delete(uri);
-	}
-
-	if (result.timedOut) {
-		await connection.window.showWarningMessage("tsqlrefine: format timed out.");
-		connection.console.warn("tsqlrefine: format timed out.");
-		return null;
-	}
-
-	if (controller.signal.aborted || result.cancelled) {
-		return null;
-	}
-
-	if (result.stderr.trim()) {
-		connection.console.warn(`tsqlrefine format stderr: ${result.stderr}`);
-	}
-
-	// Exit code 0 means success
-	// Exit code 2 means parse error - return null
-	// Exit code 3 means config error - return null
-	// Exit code 4 means runtime error - return null
-	if (result.exitCode !== 0) {
-		const errorMessage =
-			result.stderr.trim() || `Exit code: ${result.exitCode}`;
-		await connection.window.showWarningMessage(
-			`tsqlrefine: format failed (${firstLine(errorMessage)})`,
-		);
-		connection.console.warn(
-			`tsqlrefine: format failed with exit code ${result.exitCode}`,
-		);
-		return null;
-	}
-
-	const formattedText = result.stdout;
-
-	// If the formatted text is the same as the original, return empty array
-	if (formattedText === documentText) {
-		return [];
-	}
-
-	// Return a single TextEdit that replaces the entire document
-	const lastLineIndex = document.lineCount - 1;
-	const lastLine = document.getText({
-		start: { line: lastLineIndex, character: 0 },
-		end: { line: lastLineIndex, character: Number.MAX_SAFE_INTEGER },
-	});
-
-	return [
-		{
-			range: {
-				start: { line: 0, character: 0 },
-				end: { line: lastLineIndex, character: lastLine.length },
-			},
-			newText: formattedText,
-		},
-	];
 }

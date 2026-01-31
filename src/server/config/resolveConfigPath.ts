@@ -1,8 +1,9 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { normalizeForCompare } from "../shared/normalize";
+import { CONFIG_CACHE_TTL_MS } from "./constants";
 
 const defaultConfigFileNames = [".tsqlrefinerc"];
-const cacheTtlMs = 5000;
 
 type CacheEntry = {
 	value: string | null;
@@ -98,7 +99,7 @@ async function findNearestConfigFile(
 	const key = `${startDir}|${stopDir}|${fileNames.join(",")}`;
 
 	const existing = cache.get(key);
-	if (existing && Date.now() - existing.checkedAtMs < cacheTtlMs) {
+	if (existing && Date.now() - existing.checkedAtMs < CONFIG_CACHE_TTL_MS) {
 		return existing.value;
 	}
 
@@ -145,14 +146,6 @@ async function findNearestConfigFileUncached(
 
 		current = parent;
 	}
-}
-
-function normalizeForCompare(filePath: string): string {
-	const normalized = path.resolve(filePath);
-	if (process.platform === "win32") {
-		return normalized.toLowerCase();
-	}
-	return normalized;
 }
 
 function isWithinOrEqual(candidatePath: string, parentPath: string): boolean {

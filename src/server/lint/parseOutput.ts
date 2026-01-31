@@ -4,6 +4,7 @@ import {
 	DiagnosticSeverity,
 } from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
+import { normalizeForCompare } from "../shared/normalize";
 
 // New format: <filepath>:<line>:<column>: <severity>: <message> (<rule-id>)
 // Windows paths start with drive letter (e.g., C:\path), so we handle that specially
@@ -20,14 +21,6 @@ type ParseOutputOptions = {
 		log: (message: string) => void;
 	};
 };
-
-function normalizeForCompare(filePath: string): string {
-	const normalized = path.normalize(filePath);
-	if (process.platform === "win32") {
-		return normalized.toLowerCase();
-	}
-	return normalized;
-}
 
 function mapSeverity(severity: string): DiagnosticSeverity {
 	const normalized = severity.toLowerCase();
