@@ -3,7 +3,8 @@ import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { DocumentContext } from "../shared/documentContext";
 import type { DocumentStateManager } from "../state/documentStateManager";
 import type { NotificationManager } from "../state/notificationManager";
-import { runFormatter, type FormatResult } from "./runFormatter";
+import type { ProcessRunResult } from "../shared/types";
+import { runFormatter } from "./runFormatter";
 
 export type FormatOperationDeps = {
 	connection: Connection;
@@ -39,7 +40,7 @@ export async function executeFormat(
 		effectiveConfigPath,
 	);
 
-	let result: FormatResult;
+	let result: ProcessRunResult;
 	try {
 		result = await runFormatter({
 			filePath: targetFilePath,

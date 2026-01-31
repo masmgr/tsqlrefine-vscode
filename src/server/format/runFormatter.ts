@@ -3,8 +3,6 @@ import { normalizeConfigPath } from "../shared/normalize";
 import { resolveCommand, runProcess } from "../shared/processRunner";
 import type { ProcessRunResult } from "../shared/types";
 
-export type FormatResult = ProcessRunResult;
-
 export type RunFormatterOptions = {
 	filePath: string;
 	cwd: string;
@@ -33,7 +31,7 @@ function buildArgs(options: RunFormatterOptions): string[] {
  */
 export async function runFormatter(
 	options: RunFormatterOptions,
-): Promise<FormatResult> {
+): Promise<ProcessRunResult> {
 	if (options.signal.aborted) {
 		return {
 			stdout: "",
