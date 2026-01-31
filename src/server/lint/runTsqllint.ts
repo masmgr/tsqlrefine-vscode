@@ -12,8 +12,8 @@ export type RunTsqllintOptions = {
 	cwd: string;
 	settings: TsqllintSettings;
 	signal: AbortSignal;
-	/** Document content to pass via stdin. If null, tsqlrefine will read from filePath. */
-	stdin?: string | null;
+	/** Document content to pass via stdin. */
+	stdin: string;
 };
 
 /**
@@ -38,12 +38,8 @@ function buildArgs(options: RunTsqllintOptions): string[] {
 	if (configPath) {
 		args.push("-c", configPath);
 	}
-	// Use "--stdin" to read from stdin if stdin content is provided
-	if (options.stdin != null) {
-		args.push("--stdin");
-	} else {
-		args.push(options.filePath);
-	}
+	// Use --stdin to read content from stdin
+	args.push("--stdin");
 	return args;
 }
 

@@ -1,7 +1,7 @@
 import * as assert from "node:assert";
 import * as vscode from "vscode";
 import { cleanupWorkspace, runE2ETest } from "../helpers/e2eTestHarness";
-import { FAKE_CLI_RULES, TEST_TIMEOUTS } from "../helpers/testConstants";
+import { TEST_TIMEOUTS } from "../helpers/testConstants";
 
 suite("Startup Verification Test Suite", () => {
 	suiteTeardown(async () => {
@@ -14,12 +14,11 @@ suite("Startup Verification Test Suite", () => {
 
 		await runE2ETest(
 			{
-				fakeCliRule: FAKE_CLI_RULES.FAKE_RULE,
 				config: { runOnOpen: false },
 				documentContent: "select 1;",
 			},
 			async (context, _harness) => {
-				// Extension activated successfully with fake CLI
+				// Extension activated successfully with real tsqlrefine
 				// Verify document was created properly
 				assert.ok(context.document);
 				assert.strictEqual(context.document.languageId, "sql");
@@ -36,9 +35,8 @@ suite("Startup Verification Test Suite", () => {
 
 		await runE2ETest(
 			{
-				fakeCliRule: FAKE_CLI_RULES.MANUAL_RULE,
 				config: { runOnSave: false, runOnType: false, runOnOpen: false },
-				documentContent: "select 1;",
+				documentContent: "select from",
 			},
 			async (context, harness) => {
 				await vscode.window.showTextDocument(context.document, {
@@ -53,12 +51,8 @@ suite("Startup Verification Test Suite", () => {
 					context.document.uri,
 					(entries) => entries.length >= 1,
 				);
-				const match = diagnostics.find(
-					(diag) =>
-						diag.source === "tsqlrefine" &&
-						diag.code === FAKE_CLI_RULES.MANUAL_RULE,
-				);
-				assert.ok(match);
+				const match = diagnostics.find((diag) => diag.source === "tsqlrefine");
+				assert.ok(match, "Expected tsqlrefine diagnostic after manual run");
 			},
 		);
 	});

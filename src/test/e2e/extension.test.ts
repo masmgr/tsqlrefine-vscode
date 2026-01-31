@@ -1,11 +1,7 @@
 import * as assert from "node:assert";
 import * as vscode from "vscode";
 import { cleanupWorkspace, runE2ETest } from "../helpers/e2eTestHarness";
-import {
-	FAKE_CLI_RULES,
-	TEST_DELAYS,
-	TEST_TIMEOUTS,
-} from "../helpers/testConstants";
+import { TEST_DELAYS, TEST_TIMEOUTS } from "../helpers/testConstants";
 
 suite("Extension Test Suite", () => {
 	suiteTeardown(async () => {
@@ -18,10 +14,9 @@ suite("Extension Test Suite", () => {
 
 		await runE2ETest(
 			{
-				fakeCliRule: FAKE_CLI_RULES.FAKE_RULE,
-				fakeCliSeverity: "error",
 				config: { runOnSave: true },
-				documentContent: "select 1;",
+				// Use invalid SQL to trigger diagnostics
+				documentContent: "select from",
 			},
 			async (context, harness) => {
 				const editor = await vscode.window.showTextDocument(context.document, {
@@ -36,13 +31,8 @@ suite("Extension Test Suite", () => {
 					context.document.uri,
 					(entries) => entries.length >= 1,
 				);
-				const match = diagnostics.find(
-					(diag) =>
-						diag.source === "tsqlrefine" &&
-						diag.code === FAKE_CLI_RULES.FAKE_RULE,
-				);
-				assert.ok(match);
-				assert.strictEqual(match.message, "Fake issue");
+				const match = diagnostics.find((diag) => diag.source === "tsqlrefine");
+				assert.ok(match, "Expected tsqlrefine diagnostic");
 			},
 		);
 	});
@@ -52,10 +42,8 @@ suite("Extension Test Suite", () => {
 
 		await runE2ETest(
 			{
-				fakeCliRule: FAKE_CLI_RULES.MANUAL_RULE,
-				fakeCliSeverity: "error",
 				config: { runOnSave: false, runOnType: false },
-				documentContent: "select 1;",
+				documentContent: "select from",
 			},
 			async (context, harness) => {
 				await vscode.window.showTextDocument(context.document, {
@@ -68,12 +56,8 @@ suite("Extension Test Suite", () => {
 					context.document.uri,
 					(entries) => entries.length >= 1,
 				);
-				const match = diagnostics.find(
-					(diag) =>
-						diag.source === "tsqlrefine" &&
-						diag.code === FAKE_CLI_RULES.MANUAL_RULE,
-				);
-				assert.ok(match);
+				const match = diagnostics.find((diag) => diag.source === "tsqlrefine");
+				assert.ok(match, "Expected tsqlrefine diagnostic from manual run");
 			},
 		);
 	});
@@ -83,8 +67,6 @@ suite("Extension Test Suite", () => {
 
 		await runE2ETest(
 			{
-				fakeCliRule: FAKE_CLI_RULES.TYPE_RULE,
-				fakeCliSeverity: "warning",
 				config: {
 					runOnType: true,
 					debounceMs: TEST_DELAYS.DEBOUNCE_SHORT,
@@ -97,20 +79,17 @@ suite("Extension Test Suite", () => {
 					preview: false,
 				});
 
+				// Insert invalid SQL to trigger diagnostics
 				await editor.edit((builder) => {
-					builder.insert(new vscode.Position(0, 0), "select 1;");
+					builder.insert(new vscode.Position(0, 0), "select from");
 				});
 
 				const diagnostics = await harness.waitForDiagnostics(
 					context.document.uri,
 					(entries) => entries.length >= 1,
 				);
-				const match = diagnostics.find(
-					(diag) =>
-						diag.source === "tsqlrefine" &&
-						diag.code === FAKE_CLI_RULES.TYPE_RULE,
-				);
-				assert.ok(match);
+				const match = diagnostics.find((diag) => diag.source === "tsqlrefine");
+				assert.ok(match, "Expected tsqlrefine diagnostic from runOnType");
 			},
 		);
 	});
@@ -120,14 +99,12 @@ suite("Extension Test Suite", () => {
 
 		await runE2ETest(
 			{
-				fakeCliRule: FAKE_CLI_RULES.OPEN_RULE,
-				fakeCliSeverity: "error",
 				config: {
 					runOnOpen: true,
 					runOnSave: false,
 					runOnType: false,
 				},
-				documentContent: "select 1;",
+				documentContent: "select from",
 			},
 			async (context, harness) => {
 				// Create a new SQL document after config is applied
@@ -138,7 +115,7 @@ suite("Extension Test Suite", () => {
 				);
 				await vscode.workspace.fs.writeFile(
 					newUri,
-					new TextEncoder().encode("select 2;"),
+					new TextEncoder().encode("select from"),
 				);
 				const newDocument = await vscode.workspace.openTextDocument(newUri);
 				await vscode.languages.setTextDocumentLanguage(newDocument, "sql");
@@ -147,12 +124,8 @@ suite("Extension Test Suite", () => {
 					newDocument.uri,
 					(entries) => entries.length >= 1,
 				);
-				const match = diagnostics.find(
-					(diag) =>
-						diag.source === "tsqlrefine" &&
-						diag.code === FAKE_CLI_RULES.OPEN_RULE,
-				);
-				assert.ok(match);
+				const match = diagnostics.find((diag) => diag.source === "tsqlrefine");
+				assert.ok(match, "Expected tsqlrefine diagnostic from runOnOpen");
 
 				// Clean up
 				await vscode.commands.executeCommand(
@@ -167,13 +140,12 @@ suite("Extension Test Suite", () => {
 
 		await runE2ETest(
 			{
-				fakeCliRule: FAKE_CLI_RULES.OPEN_RULE,
 				config: {
 					runOnOpen: false,
 					runOnSave: false,
 					runOnType: false,
 				},
-				documentContent: "select 1;",
+				documentContent: "select from",
 			},
 			async (context, _harness) => {
 				// Wait a short time to ensure no linting happens

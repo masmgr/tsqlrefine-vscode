@@ -36,13 +36,17 @@ function mapSeverity(severity: string): DiagnosticSeverity {
 	}
 }
 
+// Special stdin marker that should not be path-resolved
+const STDIN_MARKER = "<stdin>";
+
 export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 	const diagnostics: Diagnostic[] = [];
 	const targetPath = normalizeForCompare(URI.parse(options.uri).fsPath);
 	const extraTargets = options.targetPaths ?? [];
 	const targetPaths = new Set(
 		[targetPath, ...extraTargets].map((filePath) =>
-			normalizeForCompare(filePath),
+			// Don't normalize the stdin marker - it's a special value
+			filePath === STDIN_MARKER ? STDIN_MARKER : normalizeForCompare(filePath),
 		),
 	);
 	const cwd = options.cwd ?? path.dirname(targetPath);
@@ -76,7 +80,11 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 		if (!rawPath) {
 			continue;
 		}
-		const resolvedPath = normalizeForCompare(path.resolve(cwd, rawPath));
+		// Don't resolve the stdin marker - check it directly
+		const resolvedPath =
+			rawPath === STDIN_MARKER
+				? STDIN_MARKER
+				: normalizeForCompare(path.resolve(cwd, rawPath));
 		options.logger?.log(`[parseOutput] Line: ${line}`);
 		options.logger?.log(
 			`[parseOutput] Raw path: ${rawPath} -> Resolved: ${resolvedPath}`,

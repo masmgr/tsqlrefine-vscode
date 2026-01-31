@@ -61,8 +61,7 @@ export async function executeLint(
 	const controller = new AbortController();
 	lintStateManager.setInFlight(uri, controller);
 
-	const useStdin = !isSavedFile;
-	const targetFilePath = useStdin ? filePath || "untitled.sql" : filePath;
+	const targetFilePath = filePath || "untitled.sql";
 
 	logLintContext(
 		notificationManager,
@@ -71,7 +70,6 @@ export async function executeLint(
 		targetFilePath,
 		cwd,
 		isSavedFile,
-		useStdin,
 		effectiveConfigPath,
 	);
 
@@ -82,7 +80,7 @@ export async function executeLint(
 			cwd,
 			settings: effectiveSettings,
 			signal: controller.signal,
-			stdin: useStdin ? documentText : null,
+			stdin: documentText,
 		});
 	} catch (error) {
 		lintStateManager.clearInFlight(uri);
@@ -112,9 +110,12 @@ export async function executeLint(
 	const eol: EndOfLine = documentText.includes("\r\n") ? "CRLF" : "LF";
 	const normalizedStdout = normalizeLineEndings(result.stdout, eol);
 
-	const targetPaths = useStdin
-		? [targetFilePath, "untitled.sql", path.resolve(cwd, "untitled.sql")]
-		: [targetFilePath];
+	const targetPaths = [
+		targetFilePath,
+		"untitled.sql",
+		path.resolve(cwd, "untitled.sql"),
+		"<stdin>", // tsqlrefine outputs this path when reading from stdin
+	];
 
 	const diagnostics = parseOutput({
 		stdout: normalizedStdout,
@@ -165,7 +166,6 @@ function logLintContext(
 	targetFilePath: string,
 	cwd: string,
 	isSavedFile: boolean,
-	useStdin: boolean,
 	effectiveConfigPath: string | undefined,
 ): void {
 	notificationManager.log(`[executeLint] URI: ${uri}`);
@@ -173,7 +173,6 @@ function logLintContext(
 	notificationManager.log(`[executeLint] Target file path: ${targetFilePath}`);
 	notificationManager.log(`[executeLint] CWD: ${cwd}`);
 	notificationManager.log(`[executeLint] Is saved: ${isSavedFile}`);
-	notificationManager.log(`[executeLint] Using stdin: ${useStdin}`);
 	notificationManager.log(
 		`[executeLint] Config path: ${effectiveConfigPath ?? "(tsqlrefine default)"}`,
 	);

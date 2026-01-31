@@ -3,88 +3,66 @@
  * Eliminates duplication by providing reusable test setup utilities.
  */
 
+import { spawn } from "node:child_process";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { createFakeCli, type FakeCli } from "./fakeCli";
 
 /**
- * Creates a standard fake CLI that outputs a diagnostic for the linted file.
- * Output format: <filepath>:<line>:<column>: <Severity>: <message> (<rule-id>)
+ * Locates the tsqlrefine executable in the system PATH.
  *
- * @param ruleName - The rule name to include in the diagnostic
- * @param severity - The severity level (default: "error")
- * @param message - Custom message (default: derived from ruleName)
- * @returns FakeCli instance with cleanup method
- *
- * @example
- * const cli = await createStandardFakeCli('MyRule', 'warning', 'My custom message');
+ * @returns Path to tsqlrefine executable, or null if not found
  */
-export async function createStandardFakeCli(
-	ruleName: string,
-	severity: "error" | "warning" | "hint" | "information" = "error",
-	message?: string,
-): Promise<FakeCli> {
-	const msg = message ?? `${ruleName.replace("Rule", "")} issue`;
-	// Capitalize first letter for severity in output (e.g., "error" -> "Error")
-	const severityCapitalized =
-		severity.charAt(0).toUpperCase() + severity.slice(1);
-	const scriptBody = `
-const args = process.argv.slice(2);
-const lastArg = args[args.length - 1] || "";
+export async function locateTsqlrefine(): Promise<string | null> {
+	const command = process.platform === "win32" ? "where.exe" : "which";
+	const args = ["tsqlrefine"];
+	const result = await runCommand(command, args, 3000);
+	if (result.exitCode !== 0) {
+		return null;
+	}
+	const first = result.stdout
+		.split(/\r?\n/)
+		.map((line) => line.trim())
+		.find((line) => line.length > 0);
+	return first ?? null;
+}
 
-// Handle stdin input (when last arg is "-")
-if (lastArg === "-") {
-	let stdinData = '';
-	process.stdin.on('data', chunk => { stdinData += chunk; });
-	process.stdin.on('end', () => {
-		// Use a generic filename for stdin
-		// New format: <filepath>:<line>:<column>: <Severity>: <message> (<rule-id>)
-		process.stdout.write(\`untitled.sql:1:1: ${severityCapitalized}: ${msg} (${ruleName})\`);
+async function runCommand(
+	command: string,
+	args: string[],
+	timeoutMs: number,
+): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
+	return await new Promise((resolve) => {
+		const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+		let stdout = "";
+		let stderr = "";
+		let timer: NodeJS.Timeout | null = setTimeout(() => {
+			timer = null;
+			child.kill();
+			resolve({ stdout, stderr, exitCode: null });
+		}, timeoutMs);
+
+		child.stdout.setEncoding("utf8");
+		child.stdout.on("data", (data: string) => {
+			stdout += data;
+		});
+		child.stderr.setEncoding("utf8");
+		child.stderr.on("data", (data: string) => {
+			stderr += data;
+		});
+		child.on("error", () => {
+			if (timer) {
+				clearTimeout(timer);
+			}
+			resolve({ stdout, stderr, exitCode: 1 });
+		});
+		child.on("close", (exitCode) => {
+			if (timer) {
+				clearTimeout(timer);
+			}
+			resolve({ stdout, stderr, exitCode });
+		});
 	});
-} else {
-	// Use file path from args
-	const filePath = lastArg;
-	// New format: <filepath>:<line>:<column>: <Severity>: <message> (<rule-id>)
-	process.stdout.write(\`\${filePath}:1:1: ${severityCapitalized}: ${msg} (${ruleName})\`);
-}
-`;
-	return createFakeCli(scriptBody);
-}
-
-/**
- * Creates a fake CLI with custom script body.
- * Use this for non-standard test cases that need specific behavior.
- *
- * @param scriptBody - JavaScript code to execute in the fake CLI
- * @returns FakeCli instance with cleanup method
- *
- * @example
- * const cli = await createCustomFakeCli('process.stdout.write("custom output");');
- */
-export async function createCustomFakeCli(
-	scriptBody: string,
-): Promise<FakeCli> {
-	return createFakeCli(scriptBody);
-}
-
-/**
- * Creates a fake CLI that times out after the specified delay.
- * Useful for testing timeout handling.
- *
- * @param delayMs - Milliseconds to delay before producing output
- * @returns FakeCli instance with cleanup method
- *
- * @example
- * const cli = await createTimeoutFakeCli(2000);
- */
-export async function createTimeoutFakeCli(delayMs: number): Promise<FakeCli> {
-	const scriptBody = `
-setTimeout(() => {
-	process.stdout.write("late output");
-}, ${delayMs});
-`;
-	return createFakeCli(scriptBody);
 }
 
 /**

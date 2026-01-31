@@ -20,25 +20,6 @@ let cachedCommandAvailability: {
 } | null = null;
 
 /**
- * Resolve spawn command for Windows (wrap .cmd/.bat with cmd.exe /c).
- */
-export function resolveSpawn(
-	command: string,
-	args: string[],
-): { command: string; args: string[] } {
-	if (process.platform !== "win32") {
-		return { command, args };
-	}
-	const normalized = command.toLowerCase();
-	if (normalized.endsWith(".cmd") || normalized.endsWith(".bat")) {
-		const env = process.env as NodeJS.ProcessEnv & { ComSpec?: string };
-		const comspec = env.ComSpec ?? "cmd.exe";
-		return { command: comspec, args: ["/c", command, ...args] };
-	}
-	return { command, args };
-}
-
-/**
  * Assert that a file path exists and is a file.
  */
 export async function assertPathExists(filePath: string): Promise<void> {
@@ -151,8 +132,6 @@ export function runProcess(
 		});
 	}
 
-	const spawnSpec = resolveSpawn(options.command, options.args);
-
 	return new Promise((resolve, reject) => {
 		let settled = false;
 		let timedOut = false;
@@ -161,7 +140,7 @@ export function runProcess(
 		const stderrChunks: Buffer[] = [];
 		let timer: NodeJS.Timeout | null = null;
 
-		const child = spawn(spawnSpec.command, spawnSpec.args, {
+		const child = spawn(options.command, options.args, {
 			cwd: options.cwd,
 			stdio: [options.stdin != null ? "pipe" : "ignore", "pipe", "pipe"],
 		});

@@ -23,9 +23,8 @@ function buildArgs(options: RunFormatterOptions): string[] {
 	if (configPath) {
 		args.push("-c", configPath);
 	}
-	// Use --stdin with --stdin-filepath for virtual path
+	// Use --stdin to read content from stdin
 	args.push("--stdin");
-	args.push("--stdin-filepath", options.filePath);
 	return args;
 }
 

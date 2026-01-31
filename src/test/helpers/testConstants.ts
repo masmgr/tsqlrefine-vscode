@@ -44,23 +44,8 @@ export const RETRY_CONFIG = {
 } as const;
 
 /**
- * Fake CLI rule names used in tests.
- */
-export const FAKE_CLI_RULES = {
-	/** Generic fake rule for basic tests */
-	FAKE_RULE: "FakeRule",
-	/** Rule for manual run tests */
-	MANUAL_RULE: "ManualRule",
-	/** Rule for run-on-type tests */
-	TYPE_RULE: "TypeRule",
-	/** Rule for run-on-open tests */
-	OPEN_RULE: "OpenRule",
-} as const;
-
-/**
  * Type exports for better IDE support and type safety.
  */
 export type TestTimeoutKey = keyof typeof TEST_TIMEOUTS;
 export type TestDelayKey = keyof typeof TEST_DELAYS;
 export type RetryConfigKey = keyof typeof RETRY_CONFIG;
-export type FakeCliRuleKey = keyof typeof FAKE_CLI_RULES;

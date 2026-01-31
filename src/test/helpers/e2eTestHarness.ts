@@ -8,14 +8,12 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { type RemovalOptions, removeDirectory, sleep } from "./cleanup";
-import type { FakeCli } from "./fakeCli";
 import { TEST_DELAYS, TEST_TIMEOUTS } from "./testConstants";
 import {
 	applyTestConfig,
-	createCustomFakeCli,
 	createSqlDocument,
-	createStandardFakeCli,
 	createTestWorkspace,
+	locateTsqlrefine,
 	restoreTestConfig,
 } from "./testFixtures";
 
@@ -27,8 +25,8 @@ export interface E2ETestContext {
 	workspaceRoot: vscode.Uri;
 	/** Temporary directory created for this test */
 	tempDir: string;
-	/** Fake CLI instance */
-	fakeCli: FakeCli;
+	/** Path to tsqlrefine executable */
+	tsqlrefinePath: string;
 	/** SQL document opened for testing */
 	document: vscode.TextDocument;
 	/** Configuration snapshot for restoration */
@@ -39,12 +37,6 @@ export interface E2ETestContext {
  * Options for setting up an E2E test.
  */
 export interface E2ETestOptions {
-	/** Fake CLI rule name (creates standard fake CLI) */
-	fakeCliRule?: string;
-	/** Fake CLI severity level (default: "error") */
-	fakeCliSeverity?: "error" | "warning";
-	/** Custom fake CLI script body (mutually exclusive with fakeCliRule) */
-	customCliScript?: string;
 	/** VS Code configuration to apply */
 	config?: Record<string, unknown>;
 	/** Initial document content (default: "select 1;") */
@@ -71,17 +63,14 @@ export class E2ETestHarness {
 		// Ensure extension is activated
 		await activateExtension();
 
-		// Create fake CLI
-		if (options.customCliScript) {
-			this.context.fakeCli = await createCustomFakeCli(options.customCliScript);
-		} else if (options.fakeCliRule) {
-			this.context.fakeCli = await createStandardFakeCli(
-				options.fakeCliRule,
-				options.fakeCliSeverity,
+		// Locate tsqlrefine executable
+		const tsqlrefinePath = await locateTsqlrefine();
+		if (!tsqlrefinePath) {
+			throw new Error(
+				"tsqlrefine not found in PATH. Please install tsqlrefine to run E2E tests.",
 			);
-		} else {
-			throw new Error("Either fakeCliRule or customCliScript must be provided");
 		}
+		this.context.tsqlrefinePath = tsqlrefinePath;
 
 		// Get workspace root
 		const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
@@ -96,7 +85,7 @@ export class E2ETestHarness {
 
 		// Apply configuration before opening files so events honor the desired settings.
 		const config = {
-			path: this.context.fakeCli.commandPath,
+			path: this.context.tsqlrefinePath,
 			...options.config,
 		};
 		this.context.configSnapshot = await applyTestConfig(config);
@@ -128,11 +117,6 @@ export class E2ETestHarness {
 
 		// Close all editors
 		await vscode.commands.executeCommand("workbench.action.closeAllEditors");
-
-		// Cleanup fake CLI
-		if (this.context.fakeCli) {
-			await this.context.fakeCli.cleanup();
-		}
 
 		// Sleep to allow async operations to complete
 		await sleep(TEST_DELAYS.CLEANUP_SLEEP);
@@ -210,7 +194,6 @@ export class E2ETestHarness {
  *
  *   await runE2ETest(
  *     {
- *       fakeCliRule: 'MyRule',
  *       config: { runOnSave: true },
  *     },
  *     async (context, harness) => {
