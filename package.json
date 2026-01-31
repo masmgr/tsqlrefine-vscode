@@ -150,7 +150,7 @@
 		"verify": "npm test && npm run typecheck && npm run lint && npm run format"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.3.11",
+		"@biomejs/biome": "^2.3.13",
 		"@types/mocha": "^10.0.10",
 		"@types/node": "^24.10.9",
 		"@types/vscode": "^1.108.1",
