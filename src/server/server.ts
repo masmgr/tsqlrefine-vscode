@@ -1,8 +1,11 @@
 import {
+	CodeActionKind,
 	createConnection,
 	ProposedFeatures,
 	TextDocumentSyncKind,
 	TextDocuments,
+	type CodeAction,
+	type CodeActionParams,
 	type DocumentFormattingParams,
 	type TextEdit,
 } from "vscode-languageserver/node";
@@ -92,6 +95,9 @@ connection.onInitialize((params) => {
 				save: { includeText: false },
 			},
 			documentFormattingProvider: true,
+			codeActionProvider: {
+				codeActionKinds: [CodeActionKind.QuickFix],
+			},
 		},
 	};
 });
@@ -181,6 +187,55 @@ connection.onRequest(
 			return { ok: false, error: "Fix failed" };
 		}
 		return { ok: true };
+	},
+);
+
+// ============================================================================
+// Code Action Handler
+// ============================================================================
+
+connection.onCodeAction(
+	async (params: CodeActionParams): Promise<CodeAction[] | null> => {
+		const uri = params.textDocument.uri;
+
+		// Check if any diagnostic from tsqlrefine exists
+		const hasTsqlrefineDiagnostic = params.context.diagnostics.some(
+			(diag) => diag.source === "tsqlrefine",
+		);
+
+		if (!hasTsqlrefineDiagnostic) {
+			return null;
+		}
+
+		// Get the document
+		const document = documents.get(uri);
+		if (!document) {
+			return null;
+		}
+
+		// Execute fix to get the edits
+		const edits = await fixDocument(uri);
+
+		// If no edits (fix failed or no changes), don't offer the action
+		if (!edits || edits.length === 0) {
+			return null;
+		}
+
+		// Create the Code Action with WorkspaceEdit
+		const codeAction: CodeAction = {
+			title: "Fix all tsqlrefine issues",
+			kind: CodeActionKind.QuickFix,
+			diagnostics: params.context.diagnostics.filter(
+				(diag) => diag.source === "tsqlrefine",
+			),
+			edit: {
+				changes: {
+					[uri]: edits,
+				},
+			},
+		};
+
+		return [codeAction];
 	},
 );
 
