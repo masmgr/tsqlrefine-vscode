@@ -15,13 +15,23 @@ import {
 } from "./types";
 
 /**
- * Command availability cache (shared between lint and format operations).
+ * Command availability cache keyed by configured path.
+ * Using a Map allows different workspaces with different tsqlrefine paths to be cached separately.
  */
-let cachedCommandAvailability: {
-	command: string;
-	available: boolean;
-	checkedAt: number;
-} | null = null;
+const commandAvailabilityCache = new Map<
+	string,
+	{
+		available: boolean;
+		checkedAt: number;
+	}
+>();
+
+/**
+ * Get a cache key for command availability based on configured path.
+ */
+function getCommandCacheKey(configuredPath: string | undefined): string {
+	return configuredPath || DEFAULT_COMMAND_NAME;
+}
 
 /**
  * Assert that a file path exists and is a file.
@@ -67,6 +77,7 @@ export async function checkCommandAvailable(command: string): Promise<boolean> {
 /**
  * Resolve the command to execute based on settings.
  * Uses caching to avoid repeated PATH lookups.
+ * Cache is keyed by configured path to support multiple workspaces with different tsqlrefine paths.
  */
 export async function resolveCommand(
 	settings: TsqllintSettings,
@@ -76,24 +87,26 @@ export async function resolveCommand(
 		await assertPathExists(configuredPath);
 		return configuredPath;
 	}
+
 	const command = DEFAULT_COMMAND_NAME;
-	if (
-		cachedCommandAvailability &&
-		cachedCommandAvailability.command === command
-	) {
-		const isFresh =
-			Date.now() - cachedCommandAvailability.checkedAt < COMMAND_CACHE_TTL_MS;
-		if (!cachedCommandAvailability.available && isFresh) {
+	const cacheKey = getCommandCacheKey(settings.path);
+	const cached = commandAvailabilityCache.get(cacheKey);
+
+	if (cached) {
+		const isFresh = Date.now() - cached.checkedAt < COMMAND_CACHE_TTL_MS;
+		if (!cached.available && isFresh) {
 			throw new Error(
 				"tsqlrefine not found. Set tsqlrefine.path or install tsqlrefine.",
 			);
 		}
-		if (cachedCommandAvailability.available) {
+		if (cached.available && isFresh) {
 			return command;
 		}
 	}
+
 	const available = await checkCommandAvailable(command);
-	cachedCommandAvailability = { command, available, checkedAt: Date.now() };
+	commandAvailabilityCache.set(cacheKey, { available, checkedAt: Date.now() });
+
 	if (!available) {
 		throw new Error(
 			"tsqlrefine not found. Set tsqlrefine.path or install tsqlrefine.",
