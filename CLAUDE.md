@@ -94,7 +94,7 @@ Shared infrastructure for executing CLI commands (lint, format, fix):
 #### 3. Lint Operations ([src/server/lint/](src/server/lint/))
 
 - **lintOperations.ts**: Orchestrates lint execution with file size limiting
-- **runTsqllint.ts**: Executes `tsqlrefine lint --stdin` command
+- **runLinter.ts**: Executes `tsqlrefine lint --stdin` command
 - **parseOutput.ts**: Parses CLI output into VS Code diagnostics
 - **decodeOutput.ts**: Handles output encoding detection and line ending normalization
 
@@ -111,13 +111,15 @@ The extension can skip automatic linting for large files:
 - **runFormatter.ts**: Executes `tsqlrefine format --stdin` command
 - Returns `TextEdit[]` for full document replacement
 - Supports separate timeout via `formatTimeoutMs` setting
+- Uses shared utilities: `createFullDocumentEdit()`, `handleOperationError()`, `logOperationContext()`
 
 #### 5. Fix Operations ([src/server/fix/](src/server/fix/))
 
 - **fixOperations.ts**: Orchestrates fix execution
-- **runFixer.ts**: Executes `tsqlrefine fix --stdin` command
+- **runFixer.ts**: Executes `tsqlrefine fix --stdin` command with `--severity` flag
 - Returns `TextEdit[]` for document modification
 - Integrated with Code Action provider for quick fixes
+- Uses shared utilities: `createFullDocumentEdit()`, `handleOperationError()`, `logOperationContext()`
 
 #### 6. Output Parser ([src/server/lint/parseOutput.ts](src/server/lint/parseOutput.ts))
 
@@ -145,20 +147,24 @@ Three independent instances are used for lint, format, and fix operations.
 Centralized user notification management:
 - **Cooldown support**: Missing tsqlrefine notification has 5-minute cooldown
 - **Install guide integration**: Offers to open installation guide
-- **Error detection**: `isMissingTsqllintError()` detects missing installation
+- **Error detection**: `isMissingTsqlRefineError()` detects missing installation
 
 #### SettingsManager ([src/server/state/settingsManager.ts](src/server/state/settingsManager.ts))
 
 Settings retrieval and normalization:
 - **Global settings**: Cached settings for all documents
 - **Document-scoped settings**: Per-document settings via LSP
-- **Validation**: Normalizes rangeMode and maxFileSizeKb values
+- **Validation**: Normalizes maxFileSizeKb values
 
 ### Shared Utilities
 
 Located in [src/server/shared/](src/server/shared/):
 
 - **documentContext.ts**: Creates unified `DocumentContext` with paths, settings, and document state
+- **documentEdit.ts**: `createFullDocumentEdit()` - Creates TextEdit for full document replacement
+- **errorHandling.ts**: `handleOperationError()` - Standardized error handling for format/fix operations
+- **logging.ts**: `logOperationContext()` - Consistent operation logging
+- **textUtils.ts**: `firstLine()`, `resolveTargetFilePath()` - Text processing utilities
 - **processRunner.ts**: Command resolution and process execution
 - **normalize.ts**: Path and config normalization utilities
 - **types.ts**: Shared type definitions (`ProcessRunResult`, `BaseProcessOptions`)
@@ -169,8 +175,10 @@ Centralized in [src/server/config/constants.ts](src/server/config/constants.ts):
 - `COMMAND_CACHE_TTL_MS = 30000` - Command availability cache TTL
 - `COMMAND_CHECK_TIMEOUT_MS = 3000` - Timeout for `--version` check
 - `CONFIG_CACHE_TTL_MS = 5000` - Config file resolution cache TTL
+- `CONFIG_CACHE_MAX_SIZE = 100` - Maximum entries in config path cache
 - `MAX_CONCURRENT_RUNS = 4` - Maximum concurrent lint operations
-- `MISSING_TSQLLINT_NOTICE_COOLDOWN_MS = 300000` - 5-minute notification cooldown
+- `MISSING_TSQLREFINE_NOTICE_COOLDOWN_MS = 300000` - 5-minute notification cooldown
+- `DEFAULT_COMMAND_NAME = "tsqlrefine"` - Default executable name
 
 ### Data Flow
 
@@ -178,7 +186,7 @@ Centralized in [src/server/config/constants.ts](src/server/config/constants.ts):
 1. User edits SQL file or triggers command
 2. Client sends request to server via LSP
 3. Server's `LintScheduler` queues the lint request
-4. When a slot is available, `runTsqllint()` spawns CLI with `--stdin`
+4. When a slot is available, `runLinter()` spawns CLI with `--stdin`
 5. `parseOutput()` converts stdout to VS Code diagnostics
 6. Server sends diagnostics back to client
 7. Client displays squiggles and problems panel
@@ -191,7 +199,7 @@ Centralized in [src/server/config/constants.ts](src/server/config/constants.ts):
 
 #### Fixing
 1. User triggers fix command or selects code action
-2. Server executes `runFixer()` with `fix --stdin`
+2. Server executes `runFixer()` with `fix --stdin --severity`
 3. Returns `TextEdit[]` applied via workspace edit
 
 ### Code Action Provider
@@ -225,7 +233,7 @@ The extension contributes these settings (namespace: `tsqlrefine`):
 ### Settings Type Definition
 
 ```typescript
-type TsqllintSettings = {
+type TsqlRefineSettings = {
   path?: string;
   configPath?: string;
   runOnSave: boolean;
@@ -235,7 +243,6 @@ type TsqllintSettings = {
   timeoutMs: number;
   maxFileSizeKb: number;
   minSeverity: "error" | "warning" | "info" | "hint";
-  rangeMode: "character" | "line";
   formatTimeoutMs?: number;
   enableLint: boolean;
   enableFormat: boolean;
@@ -261,19 +268,25 @@ Tests are organized into two categories under [src/test/](src/test/):
    - [decodeOutput.test.ts](src/test/unit/decodeOutput.test.ts) - Encoding detection tests
    - [parseOutput.test.ts](src/test/unit/parseOutput.test.ts) - Output parser tests
    - [handlers.test.ts](src/test/unit/handlers.test.ts) - File event handler tests
+   - [lintOperations.test.ts](src/test/unit/lintOperations.test.ts) - Lint operations tests
+   - [formatOperations.test.ts](src/test/unit/formatOperations.test.ts) - Format operations tests
    - [fixOperations.test.ts](src/test/unit/fixOperations.test.ts) - Fix operations tests
    - [runFixer.test.ts](src/test/unit/runFixer.test.ts) - Fixer CLI runner tests
    - [resolveConfigPath.test.ts](src/test/unit/resolveConfigPath.test.ts) - Config resolution tests
+   - [documentEdit.test.ts](src/test/unit/documentEdit.test.ts) - Document edit utility tests
+   - [textUtils.test.ts](src/test/unit/textUtils.test.ts) - Text utility tests
+   - [settingsManager.test.ts](src/test/unit/settingsManager.test.ts) - Settings manager tests
+   - [notificationManager.test.ts](src/test/unit/notificationManager.test.ts) - Notification manager tests
 
 2. **E2E tests** ([src/test/e2e/](src/test/e2e/)): Test full integration with VS Code
    - [extension.test.ts](src/test/e2e/extension.test.ts) - Extension activation and commands
-   - [localTsqllint.test.ts](src/test/e2e/localTsqllint.test.ts) - Real tsqlrefine CLI integration
+   - [runLinter.test.ts](src/test/e2e/runLinter.test.ts) - Linter CLI integration
+   - [localTsqlRefine.test.ts](src/test/e2e/localTsqlRefine.test.ts) - Real tsqlrefine CLI integration
    - [startup.test.ts](src/test/e2e/startup.test.ts) - Startup verification tests
    - [formatter.test.ts](src/test/e2e/formatter.test.ts) - Formatter E2E tests
    - [fix.test.ts](src/test/e2e/fix.test.ts) - Fix command and code action tests
 
 3. **Test helpers** ([src/test/helpers/](src/test/helpers/)): Shared utilities
-   - `fakeCli.ts` - Mock tsqlrefine CLI helper
    - `testFixtures.ts` - Reusable test data factories
    - `e2eTestHarness.ts` - E2E test setup/teardown automation
    - `testConstants.ts` - Centralized timeouts and constants
@@ -391,7 +404,7 @@ Pull requests created by Dependabot are labeled with `dependencies` and `automat
 ### Windows Compatibility
 - Always use `path.resolve()` and `path.normalize()` for file paths
 - Use case-insensitive comparison on Windows (`normalizeForCompare()`)
-- Wrap `.cmd`/.bat` executables with `cmd.exe /c`
+- Wrap `.cmd`/`.bat` executables with `cmd.exe /c`
 
 ### Concurrency and Cancellation
 - The `LintScheduler` prevents resource exhaustion with its semaphore
@@ -409,6 +422,7 @@ Pull requests created by Dependabot are labeled with `dependencies` and `automat
 - CLI spawn errors reject the promise and clear diagnostics
 - Missing installation errors trigger notification with install guide link
 - Notification cooldown prevents spamming (5-minute cooldown)
+- Shared `handleOperationError()` provides consistent error handling for format/fix
 
 ### TypeScript Configuration
 This project uses strict TypeScript settings including:
@@ -437,7 +451,7 @@ type DocumentContext = {
   filePath: string;
   workspaceRoot: string | null;
   cwd: string;
-  effectiveSettings: TsqllintSettings;
+  effectiveSettings: TsqlRefineSettings;
   effectiveConfigPath: string | undefined;
   documentText: string;
   isSavedFile: boolean;
