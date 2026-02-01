@@ -6,10 +6,10 @@ import {
 import { URI } from "vscode-uri";
 import { normalizeForCompare } from "../shared/normalize";
 
-// New format: <filepath>:<line>:<column>: <severity>: <message> (<rule-id>)
+// New format: <filepath>:<line>:<column>: <severity>: <message> (<rule-id>) or (<rule-id>,Fixable)
 // Windows paths start with drive letter (e.g., C:\path), so we handle that specially
 const pattern =
-	/^(?<file>(?:[A-Za-z]:)?[^:]+):(?<line>\d+):(?<col>\d+): (?<severity>Error|Warning|Information|Hint): (?<message>.+) \((?<rule>[^)]+)\)$/i;
+	/^(?<file>(?:[A-Za-z]:)?[^:]+):(?<line>\d+):(?<col>\d+): (?<severity>Error|Warning|Information|Hint): (?<message>.+) \((?<rule>[^,]+)(?:,(?<fixable>\w+))?\)$/i;
 
 type ParseOutputOptions = {
 	stdout: string;
@@ -79,6 +79,8 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 		const rawMessage = groups["message"];
 		// biome-ignore lint/complexity/useLiteralKeys: TypeScript requires bracket notation for index signatures
 		const rawRule = groups["rule"];
+		// biome-ignore lint/complexity/useLiteralKeys: TypeScript requires bracket notation for index signatures
+		const rawFixable = groups["fixable"];
 
 		if (
 			typeof rawPath !== "string" ||
@@ -115,12 +117,15 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 		const start = { line: lineNumber, character: 0 };
 		const end = { line: lineNumber, character: lineLength };
 
+		const isFixable = rawFixable?.toLowerCase() === "fixable";
+
 		diagnostics.push({
 			message: rawMessage,
 			severity: mapSeverity(rawSeverity),
 			range: { start, end },
 			code: rawRule,
 			source: "tsqlrefine",
+			data: { fixable: isFixable },
 		});
 	}
 

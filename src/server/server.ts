@@ -210,12 +210,14 @@ connection.onCodeAction(
 	async (params: CodeActionParams): Promise<CodeAction[] | null> => {
 		const uri = params.textDocument.uri;
 
-		// Check if any diagnostic from tsqlrefine exists
-		const hasTsqlrefineDiagnostic = params.context.diagnostics.some(
-			(diag) => diag.source === "tsqlrefine",
+		// Check if any fixable diagnostic from tsqlrefine exists
+		const fixableDiagnostics = params.context.diagnostics.filter(
+			(diag) =>
+				diag.source === "tsqlrefine" &&
+				(diag.data as { fixable?: boolean } | undefined)?.fixable === true,
 		);
 
-		if (!hasTsqlrefineDiagnostic) {
+		if (fixableDiagnostics.length === 0) {
 			return null;
 		}
 
@@ -224,9 +226,7 @@ connection.onCodeAction(
 		const codeAction: CodeAction = {
 			title: "Fix all tsqlrefine issues",
 			kind: CodeActionKind.QuickFix,
-			diagnostics: params.context.diagnostics.filter(
-				(diag) => diag.source === "tsqlrefine",
-			),
+			diagnostics: fixableDiagnostics,
 			command: {
 				title: "Fix all tsqlrefine issues",
 				command: "tsqlrefine/fixDocument",
