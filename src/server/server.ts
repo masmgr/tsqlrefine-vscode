@@ -208,8 +208,6 @@ connection.onRequest(
 
 connection.onCodeAction(
 	async (params: CodeActionParams): Promise<CodeAction[] | null> => {
-		const uri = params.textDocument.uri;
-
 		// Check if any fixable diagnostic from tsqlrefine exists
 		const fixableDiagnostics = params.context.diagnostics.filter(
 			(diag) =>
@@ -229,8 +227,7 @@ connection.onCodeAction(
 			diagnostics: fixableDiagnostics,
 			command: {
 				title: "Fix all tsqlrefine issues",
-				command: "tsqlrefine/fixDocument",
-				arguments: [{ uri }],
+				command: "tsqlrefine.fix",
 			},
 		};
 
