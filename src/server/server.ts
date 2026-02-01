@@ -18,7 +18,7 @@ import {
 	type FormatOperationDeps,
 } from "./format/formatOperations";
 import { executeLint, type LintOperationDeps } from "./lint/lintOperations";
-import { verifyTsqlRefineInstallation } from "./lint/runTsqlRefine";
+import { verifyTsqlRefineInstallation } from "./lint/runLinter";
 import {
 	type LintReason,
 	LintScheduler,

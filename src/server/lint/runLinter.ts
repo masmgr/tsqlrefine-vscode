@@ -7,7 +7,7 @@ import {
 } from "../shared/processRunner";
 import { type ProcessRunResult, createCancelledResult } from "../shared/types";
 
-export type RunTsqlRefineOptions = {
+export type RunLinterOptions = {
 	filePath: string;
 	cwd: string;
 	settings: TsqlRefineSettings;
@@ -32,7 +32,7 @@ export async function verifyTsqlRefineInstallation(
 /**
  * Build command-line arguments for tsqlrefine lint operation.
  */
-function buildArgs(options: RunTsqlRefineOptions): string[] {
+function buildArgs(options: RunLinterOptions): string[] {
 	const args: string[] = ["lint"];
 	const configPath = normalizeConfigPath(options.settings.configPath);
 	if (configPath) {
@@ -48,8 +48,8 @@ function buildArgs(options: RunTsqlRefineOptions): string[] {
 /**
  * Run tsqlrefine lint on a file or stdin content.
  */
-export async function runTsqlRefine(
-	options: RunTsqlRefineOptions,
+export async function runLinter(
+	options: RunLinterOptions,
 ): Promise<ProcessRunResult> {
 	if (options.signal.aborted) {
 		return createCancelledResult();

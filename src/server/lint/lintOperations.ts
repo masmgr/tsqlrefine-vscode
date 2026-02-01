@@ -10,7 +10,7 @@ import type { DocumentStateManager } from "../state/documentStateManager";
 import type { NotificationManager } from "../state/notificationManager";
 import { type EndOfLine, normalizeLineEndings } from "./decodeOutput";
 import { parseOutput } from "./parseOutput";
-import { runTsqlRefine } from "./runTsqlRefine";
+import { runLinter } from "./runLinter";
 import type { LintReason } from "./scheduler";
 
 export type LintOperationDeps = {
@@ -86,7 +86,7 @@ export async function executeLint(
 
 	let result: ProcessRunResult;
 	try {
-		result = await runTsqlRefine({
+		result = await runLinter({
 			filePath: targetFilePath,
 			cwd,
 			settings: effectiveSettings,
