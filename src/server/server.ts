@@ -198,6 +198,8 @@ connection.onRequest(
 		if (!result.applied) {
 			return { ok: false, error: "Failed to apply edits" };
 		}
+		// Re-run lint to update diagnostics after fix
+		await requestLint(params.uri, "manual", null);
 		return { ok: true };
 	},
 );
