@@ -7,6 +7,7 @@ export type TsqllintSettings = {
 	debounceMs: number;
 	timeoutMs: number;
 	maxFileSizeKb: number;
+	minSeverity: "error" | "warning" | "info" | "hint";
 	formatTimeoutMs?: number;
 };
 
@@ -17,5 +18,6 @@ export const defaultSettings: TsqllintSettings = {
 	debounceMs: 500,
 	timeoutMs: 10000,
 	maxFileSizeKb: 0,
+	minSeverity: "info",
 	formatTimeoutMs: 10000,
 };

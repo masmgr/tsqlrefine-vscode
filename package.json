@@ -111,6 +111,17 @@
 					"type": "number",
 					"default": 10000,
 					"description": "Timeout in milliseconds for format execution."
+				},
+				"tsqlrefine.minSeverity": {
+					"type": "string",
+					"default": "info",
+					"enum": [
+						"error",
+						"warning",
+						"info",
+						"hint"
+					],
+					"description": "Minimum severity level for lint diagnostics to display."
 				}
 			}
 		},

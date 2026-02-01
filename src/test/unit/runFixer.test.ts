@@ -15,6 +15,7 @@ function createTestSettings(
 		debounceMs: 500,
 		timeoutMs: 10000,
 		maxFileSizeKb: 0,
+		minSeverity: "info",
 		...overrides,
 	};
 }
@@ -87,6 +88,7 @@ suite("runFixer", () => {
 				debounceMs: 500,
 				timeoutMs: 15000,
 				maxFileSizeKb: 0,
+				minSeverity: "info",
 			};
 
 			const options = createTestOptions({
@@ -127,6 +129,7 @@ suite("runFixer", () => {
 				debounceMs: 500,
 				timeoutMs: 10000,
 				maxFileSizeKb: 0,
+				minSeverity: "info",
 			};
 
 			const options = createTestOptions({

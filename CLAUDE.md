@@ -216,6 +216,7 @@ The extension contributes these settings (namespace: `tsqlrefine`):
 | `debounceMs` | number | 500 | Debounce delay for typing |
 | `timeoutMs` | number | 10000 | Process timeout for lint |
 | `maxFileSizeKb` | number | 0 | Maximum file size (KB) for automatic linting (0 = unlimited) |
+| `minSeverity` | string | "info" | Minimum severity level for lint diagnostics (error/warning/info/hint) |
 | `formatTimeoutMs` | number | 10000 | Process timeout for format |
 
 ### Settings Type Definition
@@ -230,6 +231,7 @@ type TsqllintSettings = {
   debounceMs: number;
   timeoutMs: number;
   maxFileSizeKb: number;
+  minSeverity: "error" | "warning" | "info" | "hint";
   rangeMode: "character" | "line";
   formatTimeoutMs?: number;
 };

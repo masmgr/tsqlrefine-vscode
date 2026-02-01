@@ -56,6 +56,11 @@ export class SettingsManager {
 		) {
 			normalized.maxFileSizeKb = 0;
 		}
+		if (
+			!["error", "warning", "info", "hint"].includes(normalized.minSeverity)
+		) {
+			normalized.minSeverity = "info";
+		}
 		return normalized;
 	}
 }

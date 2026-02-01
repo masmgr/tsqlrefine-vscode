@@ -18,6 +18,7 @@ function createTestSettings(
 		debounceMs: 500,
 		timeoutMs: 10000,
 		maxFileSizeKb: 0,
+		minSeverity: "info",
 		formatTimeoutMs: 10000,
 		...overrides,
 	};

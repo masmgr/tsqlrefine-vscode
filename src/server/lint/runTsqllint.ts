@@ -38,6 +38,8 @@ function buildArgs(options: RunTsqllintOptions): string[] {
 	if (configPath) {
 		args.push("-c", configPath);
 	}
+	// Add severity threshold
+	args.push("--severity", options.settings.minSeverity);
 	// Use --stdin to read content from stdin
 	args.push("--stdin");
 	return args;
