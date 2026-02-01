@@ -219,31 +219,18 @@ connection.onCodeAction(
 			return null;
 		}
 
-		// Get the document
-		const document = documents.get(uri);
-		if (!document) {
-			return null;
-		}
-
-		// Execute fix to get the edits
-		const edits = await fixDocument(uri);
-
-		// If no edits (fix failed or no changes), don't offer the action
-		if (!edits || edits.length === 0) {
-			return null;
-		}
-
-		// Create the Code Action with WorkspaceEdit
+		// Create the Code Action without executing fix yet.
+		// The fix will be executed when the user selects the action.
 		const codeAction: CodeAction = {
 			title: "Fix all tsqlrefine issues",
 			kind: CodeActionKind.QuickFix,
 			diagnostics: params.context.diagnostics.filter(
 				(diag) => diag.source === "tsqlrefine",
 			),
-			edit: {
-				changes: {
-					[uri]: edits,
-				},
+			command: {
+				title: "Fix all tsqlrefine issues",
+				command: "tsqlrefine/fixDocument",
+				arguments: [{ uri }],
 			},
 		};
 
