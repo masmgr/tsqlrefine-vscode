@@ -218,6 +218,9 @@ The extension contributes these settings (namespace: `tsqlrefine`):
 | `maxFileSizeKb` | number | 0 | Maximum file size (KB) for automatic linting (0 = unlimited) |
 | `minSeverity` | string | "info" | Minimum severity level for lint diagnostics (error/warning/info/hint) |
 | `formatTimeoutMs` | number | 10000 | Process timeout for format |
+| `enableLint` | boolean | true | Enable linting functionality |
+| `enableFormat` | boolean | true | Enable formatting functionality |
+| `enableFix` | boolean | true | Enable auto-fix functionality |
 
 ### Settings Type Definition
 
@@ -234,6 +237,9 @@ type TsqllintSettings = {
   minSeverity: "error" | "warning" | "info" | "hint";
   rangeMode: "character" | "line";
   formatTimeoutMs?: number;
+  enableLint: boolean;
+  enableFormat: boolean;
+  enableFix: boolean;
 };
 ```
 

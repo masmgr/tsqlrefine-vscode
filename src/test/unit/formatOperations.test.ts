@@ -20,6 +20,9 @@ function createTestSettings(
 		maxFileSizeKb: 0,
 		minSeverity: "info",
 		formatTimeoutMs: 10000,
+		enableLint: true,
+		enableFormat: true,
+		enableFix: true,
 		...overrides,
 	};
 }

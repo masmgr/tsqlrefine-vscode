@@ -39,6 +39,13 @@ export async function executeFormat(
 		documentText,
 	} = context;
 
+	if (!effectiveSettings.enableFormat) {
+		notificationManager.log(
+			`tsqlrefine: format is disabled (enableFormat=false) for ${uri}`,
+		);
+		return null;
+	}
+
 	const controller = new AbortController();
 	formatStateManager.setInFlight(uri, controller);
 

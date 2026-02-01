@@ -39,6 +39,13 @@ export async function executeFix(
 		documentText,
 	} = context;
 
+	if (!effectiveSettings.enableFix) {
+		notificationManager.log(
+			`tsqlrefine: fix is disabled (enableFix=false) for ${uri}`,
+		);
+		return null;
+	}
+
 	const controller = new AbortController();
 	fixStateManager.setInFlight(uri, controller);
 

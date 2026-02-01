@@ -9,6 +9,9 @@ export type TsqllintSettings = {
 	maxFileSizeKb: number;
 	minSeverity: "error" | "warning" | "info" | "hint";
 	formatTimeoutMs?: number;
+	enableLint: boolean;
+	enableFormat: boolean;
+	enableFix: boolean;
 };
 
 export const defaultSettings: TsqllintSettings = {
@@ -20,4 +23,7 @@ export const defaultSettings: TsqllintSettings = {
 	maxFileSizeKb: 0,
 	minSeverity: "info",
 	formatTimeoutMs: 10000,
+	enableLint: true,
+	enableFormat: true,
+	enableFix: true,
 };

@@ -122,6 +122,21 @@
 						"hint"
 					],
 					"description": "Minimum severity level for lint diagnostics to display."
+				},
+				"tsqlrefine.enableLint": {
+					"type": "boolean",
+					"default": true,
+					"description": "Enable linting functionality."
+				},
+				"tsqlrefine.enableFormat": {
+					"type": "boolean",
+					"default": true,
+					"description": "Enable formatting functionality."
+				},
+				"tsqlrefine.enableFix": {
+					"type": "boolean",
+					"default": true,
+					"description": "Enable auto-fix functionality."
 				}
 			}
 		},

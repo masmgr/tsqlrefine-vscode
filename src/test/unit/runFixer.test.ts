@@ -16,6 +16,9 @@ function createTestSettings(
 		timeoutMs: 10000,
 		maxFileSizeKb: 0,
 		minSeverity: "info",
+		enableLint: true,
+		enableFormat: true,
+		enableFix: true,
 		...overrides,
 	};
 }
@@ -89,6 +92,9 @@ suite("runFixer", () => {
 				timeoutMs: 15000,
 				maxFileSizeKb: 0,
 				minSeverity: "info",
+				enableLint: true,
+				enableFormat: true,
+				enableFix: true,
 			};
 
 			const options = createTestOptions({
@@ -130,6 +136,9 @@ suite("runFixer", () => {
 				timeoutMs: 10000,
 				maxFileSizeKb: 0,
 				minSeverity: "info",
+				enableLint: true,
+				enableFormat: true,
+				enableFix: true,
 			};
 
 			const options = createTestOptions({

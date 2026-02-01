@@ -285,7 +285,7 @@ async function handleDidChangeContent(document: TextDocument): Promise<void> {
 		const docSettings = await settingsManager.getSettingsForDocument(
 			document.uri,
 		);
-		if (!docSettings.runOnType) {
+		if (!docSettings.runOnType || !docSettings.enableLint) {
 			return;
 		}
 		lintStateManager.cancelInFlight(document.uri);
@@ -302,7 +302,7 @@ async function handleDidSave(document: TextDocument): Promise<void> {
 		const uri = document.uri;
 		lintStateManager.setSavedVersion(uri, document.version);
 		const docSettings = await settingsManager.getSettingsForDocument(uri);
-		if (docSettings.runOnSave) {
+		if (docSettings.runOnSave && docSettings.enableLint) {
 			requestLint(uri, "save", document.version);
 		}
 	} catch (error) {
@@ -320,7 +320,7 @@ async function handleDidOpen(document: TextDocument): Promise<void> {
 		}
 
 		const docSettings = await settingsManager.getSettingsForDocument(uri);
-		if (docSettings.runOnOpen) {
+		if (docSettings.runOnOpen && docSettings.enableLint) {
 			requestLint(uri, "open", document.version);
 		}
 	} catch (error) {
@@ -384,9 +384,13 @@ async function formatDocument(uri: string): Promise<TextEdit[] | null> {
 		return null;
 	}
 
+	const documentSettings = await settingsManager.getSettingsForDocument(uri);
+	if (!documentSettings.enableFormat) {
+		return null;
+	}
+
 	formatStateManager.cancelInFlight(uri);
 
-	const documentSettings = await settingsManager.getSettingsForDocument(uri);
 	const context = await createDocumentContext({
 		document,
 		documentSettings,
@@ -418,9 +422,13 @@ async function fixDocument(uri: string): Promise<TextEdit[] | null> {
 		return null;
 	}
 
+	const documentSettings = await settingsManager.getSettingsForDocument(uri);
+	if (!documentSettings.enableFix) {
+		return null;
+	}
+
 	fixStateManager.cancelInFlight(uri);
 
-	const documentSettings = await settingsManager.getSettingsForDocument(uri);
 	const context = await createDocumentContext({
 		document,
 		documentSettings,
