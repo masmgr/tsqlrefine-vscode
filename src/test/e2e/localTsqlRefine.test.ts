@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { URI } from "vscode-uri";
 import { defaultSettings } from "../../server/config/settings";
 import { parseOutput } from "../../server/lint/parseOutput";
-import { runTsqllint } from "../../server/lint/runTsqllint";
+import { runTsqlRefine } from "../../server/lint/runTsqlRefine";
 import { locateTsqlrefine } from "../helpers/testFixtures";
 
 suite("E2E (local): real tsqlrefine binary", () => {
@@ -23,7 +23,7 @@ suite("E2E (local): real tsqlrefine binary", () => {
 		await fs.writeFile(filePath, fileText, "utf8");
 
 		try {
-			const result = await runTsqllint({
+			const result = await runTsqlRefine({
 				filePath,
 				cwd: tempDir,
 				settings: {

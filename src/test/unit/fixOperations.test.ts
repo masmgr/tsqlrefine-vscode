@@ -2,7 +2,7 @@ import * as assert from "node:assert";
 import type { Connection, TextEdit } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { DocumentContext } from "../../server/shared/documentContext";
-import type { TsqllintSettings } from "../../server/config/settings";
+import type { TsqlRefineSettings } from "../../server/config/settings";
 import { DocumentStateManager } from "../../server/state/documentStateManager";
 
 // We need to test executeFix by mocking runFixer
@@ -13,8 +13,8 @@ import { DocumentStateManager } from "../../server/state/documentStateManager";
  * Creates default test settings.
  */
 function createTestSettings(
-	overrides: Partial<TsqllintSettings> = {},
-): TsqllintSettings {
+	overrides: Partial<TsqlRefineSettings> = {},
+): TsqlRefineSettings {
 	return {
 		runOnSave: true,
 		runOnType: false,
@@ -124,7 +124,7 @@ function createMockConnection(): {
 interface MockNotificationManagerCalls {
 	log: string[];
 	warn: string[];
-	maybeNotifyMissingTsqllint: string[];
+	maybeNotifyMissingTsqlRefine: string[];
 }
 
 /**
@@ -134,15 +134,15 @@ function createMockNotificationManager(isMissingError = false): {
 	notificationManager: {
 		log: (message: string) => void;
 		warn: (message: string) => void;
-		isMissingTsqllintError: (message: string) => boolean;
-		maybeNotifyMissingTsqllint: (message: string) => Promise<void>;
+		isMissingTsqlRefineError: (message: string) => boolean;
+		maybeNotifyMissingTsqlRefine: (message: string) => Promise<void>;
 	};
 	calls: MockNotificationManagerCalls;
 } {
 	const calls: MockNotificationManagerCalls = {
 		log: [],
 		warn: [],
-		maybeNotifyMissingTsqllint: [],
+		maybeNotifyMissingTsqlRefine: [],
 	};
 
 	const notificationManager = {
@@ -152,9 +152,9 @@ function createMockNotificationManager(isMissingError = false): {
 		warn: (message: string) => {
 			calls.warn.push(message);
 		},
-		isMissingTsqllintError: (_message: string) => isMissingError,
-		maybeNotifyMissingTsqllint: async (message: string) => {
-			calls.maybeNotifyMissingTsqllint.push(message);
+		isMissingTsqlRefineError: (_message: string) => isMissingError,
+		maybeNotifyMissingTsqlRefine: async (message: string) => {
+			calls.maybeNotifyMissingTsqlRefine.push(message);
 		},
 	};
 
@@ -228,14 +228,14 @@ suite("fixOperations", () => {
 			assert.strictEqual(calls.warn[0], "Warn message");
 		});
 
-		test("isMissingTsqllintError returns configured value", () => {
+		test("isMissingTsqlRefineError returns configured value", () => {
 			const { notificationManager: manager1 } =
 				createMockNotificationManager(false);
 			const { notificationManager: manager2 } =
 				createMockNotificationManager(true);
 
-			assert.strictEqual(manager1.isMissingTsqllintError("any error"), false);
-			assert.strictEqual(manager2.isMissingTsqllintError("any error"), true);
+			assert.strictEqual(manager1.isMissingTsqlRefineError("any error"), false);
+			assert.strictEqual(manager2.isMissingTsqlRefineError("any error"), true);
 		});
 	});
 

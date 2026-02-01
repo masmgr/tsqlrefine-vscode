@@ -1,4 +1,4 @@
-import type { TsqllintSettings } from "../config/settings";
+import type { TsqlRefineSettings } from "../config/settings";
 import { normalizeConfigPath } from "../shared/normalize";
 import {
 	resolveCommand,
@@ -7,10 +7,10 @@ import {
 } from "../shared/processRunner";
 import { type ProcessRunResult, createCancelledResult } from "../shared/types";
 
-export type RunTsqllintOptions = {
+export type RunTsqlRefineOptions = {
 	filePath: string;
 	cwd: string;
-	settings: TsqllintSettings;
+	settings: TsqlRefineSettings;
 	signal: AbortSignal;
 	/** Document content to pass via stdin. */
 	stdin: string;
@@ -23,8 +23,8 @@ export type RunTsqllintOptions = {
  * @param settings - The tsqlrefine settings to verify
  * @returns Object with available status and error message if not available
  */
-export async function verifyTsqllintInstallation(
-	settings: TsqllintSettings,
+export async function verifyTsqlRefineInstallation(
+	settings: TsqlRefineSettings,
 ): Promise<{ available: boolean; message?: string }> {
 	return verifyInstallation(settings);
 }
@@ -32,7 +32,7 @@ export async function verifyTsqllintInstallation(
 /**
  * Build command-line arguments for tsqlrefine lint operation.
  */
-function buildArgs(options: RunTsqllintOptions): string[] {
+function buildArgs(options: RunTsqlRefineOptions): string[] {
 	const args: string[] = ["lint"];
 	const configPath = normalizeConfigPath(options.settings.configPath);
 	if (configPath) {
@@ -48,8 +48,8 @@ function buildArgs(options: RunTsqllintOptions): string[] {
 /**
  * Run tsqlrefine lint on a file or stdin content.
  */
-export async function runTsqllint(
-	options: RunTsqllintOptions,
+export async function runTsqlRefine(
+	options: RunTsqlRefineOptions,
 ): Promise<ProcessRunResult> {
 	if (options.signal.aborted) {
 		return createCancelledResult();

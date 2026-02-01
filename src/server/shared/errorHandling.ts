@@ -19,8 +19,8 @@ export async function handleOperationError(
 	const { connection, notificationManager } = deps;
 	const message = firstLine(String(error));
 
-	if (notificationManager.isMissingTsqllintError(message)) {
-		await notificationManager.maybeNotifyMissingTsqllint(message);
+	if (notificationManager.isMissingTsqlRefineError(message)) {
+		await notificationManager.maybeNotifyMissingTsqlRefine(message);
 		notificationManager.warn(
 			`tsqlrefine: ${operationName} failed (${message})`,
 		);

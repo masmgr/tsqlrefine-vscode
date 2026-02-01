@@ -18,7 +18,7 @@ import {
 	type FormatOperationDeps,
 } from "./format/formatOperations";
 import { executeLint, type LintOperationDeps } from "./lint/lintOperations";
-import { verifyTsqllintInstallation } from "./lint/runTsqllint";
+import { verifyTsqlRefineInstallation } from "./lint/runTsqlRefine";
 import {
 	type LintReason,
 	LintScheduler,
@@ -247,13 +247,13 @@ connection.listen();
 // ============================================================================
 
 async function verifyInstallation(): Promise<void> {
-	const result = await verifyTsqllintInstallation(
+	const result = await verifyTsqlRefineInstallation(
 		settingsManager.getSettings(),
 	);
 
 	if (!result.available) {
 		const message = result.message || "tsqlrefine not found";
-		await notificationManager.maybeNotifyMissingTsqllint(message);
+		await notificationManager.maybeNotifyMissingTsqlRefine(message);
 		notificationManager.warn(`[startup] ${message}`);
 	} else {
 		notificationManager.log("[startup] tsqlrefine installation verified");

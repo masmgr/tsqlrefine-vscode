@@ -1,4 +1,4 @@
-import type { TsqllintSettings } from "../config/settings";
+import type { TsqlRefineSettings } from "../config/settings";
 import { normalizeConfigPath } from "../shared/normalize";
 import { resolveCommand, runProcess } from "../shared/processRunner";
 import { type ProcessRunResult, createCancelledResult } from "../shared/types";
@@ -6,7 +6,7 @@ import { type ProcessRunResult, createCancelledResult } from "../shared/types";
 export type RunFixerOptions = {
 	filePath: string;
 	cwd: string;
-	settings: TsqllintSettings;
+	settings: TsqlRefineSettings;
 	signal: AbortSignal;
 	/** Document content to pass via stdin. */
 	stdin: string;

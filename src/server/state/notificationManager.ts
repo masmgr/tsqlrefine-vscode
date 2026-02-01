@@ -1,27 +1,27 @@
 import type { Connection } from "vscode-languageserver/node";
-import { MISSING_TSQLLINT_NOTICE_COOLDOWN_MS } from "../config/constants";
+import { MISSING_TSQLREFINE_NOTICE_COOLDOWN_MS } from "../config/constants";
 import { firstLine } from "../shared/textUtils";
 
 /**
  * Manages user notifications with cooldown support.
  */
 export class NotificationManager {
-	private lastMissingTsqllintNoticeAtMs = 0;
+	private lastMissingTsqlRefineNoticeAtMs = 0;
 
 	constructor(private readonly connection: Connection) {}
 
 	/**
 	 * Notify about missing tsqlrefine with cooldown to avoid spamming.
 	 */
-	async maybeNotifyMissingTsqllint(message: string): Promise<void> {
+	async maybeNotifyMissingTsqlRefine(message: string): Promise<void> {
 		const now = Date.now();
 		if (
-			now - this.lastMissingTsqllintNoticeAtMs <
-			MISSING_TSQLLINT_NOTICE_COOLDOWN_MS
+			now - this.lastMissingTsqlRefineNoticeAtMs <
+			MISSING_TSQLREFINE_NOTICE_COOLDOWN_MS
 		) {
 			return;
 		}
-		this.lastMissingTsqllintNoticeAtMs = now;
+		this.lastMissingTsqlRefineNoticeAtMs = now;
 		const action = await this.connection.window.showWarningMessage(
 			`tsqlrefine: ${message}`,
 			{ title: "Open Install Guide" },
@@ -60,7 +60,7 @@ export class NotificationManager {
 	/**
 	 * Check if an error message indicates missing tsqlrefine.
 	 */
-	isMissingTsqllintError(message: string): boolean {
+	isMissingTsqlRefineError(message: string): boolean {
 		const normalized = message.toLowerCase();
 		return (
 			normalized.includes("tsqlrefine not found") ||

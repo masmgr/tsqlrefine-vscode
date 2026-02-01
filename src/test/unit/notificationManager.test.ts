@@ -63,12 +63,12 @@ suite("NotificationManager", () => {
 		});
 	});
 
-	suite("maybeNotifyMissingTsqllint", () => {
+	suite("maybeNotifyMissingTsqlRefine", () => {
 		test("shows warning message on first call", async () => {
 			const { connection, calls } = createMockConnection();
 			const manager = new NotificationManager(connection);
 
-			await manager.maybeNotifyMissingTsqllint("tsqlrefine not found");
+			await manager.maybeNotifyMissingTsqlRefine("tsqlrefine not found");
 
 			assert.strictEqual(calls.showWarningMessage.length, 1);
 			assert.ok(
@@ -80,8 +80,8 @@ suite("NotificationManager", () => {
 			const { connection, calls } = createMockConnection();
 			const manager = new NotificationManager(connection);
 
-			await manager.maybeNotifyMissingTsqllint("tsqlrefine not found");
-			await manager.maybeNotifyMissingTsqllint("tsqlrefine not found");
+			await manager.maybeNotifyMissingTsqlRefine("tsqlrefine not found");
+			await manager.maybeNotifyMissingTsqlRefine("tsqlrefine not found");
 
 			assert.strictEqual(calls.showWarningMessage.length, 1);
 		});
@@ -92,7 +92,7 @@ suite("NotificationManager", () => {
 			});
 			const manager = new NotificationManager(connection);
 
-			await manager.maybeNotifyMissingTsqllint("tsqlrefine not found");
+			await manager.maybeNotifyMissingTsqlRefine("tsqlrefine not found");
 
 			assert.strictEqual(calls.sendNotification.length, 1);
 			assert.strictEqual(
@@ -105,7 +105,7 @@ suite("NotificationManager", () => {
 			const { connection, calls } = createMockConnection(undefined);
 			const manager = new NotificationManager(connection);
 
-			await manager.maybeNotifyMissingTsqllint("tsqlrefine not found");
+			await manager.maybeNotifyMissingTsqlRefine("tsqlrefine not found");
 
 			assert.strictEqual(calls.sendNotification.length, 0);
 		});
@@ -114,7 +114,7 @@ suite("NotificationManager", () => {
 			const { connection, calls } = createMockConnection();
 			const manager = new NotificationManager(connection);
 
-			await manager.maybeNotifyMissingTsqllint("tsqlrefine not found");
+			await manager.maybeNotifyMissingTsqlRefine("tsqlrefine not found");
 
 			assert.strictEqual(calls.showWarningMessage.length, 1);
 			const actions = calls.showWarningMessage[0]?.actions;
@@ -211,13 +211,13 @@ suite("NotificationManager", () => {
 		});
 	});
 
-	suite("isMissingTsqllintError", () => {
+	suite("isMissingTsqlRefineError", () => {
 		test("returns true for tsqlrefine not found", () => {
 			const { connection } = createMockConnection();
 			const manager = new NotificationManager(connection);
 
 			assert.strictEqual(
-				manager.isMissingTsqllintError("tsqlrefine not found in PATH"),
+				manager.isMissingTsqlRefineError("tsqlrefine not found in PATH"),
 				true,
 			);
 		});
@@ -227,7 +227,7 @@ suite("NotificationManager", () => {
 			const manager = new NotificationManager(connection);
 
 			assert.strictEqual(
-				manager.isMissingTsqllintError(
+				manager.isMissingTsqlRefineError(
 					"tsqlrefine.path not found: /invalid/path",
 				),
 				true,
@@ -239,7 +239,7 @@ suite("NotificationManager", () => {
 			const manager = new NotificationManager(connection);
 
 			assert.strictEqual(
-				manager.isMissingTsqllintError("tsqlrefine.path is not a file"),
+				manager.isMissingTsqlRefineError("tsqlrefine.path is not a file"),
 				true,
 			);
 		});
@@ -248,7 +248,10 @@ suite("NotificationManager", () => {
 			const { connection } = createMockConnection();
 			const manager = new NotificationManager(connection);
 
-			assert.strictEqual(manager.isMissingTsqllintError("spawn ENOENT"), false);
+			assert.strictEqual(
+				manager.isMissingTsqlRefineError("spawn ENOENT"),
+				false,
+			);
 		});
 
 		test("is case-insensitive", () => {
@@ -256,7 +259,7 @@ suite("NotificationManager", () => {
 			const manager = new NotificationManager(connection);
 
 			assert.strictEqual(
-				manager.isMissingTsqllintError("TSQLREFINE NOT FOUND"),
+				manager.isMissingTsqlRefineError("TSQLREFINE NOT FOUND"),
 				true,
 			);
 		});

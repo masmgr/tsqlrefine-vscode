@@ -2,14 +2,14 @@ import * as path from "node:path";
 import { URI } from "vscode-uri";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { resolveConfigPath } from "../config/resolveConfigPath";
-import type { TsqllintSettings } from "../config/settings";
+import type { TsqlRefineSettings } from "../config/settings";
 
 export type DocumentContext = {
 	uri: string;
 	filePath: string;
 	workspaceRoot: string | null;
 	cwd: string;
-	effectiveSettings: TsqllintSettings;
+	effectiveSettings: TsqlRefineSettings;
 	effectiveConfigPath: string | undefined;
 	documentText: string;
 	isSavedFile: boolean;
@@ -17,7 +17,7 @@ export type DocumentContext = {
 
 export type DocumentContextOptions = {
 	document: TextDocument;
-	documentSettings: TsqllintSettings;
+	documentSettings: TsqlRefineSettings;
 	workspaceFolders: string[];
 	isSavedFn: (document: TextDocument) => boolean;
 };
@@ -42,7 +42,7 @@ export async function createDocumentContext(
 		workspaceRoot,
 	});
 
-	const effectiveSettings: TsqllintSettings =
+	const effectiveSettings: TsqlRefineSettings =
 		typeof effectiveConfigPath === "string" && effectiveConfigPath.trim()
 			? { ...documentSettings, configPath: effectiveConfigPath }
 			: documentSettings;

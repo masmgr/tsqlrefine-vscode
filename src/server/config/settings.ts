@@ -1,4 +1,4 @@
-export type TsqllintSettings = {
+export type TsqlRefineSettings = {
 	path?: string;
 	configPath?: string;
 	runOnSave: boolean;
@@ -14,7 +14,7 @@ export type TsqllintSettings = {
 	enableFix: boolean;
 };
 
-export const defaultSettings: TsqllintSettings = {
+export const defaultSettings: TsqlRefineSettings = {
 	runOnSave: true,
 	runOnType: false,
 	runOnOpen: true,

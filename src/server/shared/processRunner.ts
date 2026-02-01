@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs/promises";
-import type { TsqllintSettings } from "../config/settings";
+import type { TsqlRefineSettings } from "../config/settings";
 import {
 	COMMAND_CACHE_TTL_MS,
 	COMMAND_CHECK_TIMEOUT_MS,
@@ -80,7 +80,7 @@ export async function checkCommandAvailable(command: string): Promise<boolean> {
  * Cache is keyed by configured path to support multiple workspaces with different tsqlrefine paths.
  */
 export async function resolveCommand(
-	settings: TsqllintSettings,
+	settings: TsqlRefineSettings,
 ): Promise<string> {
 	const configuredPath = normalizeExecutablePath(settings.path);
 	if (configuredPath) {
@@ -122,7 +122,7 @@ export async function resolveCommand(
  * @returns Object with available status and error message if not available
  */
 export async function verifyInstallation(
-	settings: TsqllintSettings,
+	settings: TsqlRefineSettings,
 ): Promise<{ available: boolean; message?: string }> {
 	try {
 		await resolveCommand(settings);

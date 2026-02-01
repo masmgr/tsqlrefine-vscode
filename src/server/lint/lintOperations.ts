@@ -10,7 +10,7 @@ import type { DocumentStateManager } from "../state/documentStateManager";
 import type { NotificationManager } from "../state/notificationManager";
 import { type EndOfLine, normalizeLineEndings } from "./decodeOutput";
 import { parseOutput } from "./parseOutput";
-import { runTsqllint } from "./runTsqllint";
+import { runTsqlRefine } from "./runTsqlRefine";
 import type { LintReason } from "./scheduler";
 
 export type LintOperationDeps = {
@@ -86,7 +86,7 @@ export async function executeLint(
 
 	let result: ProcessRunResult;
 	try {
-		result = await runTsqllint({
+		result = await runTsqlRefine({
 			filePath: targetFilePath,
 			cwd,
 			settings: effectiveSettings,
@@ -179,12 +179,12 @@ async function handleLintError(
 	const { connection, notificationManager } = deps;
 	const message = firstLine(String(error));
 
-	if (notificationManager.isMissingTsqllintError(message)) {
-		await notificationManager.maybeNotifyMissingTsqllint(message);
+	if (notificationManager.isMissingTsqlRefineError(message)) {
+		await notificationManager.maybeNotifyMissingTsqlRefine(message);
 		notificationManager.warn(`tsqlrefine: ${message}`);
 		connection.sendDiagnostics({
 			uri,
-			diagnostics: [createMissingTsqllintDiagnostic(message)],
+			diagnostics: [createMissingTsqlRefineDiagnostic(message)],
 		});
 	} else {
 		notificationManager.notifyRunFailure(error);
@@ -193,7 +193,7 @@ async function handleLintError(
 	return { diagnosticsCount: -1, success: false };
 }
 
-function createMissingTsqllintDiagnostic(message: string): Diagnostic {
+function createMissingTsqlRefineDiagnostic(message: string): Diagnostic {
 	return {
 		message: `tsqlrefine: ${message}`,
 		severity: DiagnosticSeverity.Error,

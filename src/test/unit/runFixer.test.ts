@@ -1,13 +1,13 @@
 import * as assert from "node:assert";
-import type { TsqllintSettings } from "../../server/config/settings";
+import type { TsqlRefineSettings } from "../../server/config/settings";
 import { runFixer, type RunFixerOptions } from "../../server/fix/runFixer";
 
 /**
  * Creates default test settings.
  */
 function createTestSettings(
-	overrides: Partial<TsqllintSettings> = {},
-): TsqllintSettings {
+	overrides: Partial<TsqlRefineSettings> = {},
+): TsqlRefineSettings {
 	return {
 		runOnSave: true,
 		runOnType: false,
@@ -84,7 +84,7 @@ suite("runFixer", () => {
 			controller.abort();
 
 			// Create settings without formatTimeoutMs
-			const settingsWithoutFormat: TsqllintSettings = {
+			const settingsWithoutFormat: TsqlRefineSettings = {
 				runOnSave: true,
 				runOnType: false,
 				runOnOpen: true,
@@ -128,7 +128,7 @@ suite("runFixer", () => {
 			controller.abort();
 
 			// Create settings without configPath
-			const settingsWithoutConfig: TsqllintSettings = {
+			const settingsWithoutConfig: TsqlRefineSettings = {
 				runOnSave: true,
 				runOnType: false,
 				runOnOpen: true,

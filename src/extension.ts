@@ -8,14 +8,14 @@ import { handleDidDeleteFiles, handleDidRenameFiles } from "./client/handlers";
 let client: LanguageClient | undefined;
 export let clientReady: Promise<void> = Promise.resolve();
 
-export type TsqllintLiteApi = {
+export type TsqlRefineLiteApi = {
 	clientReady: Promise<void>;
 };
 
 const installGuideUrl =
 	"https://github.com/masmgr/tsqllint-vscode-lite#installing-tsqlrefine";
 
-export function activate(context: vscode.ExtensionContext): TsqllintLiteApi {
+export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 	client = createLanguageClient(context);
 
 	const openInstallGuideCommand = vscode.commands.registerCommand(

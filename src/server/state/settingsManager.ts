@@ -1,18 +1,18 @@
 import type { Connection } from "vscode-languageserver/node";
-import { defaultSettings, type TsqllintSettings } from "../config/settings";
+import { defaultSettings, type TsqlRefineSettings } from "../config/settings";
 
 /**
  * Manages settings retrieval and normalization.
  */
 export class SettingsManager {
-	private settings: TsqllintSettings = defaultSettings;
+	private settings: TsqlRefineSettings = defaultSettings;
 
 	constructor(private readonly connection: Connection) {}
 
 	/**
 	 * Get the current global settings.
 	 */
-	getSettings(): TsqllintSettings {
+	getSettings(): TsqlRefineSettings {
 		return this.settings;
 	}
 
@@ -33,11 +33,11 @@ export class SettingsManager {
 	/**
 	 * Get settings for a specific document, merging global and scoped settings.
 	 */
-	async getSettingsForDocument(uri: string): Promise<TsqllintSettings> {
+	async getSettingsForDocument(uri: string): Promise<TsqlRefineSettings> {
 		const scopedConfig = ((await this.connection.workspace.getConfiguration({
 			scopeUri: uri,
 			section: "tsqlrefine",
-		})) ?? {}) as Partial<TsqllintSettings>;
+		})) ?? {}) as Partial<TsqlRefineSettings>;
 		return this.normalizeSettings({
 			...defaultSettings,
 			...this.settings,
@@ -48,7 +48,7 @@ export class SettingsManager {
 	/**
 	 * Normalize settings values to ensure they are valid.
 	 */
-	private normalizeSettings(value: TsqllintSettings): TsqllintSettings {
+	private normalizeSettings(value: TsqlRefineSettings): TsqlRefineSettings {
 		const normalized = { ...value };
 		if (
 			!Number.isFinite(normalized.maxFileSizeKb) ||
