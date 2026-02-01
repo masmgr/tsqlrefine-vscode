@@ -93,13 +93,7 @@ export async function executeFix(
 		notificationManager.warn(`tsqlrefine fix stderr: ${result.stderr}`);
 	}
 
-	// Note: tsqlrefine fix returns exit code 1 when there are unfixable issues,
-	// but still outputs the fixed content to stdout. We use the output regardless
-	// of exit code, as long as there's content available.
-	const fixedText = result.stdout;
-
-	// If no output and there was a real error, return null
-	if (!fixedText && result.exitCode !== 0) {
+	if (result.exitCode !== 0) {
 		const errorMessage =
 			result.stderr.trim() || `Exit code: ${result.exitCode}`;
 		// Don't await - warning message may block in some environments
@@ -111,6 +105,8 @@ export async function executeFix(
 		);
 		return null;
 	}
+
+	const fixedText = result.stdout;
 
 	if (fixedText === documentText) {
 		return [];
