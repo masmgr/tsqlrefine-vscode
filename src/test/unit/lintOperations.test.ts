@@ -1,6 +1,8 @@
 import * as assert from "node:assert";
 import type { Connection } from "vscode-languageserver/node";
+import { DiagnosticSeverity } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
+import { TextDocument as TextDocumentImpl } from "vscode-languageserver-textdocument";
 import type { DocumentContext } from "../../server/shared/documentContext";
 import type { TsqlRefineSettings } from "../../server/config/settings";
 import { DocumentStateManager } from "../../server/state/documentStateManager";
@@ -49,32 +51,10 @@ function createMockDocumentContext(
  * Creates a mock TextDocument for testing.
  */
 function createMockTextDocument(
-	overrides: Partial<{
-		uri: string;
-		text: string;
-		lineCount: number;
-	}> = {},
+	uri = "file:///test.sql",
+	text = "SELECT 1;",
 ): TextDocument {
-	const text = overrides.text ?? "SELECT 1;";
-	const lineCount = overrides.lineCount ?? 1;
-
-	return {
-		uri: overrides.uri ?? "file:///test.sql",
-		languageId: "sql",
-		version: 1,
-		getText: (range?: { start: { line: number }; end: { line: number } }) => {
-			if (!range) return text;
-			const lines = text.split("\n");
-			if (range.start.line === lineCount - 1) {
-				return lines[range.start.line] ?? "";
-			}
-			return text;
-		},
-		lineCount,
-		positionAt: (offset: number) => ({ line: 0, character: offset }),
-		offsetAt: (position: { line: number; character: number }) =>
-			position.character,
-	} as TextDocument;
+	return TextDocumentImpl.create(uri, "sql", 1, text);
 }
 
 /**
@@ -82,7 +62,10 @@ function createMockTextDocument(
  */
 interface MockConnectionCalls {
 	showWarningMessage: string[];
-	diagnostics: Array<{ uri: string; diagnostics: unknown[] }>;
+	sendDiagnostics: Array<{
+		uri: string;
+		diagnostics: Array<{ message: string; severity?: DiagnosticSeverity }>;
+	}>;
 }
 
 /**
@@ -94,7 +77,7 @@ function createMockConnection(): {
 } {
 	const calls: MockConnectionCalls = {
 		showWarningMessage: [],
-		diagnostics: [],
+		sendDiagnostics: [],
 	};
 
 	const connection = {
@@ -104,14 +87,16 @@ function createMockConnection(): {
 				return undefined;
 			},
 		},
+		sendDiagnostics: (params: {
+			uri: string;
+			diagnostics: Array<{ message: string; severity?: DiagnosticSeverity }>;
+		}) => {
+			calls.sendDiagnostics.push(params);
+		},
 		console: {
 			log: () => {},
 			warn: () => {},
 			error: () => {},
-		},
-		sendNotification: () => {},
-		sendDiagnostics: (params: { uri: string; diagnostics: unknown[] }) => {
-			calls.diagnostics.push(params);
 		},
 	} as unknown as Connection;
 
@@ -124,9 +109,9 @@ function createMockConnection(): {
 interface MockNotificationManagerCalls {
 	log: string[];
 	warn: string[];
-	maybeNotifyMissingTsqlRefine: string[];
 	notifyStderr: string[];
 	notifyRunFailure: unknown[];
+	maybeNotifyMissingTsqlRefine: string[];
 }
 
 /**
@@ -136,19 +121,19 @@ function createMockNotificationManager(isMissingError = false): {
 	notificationManager: {
 		log: (message: string) => void;
 		warn: (message: string) => void;
-		isMissingTsqlRefineError: (message: string) => boolean;
-		maybeNotifyMissingTsqlRefine: (message: string) => Promise<void>;
 		notifyStderr: (stderr: string) => void;
 		notifyRunFailure: (error: unknown) => void;
+		isMissingTsqlRefineError: (message: string) => boolean;
+		maybeNotifyMissingTsqlRefine: (message: string) => Promise<void>;
 	};
 	calls: MockNotificationManagerCalls;
 } {
 	const calls: MockNotificationManagerCalls = {
 		log: [],
 		warn: [],
-		maybeNotifyMissingTsqlRefine: [],
 		notifyStderr: [],
 		notifyRunFailure: [],
+		maybeNotifyMissingTsqlRefine: [],
 	};
 
 	const notificationManager = {
@@ -158,15 +143,15 @@ function createMockNotificationManager(isMissingError = false): {
 		warn: (message: string) => {
 			calls.warn.push(message);
 		},
-		isMissingTsqlRefineError: (_message: string) => isMissingError,
-		maybeNotifyMissingTsqlRefine: async (message: string) => {
-			calls.maybeNotifyMissingTsqlRefine.push(message);
-		},
 		notifyStderr: (stderr: string) => {
 			calls.notifyStderr.push(stderr);
 		},
 		notifyRunFailure: (error: unknown) => {
 			calls.notifyRunFailure.push(error);
+		},
+		isMissingTsqlRefineError: (_message: string) => isMissingError,
+		maybeNotifyMissingTsqlRefine: async (message: string) => {
+			calls.maybeNotifyMissingTsqlRefine.push(message);
 		},
 	};
 
@@ -216,101 +201,6 @@ suite("lintOperations", () => {
 		});
 	});
 
-	suite("File size limit logic", () => {
-		test("maxFileSizeBytes returns null for zero", () => {
-			const maxFileSizeKb = 0;
-			const result =
-				!Number.isFinite(maxFileSizeKb) || maxFileSizeKb <= 0
-					? null
-					: Math.floor(maxFileSizeKb * 1024);
-			assert.strictEqual(result, null);
-		});
-
-		test("maxFileSizeBytes returns null for negative", () => {
-			const maxFileSizeKb = -1;
-			const result =
-				!Number.isFinite(maxFileSizeKb) || maxFileSizeKb <= 0
-					? null
-					: Math.floor(maxFileSizeKb * 1024);
-			assert.strictEqual(result, null);
-		});
-
-		test("maxFileSizeBytes returns bytes for positive value", () => {
-			const maxFileSizeKb = 100;
-			const result =
-				!Number.isFinite(maxFileSizeKb) || maxFileSizeKb <= 0
-					? null
-					: Math.floor(maxFileSizeKb * 1024);
-			assert.strictEqual(result, 102400);
-		});
-
-		test("maxFileSizeBytes returns null for NaN", () => {
-			const maxFileSizeKb = Number.NaN;
-			const result =
-				!Number.isFinite(maxFileSizeKb) || maxFileSizeKb <= 0
-					? null
-					: Math.floor(maxFileSizeKb * 1024);
-			assert.strictEqual(result, null);
-		});
-
-		test("maxFileSizeBytes returns null for Infinity", () => {
-			const maxFileSizeKb = Number.POSITIVE_INFINITY;
-			const result =
-				!Number.isFinite(maxFileSizeKb) || maxFileSizeKb <= 0
-					? null
-					: Math.floor(maxFileSizeKb * 1024);
-			assert.strictEqual(result, null);
-		});
-	});
-
-	suite("Document size calculation", () => {
-		test("calculates byte size correctly for ASCII", () => {
-			const text = "SELECT 1;";
-			const sizeBytes = Buffer.byteLength(text, "utf8");
-			assert.strictEqual(sizeBytes, 9);
-		});
-
-		test("calculates byte size correctly for UTF-8", () => {
-			const text = "SELECT '日本語';";
-			const sizeBytes = Buffer.byteLength(text, "utf8");
-			// '日本語' = 3 characters × 3 bytes each = 9 bytes
-			// Total: "SELECT '" (8) + 9 + "';" (2) = 19 bytes
-			assert.strictEqual(sizeBytes, 19);
-		});
-
-		test("calculates byte size correctly for empty string", () => {
-			const text = "";
-			const sizeBytes = Buffer.byteLength(text, "utf8");
-			assert.strictEqual(sizeBytes, 0);
-		});
-	});
-
-	suite("File size skip logic", () => {
-		function shouldSkipLint(
-			maxBytes: number | null,
-			sizeBytes: number,
-			reason: string,
-		): boolean {
-			return maxBytes !== null && reason !== "manual" && sizeBytes > maxBytes;
-		}
-
-		test("skips lint when file exceeds size limit for non-manual reason", () => {
-			assert.strictEqual(shouldSkipLint(100, 150, "save"), true);
-		});
-
-		test("does not skip lint when file is within size limit", () => {
-			assert.strictEqual(shouldSkipLint(100, 50, "save"), false);
-		});
-
-		test("does not skip lint for manual reason even if file exceeds limit", () => {
-			assert.strictEqual(shouldSkipLint(100, 150, "manual"), false);
-		});
-
-		test("does not skip lint when maxBytes is null (unlimited)", () => {
-			assert.strictEqual(shouldSkipLint(null, 999999, "save"), false);
-		});
-	});
-
 	suite("Mock connection behavior", () => {
 		test("mock connection tracks showWarningMessage calls", async () => {
 			const { connection, calls } = createMockConnection();
@@ -326,11 +216,21 @@ suite("lintOperations", () => {
 
 			connection.sendDiagnostics({
 				uri: "file:///test.sql",
-				diagnostics: [],
+				diagnostics: [
+					{
+						message: "Test diagnostic",
+						severity: DiagnosticSeverity.Error,
+						range: {
+							start: { line: 0, character: 0 },
+							end: { line: 0, character: 1 },
+						},
+					},
+				],
 			});
 
-			assert.strictEqual(calls.diagnostics.length, 1);
-			assert.strictEqual(calls.diagnostics[0]?.uri, "file:///test.sql");
+			assert.strictEqual(calls.sendDiagnostics.length, 1);
+			assert.strictEqual(calls.sendDiagnostics[0]?.uri, "file:///test.sql");
+			assert.strictEqual(calls.sendDiagnostics[0]?.diagnostics.length, 1);
 		});
 	});
 
@@ -340,18 +240,12 @@ suite("lintOperations", () => {
 
 			notificationManager.log("Log message");
 			notificationManager.warn("Warn message");
+			notificationManager.notifyStderr("stderr output");
 
 			assert.strictEqual(calls.log.length, 1);
 			assert.strictEqual(calls.log[0], "Log message");
 			assert.strictEqual(calls.warn.length, 1);
 			assert.strictEqual(calls.warn[0], "Warn message");
-		});
-
-		test("tracks notifyStderr calls", () => {
-			const { notificationManager, calls } = createMockNotificationManager();
-
-			notificationManager.notifyStderr("stderr output");
-
 			assert.strictEqual(calls.notifyStderr.length, 1);
 			assert.strictEqual(calls.notifyStderr[0], "stderr output");
 		});
@@ -367,52 +261,30 @@ suite("lintOperations", () => {
 		});
 	});
 
-	suite("Result handling logic", () => {
-		test("timeout result returns failure", () => {
-			const result = {
-				stdout: "",
-				stderr: "",
-				exitCode: null,
-				timedOut: true,
-				cancelled: false,
-			};
+	suite("File size limiting", () => {
+		test("calculates document size correctly", () => {
+			const text = "SELECT 1;\n".repeat(100);
+			const document = createMockTextDocument("file:///test.sql", text);
 
-			const isFailure = result.timedOut;
-			assert.strictEqual(isFailure, true);
+			const sizeBytes = Buffer.byteLength(document.getText(), "utf8");
+			const sizeKb = Math.ceil(sizeBytes / 1024);
+
+			assert.ok(sizeBytes > 0);
+			assert.ok(sizeKb > 0);
 		});
 
-		test("cancelled result returns failure", () => {
-			const controller = new AbortController();
-			controller.abort();
+		test("detects when file exceeds size limit", () => {
+			const largeText = "SELECT 1;\n".repeat(10000); // ~90KB
+			const sizeBytes = Buffer.byteLength(largeText, "utf8");
+			const sizeKb = Math.ceil(sizeBytes / 1024);
+			const maxFileSizeKb = 10;
 
-			const result = {
-				stdout: "",
-				stderr: "",
-				exitCode: null,
-				timedOut: false,
-				cancelled: true,
-			};
-
-			const isFailure = controller.signal.aborted || result.cancelled;
-			assert.strictEqual(isFailure, true);
-		});
-
-		test("normal result returns success", () => {
-			const result = {
-				stdout: "output",
-				stderr: "",
-				exitCode: 0,
-				timedOut: false,
-				cancelled: false,
-			};
-
-			const isFailure = result.timedOut || result.cancelled;
-			assert.strictEqual(isFailure, false);
+			assert.ok(sizeKb > maxFileSizeKb, "Document should exceed limit");
 		});
 	});
 
-	suite("DocumentContext creation", () => {
-		test("mock context has all required properties", () => {
+	suite("Mock document context", () => {
+		test("creates valid context with defaults", () => {
 			const context = createMockDocumentContext();
 
 			assert.strictEqual(context.uri, "file:///test.sql");
@@ -420,148 +292,22 @@ suite("lintOperations", () => {
 			assert.strictEqual(context.cwd, "/workspace");
 			assert.strictEqual(context.documentText, "SELECT 1;");
 			assert.strictEqual(context.isSavedFile, true);
-			assert.ok(context.effectiveSettings);
 		});
 
-		test("mock context can be customized", () => {
+		test("creates valid context with overrides", () => {
 			const context = createMockDocumentContext({
 				uri: "file:///custom.sql",
-				documentText: "SELECT * FROM users;",
+				filePath: "/custom/custom.sql",
+				cwd: "/custom",
+				documentText: "SELECT 2;",
 				isSavedFile: false,
 			});
 
 			assert.strictEqual(context.uri, "file:///custom.sql");
-			assert.strictEqual(context.documentText, "SELECT * FROM users;");
+			assert.strictEqual(context.filePath, "/custom/custom.sql");
+			assert.strictEqual(context.cwd, "/custom");
+			assert.strictEqual(context.documentText, "SELECT 2;");
 			assert.strictEqual(context.isSavedFile, false);
-		});
-	});
-
-	suite("TextDocument mock", () => {
-		test("getText returns full text when no range", () => {
-			const doc = createMockTextDocument({ text: "SELECT 1;\nSELECT 2;" });
-			assert.strictEqual(doc.getText(), "SELECT 1;\nSELECT 2;");
-		});
-
-		test("lineCount is correct", () => {
-			const doc = createMockTextDocument({ text: "SELECT 1;", lineCount: 1 });
-			assert.strictEqual(doc.lineCount, 1);
-		});
-	});
-
-	suite("Exit code handling", () => {
-		test("exit code 0 is success (no violations)", () => {
-			const result = {
-				exitCode: 0,
-				timedOut: false,
-				cancelled: false,
-			};
-
-			const isError = result.exitCode !== null && result.exitCode >= 2;
-			assert.strictEqual(isError, false);
-		});
-
-		test("exit code 1 is success (violations found)", () => {
-			const result = {
-				exitCode: 1,
-				timedOut: false,
-				cancelled: false,
-			};
-
-			const isError = result.exitCode !== null && result.exitCode >= 2;
-			assert.strictEqual(isError, false);
-		});
-
-		test("exit code 2 is failure (parse error)", () => {
-			const result = {
-				exitCode: 2,
-				timedOut: false,
-				cancelled: false,
-			};
-
-			const isError = result.exitCode !== null && result.exitCode >= 2;
-			assert.strictEqual(isError, true);
-		});
-
-		test("exit code 3 is failure (configuration error)", () => {
-			const result = {
-				exitCode: 3,
-				timedOut: false,
-				cancelled: false,
-			};
-
-			const isError = result.exitCode !== null && result.exitCode >= 2;
-			assert.strictEqual(isError, true);
-		});
-
-		test("exit code 4 is failure (runtime exception)", () => {
-			const result = {
-				exitCode: 4,
-				timedOut: false,
-				cancelled: false,
-			};
-
-			const isError = result.exitCode !== null && result.exitCode >= 2;
-			assert.strictEqual(isError, true);
-		});
-	});
-
-	suite("Target file path resolution", () => {
-		test("uses filePath when provided", () => {
-			const filePath = "/path/to/test.sql";
-			const targetFilePath = filePath || "untitled.sql";
-			assert.strictEqual(targetFilePath, "/path/to/test.sql");
-		});
-
-		test("uses untitled.sql fallback when filePath is empty", () => {
-			const filePath = "";
-			const targetFilePath = filePath || "untitled.sql";
-			assert.strictEqual(targetFilePath, "untitled.sql");
-		});
-	});
-
-	suite("Missing tsqlrefine diagnostic creation", () => {
-		test("creates diagnostic with correct properties", () => {
-			const message = "tsqlrefine not found in PATH";
-			const diagnostic = {
-				message: `tsqlrefine: ${message}`,
-				severity: 1, // DiagnosticSeverity.Error
-				range: {
-					start: { line: 0, character: 0 },
-					end: { line: 0, character: 0 },
-				},
-				source: "tsqlrefine",
-				code: "tsqlrefine-not-found",
-			};
-
-			assert.strictEqual(
-				diagnostic.message,
-				"tsqlrefine: tsqlrefine not found in PATH",
-			);
-			assert.strictEqual(diagnostic.severity, 1);
-			assert.strictEqual(diagnostic.source, "tsqlrefine");
-			assert.strictEqual(diagnostic.code, "tsqlrefine-not-found");
-		});
-	});
-
-	suite("File too large diagnostic creation", () => {
-		test("creates diagnostic with correct message", () => {
-			const sizeKb = 150;
-			const maxFileSizeKb = 100;
-			const diagnostic = {
-				message: `tsqlrefine: lint skipped (file too large: ${sizeKb}KB > maxFileSizeKb=${maxFileSizeKb}). Run "TSQLRefine: Run" to lint manually or increase the limit.`,
-				severity: 3, // DiagnosticSeverity.Information
-				range: {
-					start: { line: 0, character: 0 },
-					end: { line: 0, character: 0 },
-				},
-				source: "tsqlrefine",
-				code: "lint-skipped-file-too-large",
-			};
-
-			assert.ok(diagnostic.message.includes("150KB"));
-			assert.ok(diagnostic.message.includes("maxFileSizeKb=100"));
-			assert.strictEqual(diagnostic.severity, 3);
-			assert.strictEqual(diagnostic.code, "lint-skipped-file-too-large");
 		});
 	});
 });

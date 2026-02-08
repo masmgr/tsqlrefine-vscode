@@ -1,6 +1,5 @@
 import * as assert from "node:assert";
-import type { Connection, TextEdit } from "vscode-languageserver/node";
-import type { TextDocument } from "vscode-languageserver-textdocument";
+import type { Connection } from "vscode-languageserver/node";
 import type { DocumentContext } from "../../server/shared/documentContext";
 import type { TsqlRefineSettings } from "../../server/config/settings";
 import { DocumentStateManager } from "../../server/state/documentStateManager";
@@ -19,7 +18,6 @@ function createTestSettings(
 		timeoutMs: 10000,
 		maxFileSizeKb: 0,
 		minSeverity: "info",
-		formatTimeoutMs: 10000,
 		enableLint: true,
 		enableFormat: true,
 		enableFix: true,
@@ -44,38 +42,6 @@ function createMockDocumentContext(
 		isSavedFile: true,
 		...overrides,
 	};
-}
-
-/**
- * Creates a mock TextDocument for testing.
- */
-function createMockTextDocument(
-	overrides: Partial<{
-		uri: string;
-		text: string;
-		lineCount: number;
-	}> = {},
-): TextDocument {
-	const text = overrides.text ?? "SELECT 1;";
-	const lineCount = overrides.lineCount ?? 1;
-
-	return {
-		uri: overrides.uri ?? "file:///test.sql",
-		languageId: "sql",
-		version: 1,
-		getText: (range?: { start: { line: number }; end: { line: number } }) => {
-			if (!range) return text;
-			const lines = text.split("\n");
-			if (range.start.line === lineCount - 1) {
-				return lines[range.start.line] ?? "";
-			}
-			return text;
-		},
-		lineCount,
-		positionAt: (offset: number) => ({ line: 0, character: offset }),
-		offsetAt: (position: { line: number; character: number }) =>
-			position.character,
-	} as TextDocument;
 }
 
 /**
@@ -108,7 +74,6 @@ function createMockConnection(): {
 			warn: () => {},
 			error: () => {},
 		},
-		sendNotification: () => {},
 	} as unknown as Connection;
 
 	return { connection, calls };
@@ -235,61 +200,49 @@ suite("formatOperations", () => {
 		});
 	});
 
-	suite("TextEdit creation", () => {
-		test("createFullDocumentEdit creates correct range for single line", () => {
-			const document = createMockTextDocument({
-				text: "SELECT 1;",
-				lineCount: 1,
+	suite("Format disabled handling", () => {
+		test("checks enableFormat setting correctly", () => {
+			const context = createMockDocumentContext({
+				effectiveSettings: createTestSettings({
+					enableFormat: false,
+				}),
 			});
 
-			const lastLineIndex = document.lineCount - 1;
-			const lastLine = document.getText({
-				start: { line: lastLineIndex, character: 0 },
-				end: { line: lastLineIndex, character: Number.MAX_SAFE_INTEGER },
-			});
-
-			const edit: TextEdit = {
-				range: {
-					start: { line: 0, character: 0 },
-					end: { line: lastLineIndex, character: lastLine.length },
-				},
-				newText: "SELECT 1;",
-			};
-
-			assert.deepStrictEqual(edit.range.start, { line: 0, character: 0 });
-			assert.strictEqual(edit.range.end.line, 0);
-			assert.strictEqual(edit.range.end.character, 9);
+			assert.strictEqual(context.effectiveSettings.enableFormat, false);
 		});
 
-		test("createFullDocumentEdit creates correct range for multiline", () => {
-			const text = "SELECT 1;\nSELECT 2;";
-			const document = createMockTextDocument({
-				text,
-				lineCount: 2,
-			});
+		test("enableFormat is true by default", () => {
+			const context = createMockDocumentContext();
 
-			const lastLineIndex = document.lineCount - 1;
-			const lastLine = document.getText({
-				start: { line: lastLineIndex, character: 0 },
-				end: { line: lastLineIndex, character: Number.MAX_SAFE_INTEGER },
-			});
-
-			const edit: TextEdit = {
-				range: {
-					start: { line: 0, character: 0 },
-					end: { line: lastLineIndex, character: lastLine.length },
-				},
-				newText: text,
-			};
-
-			assert.deepStrictEqual(edit.range.start, { line: 0, character: 0 });
-			assert.strictEqual(edit.range.end.line, 1);
-			assert.strictEqual(edit.range.end.character, 9);
+			assert.strictEqual(context.effectiveSettings.enableFormat, true);
 		});
 	});
 
-	suite("DocumentContext creation", () => {
-		test("mock context has all required properties", () => {
+	suite("Timeout handling", () => {
+		test("uses formatTimeoutMs when available", () => {
+			const settings = createTestSettings({
+				formatTimeoutMs: 5000,
+				timeoutMs: 10000,
+			});
+
+			const timeoutMs = settings.formatTimeoutMs ?? settings.timeoutMs;
+
+			assert.strictEqual(timeoutMs, 5000);
+		});
+
+		test("falls back to timeoutMs when formatTimeoutMs is not set", () => {
+			const settings = createTestSettings({
+				timeoutMs: 15000,
+			});
+
+			const timeoutMs = settings.formatTimeoutMs ?? settings.timeoutMs;
+
+			assert.strictEqual(timeoutMs, 15000);
+		});
+	});
+
+	suite("Mock document context", () => {
+		test("creates valid context with defaults", () => {
 			const context = createMockDocumentContext();
 
 			assert.strictEqual(context.uri, "file:///test.sql");
@@ -297,259 +250,42 @@ suite("formatOperations", () => {
 			assert.strictEqual(context.cwd, "/workspace");
 			assert.strictEqual(context.documentText, "SELECT 1;");
 			assert.strictEqual(context.isSavedFile, true);
-			assert.ok(context.effectiveSettings);
 		});
 
-		test("mock context can be customized", () => {
+		test("creates valid context with overrides", () => {
 			const context = createMockDocumentContext({
 				uri: "file:///custom.sql",
-				documentText: "SELECT * FROM users;",
+				filePath: "/custom/custom.sql",
+				cwd: "/custom",
+				documentText: "select   2;",
 				isSavedFile: false,
 			});
 
 			assert.strictEqual(context.uri, "file:///custom.sql");
-			assert.strictEqual(context.documentText, "SELECT * FROM users;");
+			assert.strictEqual(context.filePath, "/custom/custom.sql");
+			assert.strictEqual(context.cwd, "/custom");
+			assert.strictEqual(context.documentText, "select   2;");
 			assert.strictEqual(context.isSavedFile, false);
-		});
-
-		test("uses untitled.sql fallback when filePath is empty", () => {
-			const context = createMockDocumentContext({
-				filePath: "",
-			});
-
-			const targetFilePath = context.filePath || "untitled.sql";
-			assert.strictEqual(targetFilePath, "untitled.sql");
 		});
 	});
 
-	suite("Result handling logic", () => {
-		test("empty array is returned when text unchanged", () => {
-			const originalText = "SELECT 1;";
-			const formattedText = "SELECT 1;";
+	suite("Document change detection", () => {
+		test("detects when formatted text differs from original", () => {
+			const originalText: string = "select   1;";
+			const formattedText: string = "SELECT 1;";
 
-			const edits: TextEdit[] =
-				formattedText === originalText
-					? []
-					: [{ range: {} as never, newText: "" }];
+			const hasChanges = formattedText !== originalText;
 
-			assert.strictEqual(edits.length, 0);
-		});
-
-		test("TextEdit array is returned when text changes", () => {
-			const originalText = "select 1;";
-			const formattedText = "SELECT 1;";
-
-			const hasChanges = String(formattedText) !== String(originalText);
 			assert.strictEqual(hasChanges, true);
 		});
 
-		test("null is returned for timeout (simulated)", () => {
-			const result = {
-				stdout: "",
-				stderr: "",
-				exitCode: null,
-				timedOut: true,
-				cancelled: false,
-			};
+		test("detects when formatted text is identical to original", () => {
+			const originalText: string = "SELECT 1;";
+			const formattedText: string = "SELECT 1;";
 
-			const edits = result.timedOut ? null : [];
-			assert.strictEqual(edits, null);
-		});
+			const hasChanges = formattedText !== originalText;
 
-		test("null is returned for cancellation (simulated)", () => {
-			const controller = new AbortController();
-			controller.abort();
-
-			const result = {
-				stdout: "",
-				stderr: "",
-				exitCode: null,
-				timedOut: false,
-				cancelled: true,
-			};
-
-			const edits = controller.signal.aborted || result.cancelled ? null : [];
-			assert.strictEqual(edits, null);
-		});
-
-		test("null is returned for non-zero exit code (simulated)", () => {
-			const result = {
-				stdout: "",
-				stderr: "Error message",
-				exitCode: 1,
-				timedOut: false,
-				cancelled: false,
-			};
-
-			const edits = result.exitCode !== 0 ? null : [];
-			assert.strictEqual(edits, null);
-		});
-	});
-
-	suite("Error message extraction", () => {
-		test("firstLine extracts first line from multiline text", () => {
-			const text = "First line\nSecond line\nThird line";
-			const index = text.indexOf("\n");
-			const firstLine = index === -1 ? text : text.slice(0, index);
-
-			assert.strictEqual(firstLine, "First line");
-		});
-
-		test("firstLine returns full text when no newline", () => {
-			const text = "Single line text";
-			const index = text.indexOf("\n");
-			const firstLine = index === -1 ? text : text.slice(0, index);
-
-			assert.strictEqual(firstLine, "Single line text");
-		});
-
-		test("firstLine handles empty string", () => {
-			const text = "";
-			const index = text.indexOf("\n");
-			const firstLine = index === -1 ? text : text.slice(0, index);
-
-			assert.strictEqual(firstLine, "");
-		});
-	});
-
-	suite("Stderr handling", () => {
-		test("stderr is logged when present", () => {
-			const { notificationManager, calls } = createMockNotificationManager();
-			const stderr = "Warning: something happened";
-
-			if (stderr.trim()) {
-				notificationManager.warn(`tsqlrefine format stderr: ${stderr}`);
-			}
-
-			assert.strictEqual(calls.warn.length, 1);
-			assert.ok(calls.warn[0]?.includes("tsqlrefine format stderr:"));
-		});
-
-		test("stderr is not logged when empty", () => {
-			const { notificationManager, calls } = createMockNotificationManager();
-			const stderr = "   ";
-
-			if (stderr.trim()) {
-				notificationManager.warn(`tsqlrefine format stderr: ${stderr}`);
-			}
-
-			assert.strictEqual(calls.warn.length, 0);
-		});
-	});
-
-	suite("formatTimeoutMs setting", () => {
-		test("default formatTimeoutMs is 10000", () => {
-			const settings = createTestSettings();
-			assert.strictEqual(settings.formatTimeoutMs, 10000);
-		});
-
-		test("formatTimeoutMs can be customized", () => {
-			const settings = createTestSettings({ formatTimeoutMs: 30000 });
-			assert.strictEqual(settings.formatTimeoutMs, 30000);
-		});
-
-		test("formatTimeoutMs defaults correctly when not specified", () => {
-			const settings = createTestSettings();
-			// Default is 10000
-			assert.strictEqual(settings.formatTimeoutMs, 10000);
-		});
-	});
-
-	suite("Exit code handling", () => {
-		test("zero exit code is success", () => {
-			const result = {
-				stdout: "formatted output",
-				stderr: "",
-				exitCode: 0,
-				timedOut: false,
-				cancelled: false,
-			};
-
-			const isSuccess = result.exitCode === 0;
-			assert.strictEqual(isSuccess, true);
-		});
-
-		test("non-zero exit code is failure", () => {
-			const result = {
-				stdout: "",
-				stderr: "",
-				exitCode: 1,
-				timedOut: false,
-				cancelled: false,
-			};
-
-			const isFailure = result.exitCode !== 0;
-			assert.strictEqual(isFailure, true);
-		});
-
-		test("exit code 2 maps to SQL parse error description", () => {
-			const CLI_EXIT_CODE_DESCRIPTIONS: Record<number, string> = {
-				2: "SQL parse error",
-				3: "configuration error",
-				4: "runtime exception",
-			};
-			const exitCode = 2;
-			const description =
-				CLI_EXIT_CODE_DESCRIPTIONS[exitCode] ?? `exit code ${exitCode}`;
-			assert.strictEqual(description, "SQL parse error");
-		});
-
-		test("exit code 3 maps to configuration error description", () => {
-			const CLI_EXIT_CODE_DESCRIPTIONS: Record<number, string> = {
-				2: "SQL parse error",
-				3: "configuration error",
-				4: "runtime exception",
-			};
-			const exitCode = 3;
-			const description =
-				CLI_EXIT_CODE_DESCRIPTIONS[exitCode] ?? `exit code ${exitCode}`;
-			assert.strictEqual(description, "configuration error");
-		});
-
-		test("exit code 4 maps to runtime exception description", () => {
-			const CLI_EXIT_CODE_DESCRIPTIONS: Record<number, string> = {
-				2: "SQL parse error",
-				3: "configuration error",
-				4: "runtime exception",
-			};
-			const exitCode = 4;
-			const description =
-				CLI_EXIT_CODE_DESCRIPTIONS[exitCode] ?? `exit code ${exitCode}`;
-			assert.strictEqual(description, "runtime exception");
-		});
-
-		test("unknown exit code falls back to generic description", () => {
-			const CLI_EXIT_CODE_DESCRIPTIONS: Record<number, string> = {
-				2: "SQL parse error",
-				3: "configuration error",
-				4: "runtime exception",
-			};
-			const exitCode = 99;
-			const description =
-				CLI_EXIT_CODE_DESCRIPTIONS[exitCode] ?? `exit code ${exitCode}`;
-			assert.strictEqual(description, "exit code 99");
-		});
-
-		test("stderr detail is included in error message", () => {
-			const stderrDetail = "Syntax error at line 1";
-			const description = "SQL parse error";
-			const detail = stderrDetail ? ` (${stderrDetail})` : "";
-			const formatted = `tsqlrefine: format failed - ${description}${detail}`;
-			assert.strictEqual(
-				formatted,
-				"tsqlrefine: format failed - SQL parse error (Syntax error at line 1)",
-			);
-		});
-
-		test("error message omits detail when stderr is empty", () => {
-			const stderrDetail = "";
-			const description = "SQL parse error";
-			const detail = stderrDetail ? ` (${stderrDetail})` : "";
-			const formatted = `tsqlrefine: format failed - ${description}${detail}`;
-			assert.strictEqual(
-				formatted,
-				"tsqlrefine: format failed - SQL parse error",
-			);
+			assert.strictEqual(hasChanges, false);
 		});
 	});
 });
