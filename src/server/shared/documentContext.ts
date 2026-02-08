@@ -3,6 +3,7 @@ import { URI } from "vscode-uri";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { resolveConfigPath } from "../config/resolveConfigPath";
 import type { TsqlRefineSettings } from "../config/settings";
+import { normalizeForCompare } from "./normalize";
 
 export type DocumentContext = {
 	uri: string;
@@ -71,11 +72,11 @@ function resolveWorkspaceRoot(
 	}
 
 	if (filePath) {
-		const normalizedFilePath = path.resolve(filePath);
+		const normalizedFilePath = normalizeForCompare(filePath);
 		for (const folder of workspaceFolders) {
-			const normalizedFolder = path.resolve(folder);
+			const normalizedFolder = normalizeForCompare(folder);
 			if (normalizedFilePath.startsWith(normalizedFolder)) {
-				return normalizedFolder;
+				return folder;
 			}
 		}
 		return null;

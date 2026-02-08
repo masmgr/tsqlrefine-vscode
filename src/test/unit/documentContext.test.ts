@@ -7,6 +7,7 @@ import {
 	type DocumentContextOptions,
 } from "../../server/shared/documentContext";
 import type { TsqlRefineSettings } from "../../server/config/settings";
+import { normalizeForCompare } from "../../server/shared/normalize";
 
 /**
  * Creates default test settings.
@@ -46,9 +47,18 @@ suite("createDocumentContext", () => {
 		const context = await createDocumentContext(options);
 
 		assert.strictEqual(context.uri, uri);
-		assert.strictEqual(context.filePath, filePath);
-		assert.strictEqual(context.workspaceRoot, workspaceRoot);
-		assert.strictEqual(context.cwd, workspaceRoot);
+		assert.strictEqual(
+			normalizeForCompare(context.filePath),
+			normalizeForCompare(filePath),
+		);
+		assert.strictEqual(
+			normalizeForCompare(context.workspaceRoot ?? ""),
+			normalizeForCompare(workspaceRoot),
+		);
+		assert.strictEqual(
+			normalizeForCompare(context.cwd),
+			normalizeForCompare(workspaceRoot),
+		);
 		assert.strictEqual(context.documentText, "SELECT 1;");
 		assert.strictEqual(context.isSavedFile, true);
 	});
@@ -68,9 +78,15 @@ suite("createDocumentContext", () => {
 		const context = await createDocumentContext(options);
 
 		assert.strictEqual(context.uri, uri);
-		assert.strictEqual(context.filePath, filePath);
+		assert.strictEqual(
+			normalizeForCompare(context.filePath),
+			normalizeForCompare(filePath),
+		);
 		assert.strictEqual(context.workspaceRoot, null);
-		assert.strictEqual(context.cwd, path.dirname(filePath));
+		assert.strictEqual(
+			normalizeForCompare(context.cwd),
+			normalizeForCompare(path.dirname(filePath)),
+		);
 		assert.strictEqual(context.documentText, "SELECT 2;");
 		assert.strictEqual(context.isSavedFile, false);
 	});
@@ -128,8 +144,14 @@ suite("createDocumentContext", () => {
 
 		const context = await createDocumentContext(options);
 
-		assert.strictEqual(context.workspaceRoot, workspaceRoot);
-		assert.strictEqual(context.cwd, workspaceRoot);
+		assert.strictEqual(
+			normalizeForCompare(context.workspaceRoot ?? ""),
+			normalizeForCompare(workspaceRoot),
+		);
+		assert.strictEqual(
+			normalizeForCompare(context.cwd),
+			normalizeForCompare(workspaceRoot),
+		);
 	});
 
 	test("includes configPath in effective settings when resolved", async () => {
