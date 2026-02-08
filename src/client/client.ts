@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import type * as vscode from "vscode";
+import * as vscode from "vscode";
 import {
 	LanguageClient,
 	type LanguageClientOptions,
@@ -23,6 +23,8 @@ export function createLanguageClient(
 		},
 	};
 
+	const outputChannel = vscode.window.createOutputChannel("TSQLRefine");
+
 	const clientOptions: LanguageClientOptions = {
 		documentSelector: ["sql", "tsql", "mssql"].flatMap((language) => [
 			{ scheme: "file", language },
@@ -31,6 +33,7 @@ export function createLanguageClient(
 		synchronize: {
 			configurationSection: "tsqlrefine",
 		},
+		outputChannel,
 	};
 
 	return new LanguageClient(
