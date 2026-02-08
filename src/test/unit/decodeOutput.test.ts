@@ -1,8 +1,10 @@
 import * as assert from "node:assert";
+import * as fc from "fast-check";
 import {
 	decodeCliOutput,
 	normalizeLineEndings,
 } from "../../server/lint/decodeOutput";
+import { utf8BufferWithOptionalBom } from "../helpers/arbitraries";
 
 suite("decodeOutput", () => {
 	suite("UTF-8 decoding", () => {
@@ -139,6 +141,54 @@ suite("decodeOutput", () => {
 			assert.strictEqual(result, "A");
 		});
 	});
+
+	suite("Property-based tests", () => {
+		test("property: round-trip for clean UTF-8", () => {
+			fc.assert(
+				fc.property(fc.string(), (text) => {
+					const buffer = Buffer.from(text, "utf8");
+					const result = decodeCliOutput(buffer);
+					return result === text;
+				}),
+			);
+		});
+
+		test("property: empty buffer returns empty string", () => {
+			const buffer = Buffer.alloc(0);
+			assert.strictEqual(decodeCliOutput(buffer), "");
+		});
+
+		test("property: no BOM at start of output", () => {
+			fc.assert(
+				fc.property(utf8BufferWithOptionalBom, (buffer) => {
+					const result = decodeCliOutput(buffer);
+					return !result.startsWith("\ufeff");
+				}),
+			);
+		});
+
+		test("property: length monotonicity", () => {
+			fc.assert(
+				fc.property(fc.string(), (text) => {
+					const buffer = Buffer.from(text, "utf8");
+					const result = decodeCliOutput(buffer);
+					// Decoded string length should be <= buffer length (UTF-8 property)
+					return result.length <= buffer.length;
+				}),
+			);
+		});
+
+		test("property: no exception on arbitrary buffers", () => {
+			fc.assert(
+				fc.property(fc.uint8Array(), (bytes) => {
+					const buffer = Buffer.from(bytes);
+					// Should not throw
+					const result = decodeCliOutput(buffer);
+					return typeof result === "string";
+				}),
+			);
+		});
+	});
 });
 
 suite("normalizeLineEndings", () => {
@@ -236,6 +286,93 @@ suite("normalizeLineEndings", () => {
 			assert.strictEqual(normalizeLineEndings("text\n", "LF"), "text\n");
 			assert.strictEqual(normalizeLineEndings("text\n", "CRLF"), "text\r\n");
 			assert.strictEqual(normalizeLineEndings("text\r\n", "LF"), "text\n");
+		});
+	});
+
+	suite("Property-based tests", () => {
+		test("property: idempotence for LF", () => {
+			fc.assert(
+				fc.property(fc.string(), (text) => {
+					const once = normalizeLineEndings(text, "LF");
+					const twice = normalizeLineEndings(once, "LF");
+					return once === twice;
+				}),
+			);
+		});
+
+		test("property: idempotence for CRLF", () => {
+			fc.assert(
+				fc.property(fc.string(), (text) => {
+					const once = normalizeLineEndings(text, "CRLF");
+					const twice = normalizeLineEndings(once, "CRLF");
+					return once === twice;
+				}),
+			);
+		});
+
+		test("property: LF mode has no CR characters", () => {
+			fc.assert(
+				fc.property(fc.string(), (text) => {
+					const result = normalizeLineEndings(text, "LF");
+					return !result.includes("\r");
+				}),
+			);
+		});
+
+		test("property: CRLF mode has no lone LF", () => {
+			fc.assert(
+				fc.property(fc.string(), (text) => {
+					const result = normalizeLineEndings(text, "CRLF");
+					// Split by CRLF and check no part contains \n
+					const parts = result.split("\r\n");
+					return parts.every((part) => !part.includes("\n"));
+				}),
+			);
+		});
+
+		test("property: CRLF mode has no lone CR", () => {
+			fc.assert(
+				fc.property(fc.string(), (text) => {
+					const result = normalizeLineEndings(text, "CRLF");
+					// Split by CRLF and check no part contains \r
+					const parts = result.split("\r\n");
+					return parts.every((part) => !part.includes("\r"));
+				}),
+			);
+		});
+
+		test("property: content preservation (excluding line endings)", () => {
+			fc.assert(
+				fc.property(fc.string(), fc.constantFrom("LF", "CRLF"), (text, eol) => {
+					const result = normalizeLineEndings(text, eol);
+					// Remove all line ending variants and compare content
+					const originalContent = text.replace(/\r\n|\r|\n/g, "");
+					const resultContent = result.replace(/\r\n|\r|\n/g, "");
+					return originalContent === resultContent;
+				}),
+			);
+		});
+
+		test("property: empty preservation", () => {
+			assert.strictEqual(normalizeLineEndings("", "LF"), "");
+			assert.strictEqual(normalizeLineEndings("", "CRLF"), "");
+		});
+
+		test("property: round-trip CRLF to LF to CRLF preserves line count", () => {
+			fc.assert(
+				fc.property(fc.string(), (text) => {
+					const toCrlf = normalizeLineEndings(text, "CRLF");
+					const toLf = normalizeLineEndings(toCrlf, "LF");
+					const backToCrlf = normalizeLineEndings(toLf, "CRLF");
+
+					// Line count should be preserved
+					const crlfCount = (toCrlf.match(/\r\n/g) || []).length;
+					const lfCount = (toLf.match(/\n/g) || []).length;
+					const finalCrlfCount = (backToCrlf.match(/\r\n/g) || []).length;
+
+					return crlfCount === lfCount && lfCount === finalCrlfCount;
+				}),
+			);
 		});
 	});
 });

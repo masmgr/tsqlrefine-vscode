@@ -1,8 +1,10 @@
 import * as assert from "node:assert";
 import * as path from "node:path";
+import * as fc from "fast-check";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
 import { parseOutput } from "../../server/lint/parseOutput";
+import { cliJsonOutput } from "../helpers/arbitraries";
 
 /**
  * Helper to create a JSON stdout string matching the CLI JSON output format.
@@ -401,6 +403,282 @@ suite("parseOutput", () => {
 			const diagnostics = parseOutput({ stdout, uri, cwd });
 
 			assert.strictEqual(diagnostics.length, 0);
+		});
+	});
+
+	suite("Property-based tests", () => {
+		test("property: malformed JSON returns empty array", () => {
+			fc.assert(
+				fc.property(
+					fc.string().filter((s) => {
+						try {
+							JSON.parse(s);
+							return false; // Skip valid JSON
+						} catch {
+							return true; // Keep invalid JSON
+						}
+					}),
+					(invalidJson) => {
+						const filePath = path.resolve("test.sql");
+						const uri = URI.file(filePath).toString();
+						const diagnostics = parseOutput({
+							stdout: invalidJson,
+							uri,
+							cwd: null,
+						});
+						return diagnostics.length === 0;
+					},
+				),
+				{ numRuns: 200 },
+			);
+		});
+
+		test("property: empty stdout returns empty array", () => {
+			const filePath = path.resolve("test.sql");
+			const uri = URI.file(filePath).toString();
+			const diagnostics = parseOutput({ stdout: "", uri, cwd: null });
+			assert.strictEqual(diagnostics.length, 0);
+		});
+
+		test("property: missing files array returns empty array", () => {
+			fc.assert(
+				fc.property(
+					fc.record({ tool: fc.string(), version: fc.string() }),
+					(invalidStructure) => {
+						const stdout = JSON.stringify(invalidStructure);
+						const filePath = path.resolve("test.sql");
+						const uri = URI.file(filePath).toString();
+						const diagnostics = parseOutput({ stdout, uri, cwd: null });
+						return diagnostics.length === 0;
+					},
+				),
+			);
+		});
+
+		test("property: all diagnostics have source tsqlrefine", () => {
+			fc.assert(
+				fc.property(cliJsonOutput, (jsonOutput) => {
+					const stdout = JSON.stringify(jsonOutput);
+					const cwd = path.resolve("workspace");
+					// Use the first file path from the generated output
+					const firstFilePath = jsonOutput.files[0]?.filePath ?? "test.sql";
+					const resolvedPath =
+						firstFilePath === "<stdin>"
+							? path.join(cwd, "test.sql")
+							: path.resolve(cwd, firstFilePath);
+					const uri = URI.file(resolvedPath).toString();
+
+					const diagnostics = parseOutput({ stdout, uri, cwd });
+
+					return diagnostics.every((d) => d.source === "tsqlrefine");
+				}),
+				{ numRuns: 200 },
+			);
+		});
+
+		test("property: severity defaults to Information for unknown values", () => {
+			fc.assert(
+				fc.property(
+					fc.integer().filter((n) => n < 1 || n > 4),
+					(invalidSeverity) => {
+						const cwd = path.resolve("workspace");
+						const filePath = path.join(cwd, "query.sql");
+						const uri = URI.file(filePath).toString();
+						const stdout = createJsonOutput("query.sql", [
+							{
+								range: {
+									start: { line: 0, character: 0 },
+									end: { line: 0, character: 5 },
+								},
+								severity: invalidSeverity,
+								message: "Test",
+							},
+						]);
+
+						const diagnostics = parseOutput({ stdout, uri, cwd });
+
+						if (diagnostics.length > 0) {
+							return (
+								diagnostics[0]?.severity === DiagnosticSeverity.Information
+							);
+						}
+						return true;
+					},
+				),
+			);
+		});
+
+		test("property: stdin mapping to target URI", () => {
+			fc.assert(
+				fc.property(fc.array(fc.string(), { maxLength: 3 }), (messages) => {
+					const cwd = path.resolve("workspace");
+					const filePath = path.join(cwd, "query.sql");
+					const uri = URI.file(filePath).toString();
+					const stdout = createJsonOutput(
+						"<stdin>",
+						messages.map((msg, idx) => ({
+							range: {
+								start: { line: idx, character: 0 },
+								end: { line: idx, character: 5 },
+							},
+							message: msg,
+						})),
+					);
+
+					const diagnostics = parseOutput({ stdout, uri, cwd });
+
+					// All diagnostics should be returned for <stdin>
+					return diagnostics.length === messages.length;
+				}),
+			);
+		});
+
+		test("property: fixable defaults to false when missing", () => {
+			fc.assert(
+				fc.property(fc.string(), (message) => {
+					const cwd = path.resolve("workspace");
+					const filePath = path.join(cwd, "query.sql");
+					const uri = URI.file(filePath).toString();
+					const stdout = createJsonOutput("query.sql", [
+						{
+							range: {
+								start: { line: 0, character: 0 },
+								end: { line: 0, character: 5 },
+							},
+							message,
+							// No data object
+						},
+					]);
+
+					const diagnostics = parseOutput({ stdout, uri, cwd });
+
+					if (diagnostics.length > 0) {
+						return diagnostics[0]?.data?.fixable === false;
+					}
+					return true;
+				}),
+			);
+		});
+
+		test("property: unicode handling in messages", () => {
+			fc.assert(
+				fc.property(fc.string(), (message) => {
+					const cwd = path.resolve("workspace");
+					const filePath = path.join(cwd, "query.sql");
+					const uri = URI.file(filePath).toString();
+					const stdout = createJsonOutput("query.sql", [
+						{
+							range: {
+								start: { line: 0, character: 0 },
+								end: { line: 0, character: 5 },
+							},
+							message,
+						},
+					]);
+
+					// Should not throw
+					const diagnostics = parseOutput({ stdout, uri, cwd });
+
+					if (diagnostics.length > 0) {
+						return diagnostics[0]?.message === message;
+					}
+					return true;
+				}),
+			);
+		});
+
+		test("property: range coordinates are preserved from input", () => {
+			fc.assert(
+				fc.property(cliJsonOutput, (jsonOutput) => {
+					const stdout = JSON.stringify(jsonOutput);
+					const cwd = path.resolve("workspace");
+					const firstFilePath = jsonOutput.files[0]?.filePath ?? "test.sql";
+					const resolvedPath =
+						firstFilePath === "<stdin>"
+							? path.join(cwd, "test.sql")
+							: path.resolve(cwd, firstFilePath);
+					const uri = URI.file(resolvedPath).toString();
+
+					const diagnostics = parseOutput({ stdout, uri, cwd });
+
+					// Verify that parseOutput preserves the exact range coordinates from the input
+					// (even if they're semantically invalid like end < start)
+					const firstFile = jsonOutput.files[0];
+					if (!firstFile || diagnostics.length === 0) {
+						return true;
+					}
+
+					// Check that ranges are preserved exactly as input (0-based)
+					return diagnostics.every((d, idx) => {
+						const inputDiag = firstFile.diagnostics[idx];
+						if (!inputDiag) return true;
+
+						return (
+							d.range.start.line === inputDiag.range.start.line &&
+							d.range.start.character === inputDiag.range.start.character &&
+							d.range.end.line === inputDiag.range.end.line &&
+							d.range.end.character === inputDiag.range.end.character
+						);
+					});
+				}),
+				{ numRuns: 200 },
+			);
+		});
+
+		test("property: path filtering works correctly", () => {
+			fc.assert(
+				fc.property(
+					fc.stringMatching(/^[a-zA-Z0-9_.-]+\.sql$/),
+					fc.stringMatching(/^[a-zA-Z0-9_.-]+\.sql$/),
+					(targetFile, otherFile) => {
+						fc.pre(targetFile !== otherFile); // Ensure different files
+
+						const cwd = path.resolve("workspace");
+						const targetPath = path.join(cwd, targetFile);
+						const uri = URI.file(targetPath).toString();
+
+						const stdout = JSON.stringify({
+							tool: "tsqlrefine",
+							version: "1.0.0",
+							command: "lint",
+							files: [
+								{
+									filePath: targetFile,
+									diagnostics: [
+										{
+											range: {
+												start: { line: 0, character: 0 },
+												end: { line: 0, character: 5 },
+											},
+											message: "Target diagnostic",
+										},
+									],
+								},
+								{
+									filePath: otherFile,
+									diagnostics: [
+										{
+											range: {
+												start: { line: 0, character: 0 },
+												end: { line: 0, character: 5 },
+											},
+											message: "Other diagnostic",
+										},
+									],
+								},
+							],
+						});
+
+						const diagnostics = parseOutput({ stdout, uri, cwd });
+
+						// Should only return diagnostics for the target file
+						return (
+							diagnostics.length === 1 &&
+							diagnostics[0]?.message === "Target diagnostic"
+						);
+					},
+				),
+			);
 		});
 	});
 });

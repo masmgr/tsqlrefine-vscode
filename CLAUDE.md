@@ -280,6 +280,7 @@ Tests are organized into two categories under [src/test/](src/test/):
    - [resolveConfigPath.test.ts](src/test/unit/resolveConfigPath.test.ts) - Config resolution tests
    - [documentEdit.test.ts](src/test/unit/documentEdit.test.ts) - Document edit utility tests
    - [textUtils.test.ts](src/test/unit/textUtils.test.ts) - Text utility tests
+   - [normalize.test.ts](src/test/unit/normalize.test.ts) - Path normalization tests
    - [settingsManager.test.ts](src/test/unit/settingsManager.test.ts) - Settings manager tests
    - [notificationManager.test.ts](src/test/unit/notificationManager.test.ts) - Notification manager tests
 
@@ -296,6 +297,277 @@ Tests are organized into two categories under [src/test/](src/test/):
    - `e2eTestHarness.ts` - E2E test setup/teardown automation
    - `testConstants.ts` - Centralized timeouts and constants
    - `cleanup.ts` - File system cleanup utilities
+   - `arbitraries.ts` - Custom fast-check arbitraries for property-based testing
+
+## Property-Based Testing with fast-check
+
+The project uses **fast-check** for property-based testing (PBT) to complement example-based tests. Property-based testing automatically generates hundreds of test cases and verifies that certain properties (invariants) hold true for all inputs.
+
+### Philosophy
+
+- **Example-based tests**: Verify specific, known edge cases and behaviors (e.g., "empty string returns empty string")
+- **Property-based tests**: Verify general invariants that should hold for all inputs (e.g., "function is idempotent")
+
+Both approaches are valuable and complementary:
+- Example-based tests document specific requirements and edge cases
+- Property-based tests catch unexpected edge cases and verify mathematical properties
+
+### Integration with Unit Tests
+
+PBT tests are integrated into existing unit test files under `suite("Property-based tests")` blocks:
+
+```typescript
+import * as fc from "fast-check";
+
+suite("functionName", () => {
+  // Existing example-based tests
+  suite("Example-based tests", () => {
+    test("handles empty string", () => {
+      assert.strictEqual(fn(""), "");
+    });
+    test("handles unicode", () => {
+      assert.strictEqual(fn("日本語"), "日本語");
+    });
+  });
+
+  // NEW: Property-based tests
+  suite("Property-based tests", () => {
+    test("property: idempotence", () => {
+      fc.assert(
+        fc.property(fc.string(), (input) => {
+          return fn(fn(input)) === fn(input);
+        })
+      );
+    });
+
+    test("property: never returns empty string", () => {
+      fc.assert(
+        fc.property(fc.string(), (input) => {
+          const result = fn(input);
+          return result.length > 0;
+        })
+      );
+    });
+  });
+});
+```
+
+### Custom Arbitraries
+
+Reusable arbitraries are defined in [src/test/helpers/arbitraries.ts](src/test/helpers/arbitraries.ts):
+
+| Arbitrary | Description | Example Output |
+|-----------|-------------|----------------|
+| `platformPath` | Platform-appropriate file paths (Windows/Unix) | `"C:\foo\bar.sql"` or `"/foo/bar.sql"` |
+| `unixPath` | Unix-style file paths | `"/usr/local/bin/tsqlrefine"` |
+| `windowsPath` | Windows-style file paths | `"C:\Program Files\tsqlrefine.exe"` |
+| `whitespace` | Whitespace-only strings | `"   \t\n"` |
+| `paddedString` | Strings with leading/trailing whitespace | `"  content  "` |
+| `textWithLineEndings` | Multiline text with various line endings | `"line1\r\nline2\nline3"` |
+| `utf8BufferWithOptionalBom` | Buffers with/without UTF-8 BOM | `Buffer<0xEF 0xBB 0xBF ...>` |
+| `cliDiagnostic` | Valid CLI diagnostic JSON structure | `{ range: {...}, severity: 2, message: "..." }` |
+| `cliJsonOutput` | Valid CLI JSON output structure | `{ tool: "tsqlrefine", files: [...] }` |
+
+**Usage example:**
+```typescript
+import { platformPath, textWithLineEndings } from "../helpers/arbitraries";
+
+test("property: handles all path formats", () => {
+  fc.assert(
+    fc.property(platformPath, (path) => {
+      const result = normalizePath(path);
+      return result.length > 0;
+    })
+  );
+});
+```
+
+### Modules with PBT Coverage
+
+The following modules have property-based tests in addition to example-based tests:
+
+1. **[textUtils.ts](src/server/shared/textUtils.ts)** - String manipulation
+   - `firstLine()`: Idempotence, no newlines in output, prefix preservation, length constraints
+   - `resolveTargetFilePath()`: Identity for non-empty, fallback for empty, never returns empty
+
+2. **[normalize.ts](src/server/shared/normalize.ts)** - Path normalization
+   - `normalizeForCompare()`: Idempotence, always absolute path, platform-specific case folding
+   - `normalizeExecutablePath()`: Null for whitespace-only, absolute when non-null, trimming equivalence
+   - `normalizeConfigPath()`: Trimming only (no resolution), preserves relative paths
+
+3. **[decodeOutput.ts](src/server/lint/decodeOutput.ts)** - Encoding and line endings
+   - `decodeCliOutput()`: Round-trip for UTF-8, BOM removal, length monotonicity
+   - `normalizeLineEndings()`: Idempotence, LF mode has no `\r`, CRLF mode has no lone `\n` or `\r`, content preservation
+
+4. **[parseOutput.ts](src/server/lint/parseOutput.ts)** - JSON parsing
+   - `parseOutput()`: Malformed JSON handling, severity defaults, all diagnostics have source, stdin mapping, path filtering
+
+### Running PBT Tests
+
+Property-based tests run automatically with the regular unit test suite:
+
+```bash
+npm run test:unit              # Runs all unit tests (example-based + PBT)
+npm run test:unit:coverage     # With coverage reporting
+```
+
+**Default configuration:**
+- Each property runs **100 test cases** by default (configurable via `numRuns`)
+- Failed tests are automatically **shrunk** to minimal counterexamples
+- Tests are **deterministic** when using explicit seeds
+
+### Debugging Failed Properties
+
+When fast-check finds a counterexample, it automatically shrinks the input to the simplest failing case:
+
+```
+Error: Property failed after 42 tests
+{ seed: -1234567890, path: "0:0:0", endOnFailure: true }
+Counterexample: [""]
+Shrunk 15 time(s)
+Got error: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal
+```
+
+**To reproduce the exact failure:**
+```typescript
+fc.assert(
+  fc.property(fc.string(), (input) => {
+    // ... property test
+  }),
+  { seed: -1234567890 }  // Use seed from error message
+);
+```
+
+**To debug with verbose output:**
+```typescript
+fc.assert(
+  fc.property(fc.string(), (input) => {
+    // ... property test
+  }),
+  { verbose: true }  // Prints all generated values
+);
+```
+
+### Best Practices
+
+1. **Use specific arbitraries**: Prefer constrained arbitraries over generic ones
+   ```typescript
+   // Good: Specific constraint
+   fc.property(fc.string({ minLength: 1 }), ...)
+
+   // Less ideal: Too broad
+   fc.property(fc.string(), ...)
+   ```
+
+2. **Test one property per test**: Makes failures easier to diagnose
+   ```typescript
+   // Good: One clear property
+   test("property: idempotence", () => {
+     fc.assert(fc.property(fc.string(), (s) => fn(fn(s)) === fn(s)));
+   });
+
+   // Avoid: Multiple properties in one test
+   test("properties", () => {
+     fc.assert(fc.property(fc.string(), (s) =>
+       fn(fn(s)) === fn(s) && fn(s).length <= s.length  // Hard to debug
+     ));
+   });
+   ```
+
+3. **Use preconditions when needed**: Filter out invalid inputs with `fc.pre()`
+   ```typescript
+   fc.assert(
+     fc.property(fc.string(), (path) => {
+       fc.pre(path.trim() !== "");  // Skip empty/whitespace strings
+       const result = normalizePath(path);
+       return result !== null;
+     })
+   );
+   ```
+
+4. **Set appropriate test counts**: 100 is good for most cases; use 200-1000 for critical paths
+   ```typescript
+   fc.assert(
+     fc.property(cliJsonOutput, (json) => { /* ... */ }),
+     { numRuns: 500 }  // More tests for complex input
+   );
+   ```
+
+5. **Combine with example-based tests**: PBT doesn't replace examples
+   - Use examples for known edge cases and documentation
+   - Use properties for exhaustive validation and mathematical invariants
+
+6. **Document non-obvious properties**: Add comments explaining why a property should hold
+   ```typescript
+   test("property: content preservation (excluding line endings)", () => {
+     // When normalizing line endings, only \r, \n, \r\n should change
+     // All other characters must be preserved exactly
+     fc.assert(fc.property(...));
+   });
+   ```
+
+### Platform-Specific Testing
+
+Some properties depend on the platform. Use conditional tests:
+
+```typescript
+if (process.platform === "win32") {
+  test("property: case folding on Windows", () => {
+    fc.assert(
+      fc.property(fc.string(), (path) => {
+        const upper = normalize(path.toUpperCase());
+        const lower = normalize(path.toLowerCase());
+        return upper === lower;
+      })
+    );
+  });
+} else {
+  test("property: case preservation on Unix", () => {
+    // Unix-specific property
+  });
+}
+```
+
+### Common Property Patterns
+
+**Idempotence:**
+```typescript
+test("property: idempotence", () => {
+  fc.assert(fc.property(arbitrary, (input) => {
+    const once = fn(input);
+    const twice = fn(once);
+    return once === twice;
+  }));
+});
+```
+
+**Round-trip:**
+```typescript
+test("property: encode/decode round-trip", () => {
+  fc.assert(fc.property(fc.string(), (text) => {
+    return decode(encode(text)) === text;
+  }));
+});
+```
+
+**Monotonicity:**
+```typescript
+test("property: output length <= input length", () => {
+  fc.assert(fc.property(fc.string(), (input) => {
+    return fn(input).length <= input.length;
+  }));
+});
+```
+
+**Invariant preservation:**
+```typescript
+test("property: never contains forbidden characters", () => {
+  fc.assert(fc.property(fc.string(), (input) => {
+    const result = sanitize(input);
+    return !result.includes("<script>");
+  }));
+});
+```
 
 ## Testing Architecture
 

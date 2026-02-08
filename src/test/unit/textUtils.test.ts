@@ -1,4 +1,5 @@
 import * as assert from "node:assert";
+import * as fc from "fast-check";
 import {
 	firstLine,
 	resolveTargetFilePath,
@@ -45,6 +46,67 @@ suite("textUtils", () => {
 			const text = "日本語テスト\n英語テスト";
 			assert.strictEqual(firstLine(text), "日本語テスト");
 		});
+
+		suite("Property-based tests", () => {
+			test("property: result never contains newlines", () => {
+				fc.assert(
+					fc.property(fc.string(), (text) => {
+						const result = firstLine(text);
+						return !result.includes("\n");
+					}),
+				);
+			});
+
+			test("property: idempotence", () => {
+				fc.assert(
+					fc.property(fc.string(), (text) => {
+						const result = firstLine(text);
+						return firstLine(result) === result;
+					}),
+				);
+			});
+
+			test("property: prefix preservation", () => {
+				fc.assert(
+					fc.property(fc.string(), (text) => {
+						const result = firstLine(text);
+						return text.startsWith(result) || result === "";
+					}),
+				);
+			});
+
+			test("property: length constraint", () => {
+				fc.assert(
+					fc.property(fc.string(), (text) => {
+						const result = firstLine(text);
+						return result.length <= text.length;
+					}),
+				);
+			});
+
+			test("property: empty string handling", () => {
+				assert.strictEqual(firstLine(""), "");
+			});
+
+			test("property: concatenation property", () => {
+				fc.assert(
+					fc.property(fc.string(), fc.string(), (a, b) => {
+						const combined = `${a}\n${b}`;
+						return firstLine(combined) === firstLine(a);
+					}),
+				);
+			});
+
+			test("property: unicode safety", () => {
+				fc.assert(
+					fc.property(fc.string(), (text) => {
+						// Should not throw and should return valid result
+						const result = firstLine(text);
+						return typeof result === "string" && result.length >= 0;
+					}),
+				);
+			});
+		});
 	});
 
 	suite("resolveTargetFilePath", () => {
@@ -82,6 +144,38 @@ suite("textUtils", () => {
 				resolveTargetFilePath("/パス/ファイル.sql"),
 				"/パス/ファイル.sql",
 			);
+		});
+
+		suite("Property-based tests", () => {
+			test("property: identity for non-empty paths", () => {
+				fc.assert(
+					fc.property(fc.string({ minLength: 1 }), (path) => {
+						return resolveTargetFilePath(path) === path;
+					}),
+				);
+			});
+
+			test("property: fallback for empty string", () => {
+				assert.strictEqual(resolveTargetFilePath(""), "untitled.sql");
+			});
+
+			test("property: never returns empty string", () => {
+				fc.assert(
+					fc.property(fc.string(), (path) => {
+						const result = resolveTargetFilePath(path);
+						return result.length > 0;
+					}),
+				);
+			});
+
+			test("property: preserves length for non-empty", () => {
+				fc.assert(
+					fc.property(fc.string({ minLength: 1 }), (path) => {
+						const result = resolveTargetFilePath(path);
+						return result.length === path.length;
+					}),
+				);
+			});
 		});
 	});
 });
