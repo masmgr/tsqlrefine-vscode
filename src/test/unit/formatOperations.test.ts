@@ -456,34 +456,6 @@ suite("formatOperations", () => {
 	});
 
 	suite("Exit code handling", () => {
-		test("non-zero exit code with stderr shows stderr in warning", () => {
-			const result = {
-				stdout: "",
-				stderr: "Syntax error at line 1",
-				exitCode: 1,
-				timedOut: false,
-				cancelled: false,
-			};
-
-			const errorMessage =
-				result.stderr.trim() || `Exit code: ${result.exitCode}`;
-			assert.strictEqual(errorMessage, "Syntax error at line 1");
-		});
-
-		test("non-zero exit code without stderr shows exit code", () => {
-			const result = {
-				stdout: "",
-				stderr: "",
-				exitCode: 1,
-				timedOut: false,
-				cancelled: false,
-			};
-
-			const errorMessage =
-				result.stderr.trim() || `Exit code: ${result.exitCode}`;
-			assert.strictEqual(errorMessage, "Exit code: 1");
-		});
-
 		test("zero exit code is success", () => {
 			const result = {
 				stdout: "formatted output",
@@ -495,6 +467,89 @@ suite("formatOperations", () => {
 
 			const isSuccess = result.exitCode === 0;
 			assert.strictEqual(isSuccess, true);
+		});
+
+		test("non-zero exit code is failure", () => {
+			const result = {
+				stdout: "",
+				stderr: "",
+				exitCode: 1,
+				timedOut: false,
+				cancelled: false,
+			};
+
+			const isFailure = result.exitCode !== 0;
+			assert.strictEqual(isFailure, true);
+		});
+
+		test("exit code 2 maps to SQL parse error description", () => {
+			const CLI_EXIT_CODE_DESCRIPTIONS: Record<number, string> = {
+				2: "SQL parse error",
+				3: "configuration error",
+				4: "runtime exception",
+			};
+			const exitCode = 2;
+			const description =
+				CLI_EXIT_CODE_DESCRIPTIONS[exitCode] ?? `exit code ${exitCode}`;
+			assert.strictEqual(description, "SQL parse error");
+		});
+
+		test("exit code 3 maps to configuration error description", () => {
+			const CLI_EXIT_CODE_DESCRIPTIONS: Record<number, string> = {
+				2: "SQL parse error",
+				3: "configuration error",
+				4: "runtime exception",
+			};
+			const exitCode = 3;
+			const description =
+				CLI_EXIT_CODE_DESCRIPTIONS[exitCode] ?? `exit code ${exitCode}`;
+			assert.strictEqual(description, "configuration error");
+		});
+
+		test("exit code 4 maps to runtime exception description", () => {
+			const CLI_EXIT_CODE_DESCRIPTIONS: Record<number, string> = {
+				2: "SQL parse error",
+				3: "configuration error",
+				4: "runtime exception",
+			};
+			const exitCode = 4;
+			const description =
+				CLI_EXIT_CODE_DESCRIPTIONS[exitCode] ?? `exit code ${exitCode}`;
+			assert.strictEqual(description, "runtime exception");
+		});
+
+		test("unknown exit code falls back to generic description", () => {
+			const CLI_EXIT_CODE_DESCRIPTIONS: Record<number, string> = {
+				2: "SQL parse error",
+				3: "configuration error",
+				4: "runtime exception",
+			};
+			const exitCode = 99;
+			const description =
+				CLI_EXIT_CODE_DESCRIPTIONS[exitCode] ?? `exit code ${exitCode}`;
+			assert.strictEqual(description, "exit code 99");
+		});
+
+		test("stderr detail is included in error message", () => {
+			const stderrDetail = "Syntax error at line 1";
+			const description = "SQL parse error";
+			const detail = stderrDetail ? ` (${stderrDetail})` : "";
+			const formatted = `tsqlrefine: format failed - ${description}${detail}`;
+			assert.strictEqual(
+				formatted,
+				"tsqlrefine: format failed - SQL parse error (Syntax error at line 1)",
+			);
+		});
+
+		test("error message omits detail when stderr is empty", () => {
+			const stderrDetail = "";
+			const description = "SQL parse error";
+			const detail = stderrDetail ? ` (${stderrDetail})` : "";
+			const formatted = `tsqlrefine: format failed - ${description}${detail}`;
+			assert.strictEqual(
+				formatted,
+				"tsqlrefine: format failed - SQL parse error",
+			);
 		});
 	});
 });

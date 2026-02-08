@@ -1,5 +1,6 @@
 import type { Connection, TextEdit } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
+import { CLI_EXIT_CODE_DESCRIPTIONS } from "../config/constants";
 import type { DocumentContext } from "../shared/documentContext";
 import { createFullDocumentEdit } from "../shared/documentEdit";
 import { handleOperationError } from "../shared/errorHandling";
@@ -94,15 +95,17 @@ export async function executeFormat(
 	}
 
 	if (result.exitCode !== 0) {
-		const errorMessage =
-			result.stderr.trim() || `Exit code: ${result.exitCode}`;
-		// Don't await - warning message may block in some environments
-		void connection.window.showWarningMessage(
-			`tsqlrefine: format failed (${firstLine(errorMessage)})`,
-		);
-		notificationManager.warn(
-			`tsqlrefine: format failed with exit code ${result.exitCode}`,
-		);
+		const description =
+			result.exitCode !== null
+				? (CLI_EXIT_CODE_DESCRIPTIONS[result.exitCode] ??
+					`exit code ${result.exitCode}`)
+				: "unknown error";
+		const stderrDetail = result.stderr.trim();
+		const detail = stderrDetail ? ` (${firstLine(stderrDetail)})` : "";
+		const formatted = `tsqlrefine: format failed - ${description}${detail}`;
+
+		void connection.window.showWarningMessage(formatted);
+		notificationManager.warn(formatted);
 		return null;
 	}
 

@@ -448,23 +448,60 @@ suite("lintOperations", () => {
 		});
 	});
 
-	suite("EOL detection logic", () => {
-		test("detects CRLF line endings", () => {
-			const text = "SELECT 1;\r\nSELECT 2;";
-			const eol = text.includes("\r\n") ? "CRLF" : "LF";
-			assert.strictEqual(eol, "CRLF");
+	suite("Exit code handling", () => {
+		test("exit code 0 is success (no violations)", () => {
+			const result = {
+				exitCode: 0,
+				timedOut: false,
+				cancelled: false,
+			};
+
+			const isError = result.exitCode !== null && result.exitCode >= 2;
+			assert.strictEqual(isError, false);
 		});
 
-		test("detects LF line endings", () => {
-			const text = "SELECT 1;\nSELECT 2;";
-			const eol = text.includes("\r\n") ? "CRLF" : "LF";
-			assert.strictEqual(eol, "LF");
+		test("exit code 1 is success (violations found)", () => {
+			const result = {
+				exitCode: 1,
+				timedOut: false,
+				cancelled: false,
+			};
+
+			const isError = result.exitCode !== null && result.exitCode >= 2;
+			assert.strictEqual(isError, false);
 		});
 
-		test("defaults to LF for single line", () => {
-			const text = "SELECT 1;";
-			const eol = text.includes("\r\n") ? "CRLF" : "LF";
-			assert.strictEqual(eol, "LF");
+		test("exit code 2 is failure (parse error)", () => {
+			const result = {
+				exitCode: 2,
+				timedOut: false,
+				cancelled: false,
+			};
+
+			const isError = result.exitCode !== null && result.exitCode >= 2;
+			assert.strictEqual(isError, true);
+		});
+
+		test("exit code 3 is failure (configuration error)", () => {
+			const result = {
+				exitCode: 3,
+				timedOut: false,
+				cancelled: false,
+			};
+
+			const isError = result.exitCode !== null && result.exitCode >= 2;
+			assert.strictEqual(isError, true);
+		});
+
+		test("exit code 4 is failure (runtime exception)", () => {
+			const result = {
+				exitCode: 4,
+				timedOut: false,
+				cancelled: false,
+			};
+
+			const isError = result.exitCode !== null && result.exitCode >= 2;
+			assert.strictEqual(isError, true);
 		});
 	});
 

@@ -445,4 +445,53 @@ suite("fixOperations", () => {
 			assert.strictEqual(calls.warn.length, 0);
 		});
 	});
+
+	suite("Exit code handling", () => {
+		test("exit code 2 maps to SQL parse error description", () => {
+			const CLI_EXIT_CODE_DESCRIPTIONS: Record<number, string> = {
+				2: "SQL parse error",
+				3: "configuration error",
+				4: "runtime exception",
+			};
+			const exitCode = 2;
+			const description =
+				CLI_EXIT_CODE_DESCRIPTIONS[exitCode] ?? `exit code ${exitCode}`;
+			assert.strictEqual(description, "SQL parse error");
+		});
+
+		test("exit code 3 maps to configuration error description", () => {
+			const CLI_EXIT_CODE_DESCRIPTIONS: Record<number, string> = {
+				2: "SQL parse error",
+				3: "configuration error",
+				4: "runtime exception",
+			};
+			const exitCode = 3;
+			const description =
+				CLI_EXIT_CODE_DESCRIPTIONS[exitCode] ?? `exit code ${exitCode}`;
+			assert.strictEqual(description, "configuration error");
+		});
+
+		test("exit code 4 maps to runtime exception description", () => {
+			const CLI_EXIT_CODE_DESCRIPTIONS: Record<number, string> = {
+				2: "SQL parse error",
+				3: "configuration error",
+				4: "runtime exception",
+			};
+			const exitCode = 4;
+			const description =
+				CLI_EXIT_CODE_DESCRIPTIONS[exitCode] ?? `exit code ${exitCode}`;
+			assert.strictEqual(description, "runtime exception");
+		});
+
+		test("stderr detail is included in error message", () => {
+			const stderrDetail = "Config file not found";
+			const description = "configuration error";
+			const detail = stderrDetail ? ` (${stderrDetail})` : "";
+			const formatted = `tsqlrefine: fix failed - ${description}${detail}`;
+			assert.strictEqual(
+				formatted,
+				"tsqlrefine: fix failed - configuration error (Config file not found)",
+			);
+		});
+	});
 });

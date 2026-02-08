@@ -33,13 +33,15 @@ export async function verifyTsqlRefineInstallation(
  * Build command-line arguments for tsqlrefine lint operation.
  */
 function buildArgs(options: RunLinterOptions): string[] {
-	const args: string[] = ["lint"];
+	const args: string[] = ["lint", "-q"];
 	const configPath = normalizeConfigPath(options.settings.configPath);
 	if (configPath) {
 		args.push("-c", configPath);
 	}
 	// Add severity threshold
 	args.push("--severity", options.settings.minSeverity);
+	// Use JSON output for structured diagnostics
+	args.push("--output", "json");
 	// Use --stdin to read content from stdin
 	args.push("--stdin");
 	return args;

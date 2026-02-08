@@ -43,7 +43,6 @@ suite("E2E (local): real tsqlrefine binary", () => {
 				stdout: result.stdout,
 				uri,
 				cwd: tempDir,
-				lines: fileText.split(/\r?\n/),
 				targetPaths: [filePath, "<stdin>"], // tsqlrefine outputs <stdin> when reading from stdin
 			});
 

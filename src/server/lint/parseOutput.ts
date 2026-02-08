@@ -6,30 +6,55 @@ import {
 import { URI } from "vscode-uri";
 import { normalizeForCompare } from "../shared/normalize";
 
-// New format: <filepath>:<line>:<column>: <severity>: <message> (<rule-id>) or (<rule-id>,Fixable)
-// Windows paths start with drive letter (e.g., C:\path), so we handle that specially
-const pattern =
-	/^(?<file>(?:[A-Za-z]:)?[^:]+):(?<line>\d+):(?<col>\d+): (?<severity>Error|Warning|Information|Hint): (?<message>.+) \((?<rule>[^,]+)(?:,(?<fixable>\w+))?\)$/i;
+/** CLI JSON output: top-level structure */
+type CliJsonOutput = {
+	tool: string;
+	version: string;
+	command: string;
+	files: CliFileResult[];
+};
 
-type ParseOutputOptions = {
+/** CLI JSON output: per-file result */
+type CliFileResult = {
+	filePath: string;
+	diagnostics: CliDiagnostic[];
+};
+
+/** CLI JSON output: single diagnostic */
+type CliDiagnostic = {
+	range: {
+		start: { line: number; character: number };
+		end: { line: number; character: number };
+	};
+	severity?: number;
+	code?: string;
+	source?: string;
+	message: string;
+	tags?: number[];
+	data?: {
+		ruleId?: string;
+		category?: string;
+		fixable?: boolean;
+	};
+};
+
+export type ParseOutputOptions = {
 	stdout: string;
 	uri: string;
 	cwd: string | null;
-	lines: string[];
 	targetPaths?: string[];
 	logger?: {
 		log: (message: string) => void;
 	};
 };
 
-function mapSeverity(severity: string): DiagnosticSeverity {
-	const normalized = severity.toLowerCase();
-	switch (normalized) {
-		case "error":
+function mapSeverity(severity: number | undefined): DiagnosticSeverity {
+	switch (severity) {
+		case 1:
 			return DiagnosticSeverity.Error;
-		case "warning":
+		case 2:
 			return DiagnosticSeverity.Warning;
-		case "hint":
+		case 4:
 			return DiagnosticSeverity.Hint;
 		default:
 			return DiagnosticSeverity.Information;
@@ -40,7 +65,23 @@ function mapSeverity(severity: string): DiagnosticSeverity {
 const STDIN_MARKER = "<stdin>";
 
 export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
-	const diagnostics: Diagnostic[] = [];
+	if (!options.stdout.trim()) {
+		return [];
+	}
+
+	let parsed: CliJsonOutput;
+	try {
+		parsed = JSON.parse(options.stdout) as CliJsonOutput;
+	} catch {
+		options.logger?.log(`[parseOutput] Failed to parse JSON output`);
+		return [];
+	}
+
+	if (!Array.isArray(parsed.files)) {
+		options.logger?.log(`[parseOutput] No files array in JSON output`);
+		return [];
+	}
+
 	const targetPath = normalizeForCompare(URI.parse(options.uri).fsPath);
 	const extraTargets = options.targetPaths ?? [];
 	const targetPaths = new Set(
@@ -54,79 +95,50 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 		`[parseOutput] Target paths: ${JSON.stringify([...targetPaths])}`,
 	);
 	options.logger?.log(`[parseOutput] CWD: ${cwd}`);
-	options.logger?.log(`[parseOutput] stdout:\n${options.stdout}`);
 
-	for (const line of options.stdout.split(/\r?\n/)) {
-		if (!line.trim()) {
-			continue;
-		}
-		const match = pattern.exec(line);
-		const groups = match?.groups;
-		if (!groups) {
-			continue;
-		}
+	const diagnostics: Diagnostic[] = [];
 
-		// Type guard: verify all required properties exist and are strings
-		// biome-ignore lint/complexity/useLiteralKeys: TypeScript requires bracket notation for index signatures
-		const rawPath = groups["file"];
-		// biome-ignore lint/complexity/useLiteralKeys: TypeScript requires bracket notation for index signatures
-		const rawLine = groups["line"];
-		// biome-ignore lint/complexity/useLiteralKeys: TypeScript requires bracket notation for index signatures
-		const rawCol = groups["col"];
-		// biome-ignore lint/complexity/useLiteralKeys: TypeScript requires bracket notation for index signatures
-		const rawSeverity = groups["severity"];
-		// biome-ignore lint/complexity/useLiteralKeys: TypeScript requires bracket notation for index signatures
-		const rawMessage = groups["message"];
-		// biome-ignore lint/complexity/useLiteralKeys: TypeScript requires bracket notation for index signatures
-		const rawRule = groups["rule"];
-		// biome-ignore lint/complexity/useLiteralKeys: TypeScript requires bracket notation for index signatures
-		const rawFixable = groups["fixable"];
-
-		if (
-			typeof rawPath !== "string" ||
-			typeof rawLine !== "string" ||
-			typeof rawCol !== "string" ||
-			typeof rawSeverity !== "string" ||
-			typeof rawMessage !== "string" ||
-			typeof rawRule !== "string"
-		) {
-			continue;
-		}
-
-		if (!rawPath) {
-			continue;
-		}
-		// Map stdin marker to the target file path for comparison
+	for (const file of parsed.files) {
 		const resolvedPath =
-			rawPath === STDIN_MARKER
+			file.filePath === STDIN_MARKER
 				? targetPath
-				: normalizeForCompare(path.resolve(cwd, rawPath));
-		options.logger?.log(`[parseOutput] Line: ${line}`);
+				: normalizeForCompare(path.resolve(cwd, file.filePath));
+
 		options.logger?.log(
-			`[parseOutput] Raw path: ${rawPath} -> Resolved: ${resolvedPath}`,
+			`[parseOutput] File: ${file.filePath} -> Resolved: ${resolvedPath}`,
 		);
+
 		if (!targetPaths.has(resolvedPath)) {
 			options.logger?.log(`[parseOutput] Path not in target paths, skipping`);
 			continue;
 		}
 
-		const lineNumber = Math.max(0, Number(rawLine) - 1);
-		const lineText = options.lines[lineNumber] ?? "";
-		const lineLength = lineText.length;
+		if (!Array.isArray(file.diagnostics)) {
+			continue;
+		}
 
-		const start = { line: lineNumber, character: 0 };
-		const end = { line: lineNumber, character: lineLength };
-
-		const isFixable = rawFixable?.toLowerCase() === "fixable";
-
-		diagnostics.push({
-			message: rawMessage,
-			severity: mapSeverity(rawSeverity),
-			range: { start, end },
-			code: rawRule,
-			source: "tsqlrefine",
-			data: { fixable: isFixable },
-		});
+		for (const diag of file.diagnostics) {
+			const diagnostic: Diagnostic = {
+				message: diag.message,
+				severity: mapSeverity(diag.severity),
+				range: {
+					start: {
+						line: diag.range.start.line,
+						character: diag.range.start.character,
+					},
+					end: {
+						line: diag.range.end.line,
+						character: diag.range.end.character,
+					},
+				},
+				source: "tsqlrefine",
+				data: { fixable: diag.data?.fixable ?? false },
+			};
+			if (diag.code != null) {
+				diagnostic.code = diag.code;
+			}
+			diagnostics.push(diagnostic);
+		}
 	}
 
 	return diagnostics;

@@ -2,13 +2,13 @@ import * as path from "node:path";
 import type { Connection, Diagnostic } from "vscode-languageserver/node";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
+import { CLI_EXIT_CODE_DESCRIPTIONS } from "../config/constants";
 import type { DocumentContext } from "../shared/documentContext";
 import { logOperationContext } from "../shared/logging";
 import { firstLine, resolveTargetFilePath } from "../shared/textUtils";
 import type { ProcessRunResult } from "../shared/types";
 import type { DocumentStateManager } from "../state/documentStateManager";
 import type { NotificationManager } from "../state/notificationManager";
-import { type EndOfLine, normalizeLineEndings } from "./decodeOutput";
 import { parseOutput } from "./parseOutput";
 import { runLinter } from "./runLinter";
 import type { LintReason } from "./scheduler";
@@ -119,9 +119,21 @@ export async function executeLint(
 		notificationManager.notifyStderr(result.stderr);
 	}
 
-	// Detect EOL from document and normalize stdout line endings
-	const eol: EndOfLine = documentText.includes("\r\n") ? "CRLF" : "LF";
-	const normalizedStdout = normalizeLineEndings(result.stdout, eol);
+	// Exit code 0 = no violations, 1 = violations found (both are success)
+	// Exit code 2 = parse error, 3 = config error, 4 = runtime exception
+	if (result.exitCode !== null && result.exitCode >= 2) {
+		const description =
+			CLI_EXIT_CODE_DESCRIPTIONS[result.exitCode] ??
+			`exit code ${result.exitCode}`;
+		const stderrDetail = result.stderr.trim();
+		const detail = stderrDetail ? ` (${firstLine(stderrDetail)})` : "";
+		const formatted = `tsqlrefine: lint failed - ${description}${detail}`;
+
+		void connection.window.showWarningMessage(formatted);
+		notificationManager.warn(formatted);
+		connection.sendDiagnostics({ uri, diagnostics: [] });
+		return { diagnosticsCount: -1, success: false };
+	}
 
 	const targetPaths = [
 		targetFilePath,
@@ -130,10 +142,9 @@ export async function executeLint(
 	];
 
 	const diagnostics = parseOutput({
-		stdout: normalizedStdout,
+		stdout: result.stdout,
 		uri,
 		cwd,
-		lines: documentText.split(/\r?\n/),
 		targetPaths,
 		logger: {
 			log: (message: string) => notificationManager.log(message),

@@ -16,7 +16,7 @@ export type RunFormatterOptions = {
  * Build command-line arguments for tsqlrefine format operation.
  */
 function buildArgs(options: RunFormatterOptions): string[] {
-	const args: string[] = ["format"];
+	const args: string[] = ["format", "-q"];
 	const configPath = normalizeConfigPath(options.settings.configPath);
 	if (configPath) {
 		args.push("-c", configPath);

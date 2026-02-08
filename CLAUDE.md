@@ -93,10 +93,10 @@ Shared infrastructure for executing CLI commands (lint, format, fix):
 
 #### 3. Lint Operations ([src/server/lint/](src/server/lint/))
 
-- **lintOperations.ts**: Orchestrates lint execution with file size limiting
-- **runLinter.ts**: Executes `tsqlrefine lint --stdin` command
-- **parseOutput.ts**: Parses CLI output into VS Code diagnostics
-- **decodeOutput.ts**: Handles output encoding detection and line ending normalization
+- **lintOperations.ts**: Orchestrates lint execution with file size limiting and exit code handling
+- **runLinter.ts**: Executes `tsqlrefine lint -q --output json --stdin` command
+- **parseOutput.ts**: Parses CLI JSON output into VS Code diagnostics (0-based character-level ranges)
+- **decodeOutput.ts**: Handles output encoding detection
 
 ##### File Size Limiting
 
@@ -107,27 +107,28 @@ The extension can skip automatic linting for large files:
 
 #### 4. Format Operations ([src/server/format/](src/server/format/))
 
-- **formatOperations.ts**: Orchestrates format execution
-- **runFormatter.ts**: Executes `tsqlrefine format --stdin` command
+- **formatOperations.ts**: Orchestrates format execution with exit code handling
+- **runFormatter.ts**: Executes `tsqlrefine format -q --stdin` command
 - Returns `TextEdit[]` for full document replacement
 - Supports separate timeout via `formatTimeoutMs` setting
 - Uses shared utilities: `createFullDocumentEdit()`, `handleOperationError()`, `logOperationContext()`
 
 #### 5. Fix Operations ([src/server/fix/](src/server/fix/))
 
-- **fixOperations.ts**: Orchestrates fix execution
-- **runFixer.ts**: Executes `tsqlrefine fix --stdin` command with `--severity` flag
+- **fixOperations.ts**: Orchestrates fix execution with exit code handling
+- **runFixer.ts**: Executes `tsqlrefine fix -q --stdin` command with `--severity` flag
 - Returns `TextEdit[]` for document modification
 - Integrated with Code Action provider for quick fixes
 - Uses shared utilities: `createFullDocumentEdit()`, `handleOperationError()`, `logOperationContext()`
 
 #### 6. Output Parser ([src/server/lint/parseOutput.ts](src/server/lint/parseOutput.ts))
 
-Parses tsqlrefine output into VS Code diagnostics:
-- **Pattern**: `<file>(<line>,<col>): <severity> <rule> : <message>`
-- **Range mode**: Supports "character" (default) or "line" highlighting
-- **Path normalization**: Handles Windows case-insensitivity and stdin path mapping
-- **Line ending normalization**: Matches document's EOL (CRLF/LF)
+Parses tsqlrefine JSON output (`--output json`) into VS Code diagnostics:
+- **JSON format**: Parses `LintResult` with `files[].diagnostics[]` structure
+- **0-based positions**: Line and character positions from JSON are used directly (no conversion)
+- **Character-level ranges**: Uses exact `range.start`/`range.end` from JSON (not full-line highlighting)
+- **Path normalization**: Handles Windows case-insensitivity and `<stdin>` path mapping
+- **Fixable detection**: Reads `data.fixable` boolean from each diagnostic
 
 ### State Management
 
@@ -179,6 +180,7 @@ Centralized in [src/server/config/constants.ts](src/server/config/constants.ts):
 - `MAX_CONCURRENT_RUNS = 4` - Maximum concurrent lint operations
 - `MISSING_TSQLREFINE_NOTICE_COOLDOWN_MS = 300000` - 5-minute notification cooldown
 - `DEFAULT_COMMAND_NAME = "tsqlrefine"` - Default executable name
+- `CLI_EXIT_CODE_DESCRIPTIONS` - Human-readable descriptions for CLI exit codes (2=parse error, 3=config error, 4=runtime exception)
 
 ### Data Flow
 
@@ -186,21 +188,24 @@ Centralized in [src/server/config/constants.ts](src/server/config/constants.ts):
 1. User edits SQL file or triggers command
 2. Client sends request to server via LSP
 3. Server's `LintScheduler` queues the lint request
-4. When a slot is available, `runLinter()` spawns CLI with `--stdin`
-5. `parseOutput()` converts stdout to VS Code diagnostics
-6. Server sends diagnostics back to client
-7. Client displays squiggles and problems panel
+4. When a slot is available, `runLinter()` spawns CLI with `lint -q --output json --stdin`
+5. Exit code is checked: 0/1 = success (parse stdout), 2/3/4 = error (show warning)
+6. `parseOutput()` parses JSON stdout into VS Code diagnostics with character-level ranges
+7. Server sends diagnostics back to client
+8. Client displays squiggles and problems panel
 
 #### Formatting
 1. User triggers format (command or editor action)
 2. Server receives `onDocumentFormatting` request
-3. `runFormatter()` spawns CLI with `format --stdin`
-4. Returns `TextEdit[]` for full document replacement
+3. `runFormatter()` spawns CLI with `format -q --stdin`
+4. Exit code is checked: 0 = success, non-zero = error with specific description
+5. Returns `TextEdit[]` for full document replacement
 
 #### Fixing
 1. User triggers fix command or selects code action
-2. Server executes `runFixer()` with `fix --stdin --severity`
-3. Returns `TextEdit[]` applied via workspace edit
+2. Server executes `runFixer()` with `fix -q --stdin --severity`
+3. Exit code is checked: 0 = success, non-zero = error with specific description
+4. Returns `TextEdit[]` applied via workspace edit
 
 ### Code Action Provider
 
@@ -414,15 +419,28 @@ Pull requests created by Dependabot are labeled with `dependencies` and `automat
 
 ### Stdin-based CLI Invocation
 - All operations use `--stdin` flag instead of temporary files
+- All operations use `-q` (quiet) flag to suppress informational stderr output
+- Lint uses `--output json` for structured JSON diagnostics; format/fix use text output (stdout = SQL text)
 - Document content is piped to the CLI process as UTF-8
 - Output paths containing `<stdin>` are mapped back to original URIs
 
+### CLI Exit Codes
+- `0`: Success (no violations, or format/fix succeeded)
+- `1`: Rule violations found (lint only; treated as success, diagnostics parsed from stdout)
+- `2`: Parse error (SQL could not be parsed)
+- `3`: Configuration error (config file load failure, invalid settings)
+- `4`: Runtime exception (internal error)
+
+For lint: exit codes 0 and 1 are success (stdout is parsed). Exit codes >= 2 are errors.
+For format/fix: only exit code 0 is success (stdout contains formatted/fixed SQL).
+
 ### Error Handling
-- TSQLRefine errors go to stderr and are shown as warnings
+- With `-q`, stderr is normally empty; only error messages (config errors, "No input") are emitted
 - CLI spawn errors reject the promise and clear diagnostics
 - Missing installation errors trigger notification with install guide link
 - Notification cooldown prevents spamming (5-minute cooldown)
 - Shared `handleOperationError()` provides consistent error handling for format/fix
+- `CLI_EXIT_CODE_DESCRIPTIONS` provides specific error messages per exit code
 
 ### TypeScript Configuration
 This project uses strict TypeScript settings including:
