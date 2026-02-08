@@ -1,10 +1,10 @@
 # TSQLRefine
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/masmgr/tsqllint-vscode-lite)
+[![Version](https://img.shields.io/badge/version-0.0.1-blue.svg)](https://github.com/masmgr/tsqlrefine-vscode)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.108.1+-007ACC.svg)](https://code.visualstudio.com/)
 
-A lightweight Visual Studio Code extension that integrates [TSQLRefine](https://github.com/tsqlrefine/tsqlrefine) into your editor, providing real-time linting, auto-fixing, and formatting for T-SQL files.
+A lightweight Visual Studio Code extension that integrates [TSQLRefine](https://github.com/masmgr/tsqlrefine) into your editor, providing real-time linting, auto-fixing, and formatting for T-SQL files.
 
 ## Requirements
 
@@ -149,7 +149,7 @@ choco install tsqlrefine
 
 ### Other Options
 
-Download from the [TSQLRefine releases page](https://github.com/tsqlrefine/tsqlrefine/releases) or follow the [TSQLRefine installation guide](https://github.com/tsqlrefine/tsqlrefine#installation).
+Download from the [TSQLRefine releases page](https://github.com/masmgr/tsqlrefine/releases) or follow the [TSQLRefine installation guide](https://github.com/masmgr/tsqlrefine#installation).
 
 ## Supported Languages
 
@@ -184,7 +184,7 @@ This extension serves as an alternative to [tsqlrefine-vscode-extension](https:/
 
 Issues and pull requests are welcome!
 
-- Report issues at the [GitHub repository](https://github.com/masmgr/tsqllint-vscode-lite/issues)
+- Report issues at the [GitHub repository](https://github.com/masmgr/tsqlrefine-vscode/issues)
 - See [DEVELOPMENT.md](DEVELOPMENT.md) for development guidelines
 - Run `npm run verify` to execute the full check suite
 

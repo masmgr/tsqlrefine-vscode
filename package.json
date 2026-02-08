@@ -1,18 +1,18 @@
 {
 	"name": "tsqlrefine",
 	"displayName": "TSQLRefine",
-	"description": "Lightweight T-SQL linter integration for VS Code using TSQLRefine",
-	"version": "1.0.1",
+	"description": "T-SQL linter integration for VS Code using TSQLRefine",
+	"version": "0.0.1",
 	"publisher": "masmgr",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/masmgr/tsqllint-vscode-lite.git"
+		"url": "https://github.com/masmgr/tsqlrefine-vscode.git"
 	},
 	"bugs": {
-		"url": "https://github.com/masmgr/tsqllint-vscode-lite/issues"
+		"url": "https://github.com/masmgr/tsqlrefine-vscode/issues"
 	},
-	"homepage": "https://github.com/masmgr/tsqllint-vscode-lite#readme",
+	"homepage": "https://github.com/masmgr/tsqlrefine-vscode#readme",
 	"icon": "icon.png",
 	"engines": {
 		"node": ">=24.0.0",

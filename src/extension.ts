@@ -13,7 +13,7 @@ export type TsqlRefineLiteApi = {
 };
 
 const installGuideUrl =
-	"https://github.com/masmgr/tsqllint-vscode-lite#installing-tsqlrefine";
+	"https://github.com/masmgr/tsqlrefine-vscode#installing-tsqlrefine";
 
 export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 	client = createLanguageClient(context);
