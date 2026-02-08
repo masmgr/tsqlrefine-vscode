@@ -28,6 +28,13 @@ For other installation options, see [Installing TSQLRefine](#installing-tsqlrefi
 
 For details, see [Features](docs/features.md).
 
+## Typical Use Cases
+
+- Formatting and linting SQL files before committing
+- Catching errors in stored procedures without running them
+- Enforcing team-wide SQL style consistency
+- Integrating static analysis into CI pipelines
+
 ## Extension Settings
 
 All settings are under the `tsqlrefine` namespace: executable path, lint behavior, timeouts, and feature toggles.
