@@ -24,7 +24,7 @@ jobs:
 
       - run: npm run lint
 
-      - run: xvfb-run -a npm test
+      - run: npm run test:unit
 
       - run: npm run build -- --production
 
