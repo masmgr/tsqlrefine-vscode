@@ -44,7 +44,7 @@ jobs:
       - run: npm run build
 
       # Install .NET SDK and tsqlrefine CLI for E2E tests
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
       - name: Install tsqlrefine CLI
