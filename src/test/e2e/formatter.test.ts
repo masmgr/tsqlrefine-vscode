@@ -73,6 +73,43 @@ suite("Formatter Test Suite", () => {
 		);
 	});
 
+	test("formats Japanese/UTF-8 content without corruption", async function () {
+		this.timeout(TEST_TIMEOUTS.MOCHA_TEST);
+
+		const japaneseSql =
+			"-- 日本語コメント: ユーザー一覧\nselect id,name from users;";
+
+		await runE2ETest(
+			{
+				config: { runOnSave: false, runOnType: false, runOnOpen: false },
+				documentContent: japaneseSql,
+			},
+			async (context, _harness) => {
+				const editor = await vscode.window.showTextDocument(context.document, {
+					preview: false,
+				});
+
+				await vscode.commands.executeCommand("editor.action.formatDocument");
+				await new Promise((resolve) => setTimeout(resolve, 1000));
+
+				const formattedContent = editor.document.getText();
+
+				assert.ok(
+					formattedContent.includes("日本語コメント"),
+					`Formatted content should preserve Japanese text, got: ${formattedContent}`,
+				);
+				assert.ok(
+					formattedContent.includes("ユーザー一覧"),
+					`Formatted content should preserve Japanese text, got: ${formattedContent}`,
+				);
+				assert.ok(
+					!formattedContent.includes("�"),
+					`Formatted content should not contain replacement characters: ${formattedContent}`,
+				);
+			},
+		);
+	});
+
 	// Note: tsqlrefine.format command delegates to editor.action.formatDocument
 	// which is already tested above. The command exists as a convenience for
 	// users who want to explicitly invoke TSQLRefine formatting.

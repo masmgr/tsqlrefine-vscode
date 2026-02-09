@@ -107,6 +107,9 @@ export const cliDiagnostic = fc.record({
 			ruleId: fc.option(fc.string()),
 			category: fc.option(fc.string()),
 			fixable: fc.option(fc.boolean()),
+			codeDescriptionHref: fc.option(
+				fc.webUrl({ withFragments: false, withQueryParameters: false }),
+			),
 		}),
 	),
 });

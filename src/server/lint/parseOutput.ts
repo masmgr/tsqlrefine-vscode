@@ -4,6 +4,7 @@ import {
 	DiagnosticSeverity,
 } from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
+import { RULE_DOCS_BASE_URL } from "../config/constants";
 import { normalizeForCompare } from "../shared/normalize";
 
 /** CLI JSON output: top-level structure */
@@ -35,6 +36,7 @@ type CliDiagnostic = {
 		ruleId?: string;
 		category?: string;
 		fixable?: boolean;
+		codeDescriptionHref?: string;
 	};
 };
 
@@ -136,6 +138,11 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 			};
 			if (diag.code != null) {
 				diagnostic.code = diag.code;
+				diagnostic.codeDescription = {
+					href:
+						diag.data?.codeDescriptionHref ??
+						`${RULE_DOCS_BASE_URL}/${encodeURIComponent(diag.code)}.md`,
+				};
 			}
 			diagnostics.push(diagnostic);
 		}

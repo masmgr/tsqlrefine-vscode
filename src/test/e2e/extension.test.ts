@@ -15,8 +15,8 @@ suite("Extension Test Suite", () => {
 		await runE2ETest(
 			{
 				config: { runOnSave: true },
-				// Use invalid SQL to trigger diagnostics
-				documentContent: "select from",
+				// Use lint-violating SQL (exit code 1) to trigger diagnostics
+				documentContent: "select id,name from users;",
 			},
 			async (context, harness) => {
 				const editor = await vscode.window.showTextDocument(context.document, {
@@ -29,7 +29,8 @@ suite("Extension Test Suite", () => {
 
 				const diagnostics = await harness.waitForDiagnostics(
 					context.document.uri,
-					(entries) => entries.length >= 1,
+					(entries) =>
+						entries.some((diagnostic) => diagnostic.source === "tsqlrefine"),
 				);
 				const match = diagnostics.find((diag) => diag.source === "tsqlrefine");
 				assert.ok(match, "Expected tsqlrefine diagnostic");
@@ -43,7 +44,7 @@ suite("Extension Test Suite", () => {
 		await runE2ETest(
 			{
 				config: { runOnSave: false, runOnType: false },
-				documentContent: "select from",
+				documentContent: "select id,name from users;",
 			},
 			async (context, harness) => {
 				await vscode.window.showTextDocument(context.document, {
@@ -54,7 +55,8 @@ suite("Extension Test Suite", () => {
 
 				const diagnostics = await harness.waitForDiagnostics(
 					context.document.uri,
-					(entries) => entries.length >= 1,
+					(entries) =>
+						entries.some((diagnostic) => diagnostic.source === "tsqlrefine"),
 				);
 				const match = diagnostics.find((diag) => diag.source === "tsqlrefine");
 				assert.ok(match, "Expected tsqlrefine diagnostic from manual run");
@@ -81,12 +83,16 @@ suite("Extension Test Suite", () => {
 
 				// Insert invalid SQL to trigger diagnostics
 				await editor.edit((builder) => {
-					builder.insert(new vscode.Position(0, 0), "select from");
+					builder.insert(
+						new vscode.Position(0, 0),
+						"select id,name from users;",
+					);
 				});
 
 				const diagnostics = await harness.waitForDiagnostics(
 					context.document.uri,
-					(entries) => entries.length >= 1,
+					(entries) =>
+						entries.some((diagnostic) => diagnostic.source === "tsqlrefine"),
 				);
 				const match = diagnostics.find((diag) => diag.source === "tsqlrefine");
 				assert.ok(match, "Expected tsqlrefine diagnostic from runOnType");
@@ -104,7 +110,7 @@ suite("Extension Test Suite", () => {
 					runOnSave: false,
 					runOnType: false,
 				},
-				documentContent: "select from",
+				documentContent: "select id,name from users;",
 			},
 			async (context, harness) => {
 				// Create a new SQL document after config is applied
@@ -115,14 +121,15 @@ suite("Extension Test Suite", () => {
 				);
 				await vscode.workspace.fs.writeFile(
 					newUri,
-					new TextEncoder().encode("select from"),
+					new TextEncoder().encode("select id,name from users;"),
 				);
 				const newDocument = await vscode.workspace.openTextDocument(newUri);
 				await vscode.languages.setTextDocumentLanguage(newDocument, "sql");
 
 				const diagnostics = await harness.waitForDiagnostics(
 					newDocument.uri,
-					(entries) => entries.length >= 1,
+					(entries) =>
+						entries.some((diagnostic) => diagnostic.source === "tsqlrefine"),
 				);
 				const match = diagnostics.find((diag) => diag.source === "tsqlrefine");
 				assert.ok(match, "Expected tsqlrefine diagnostic from runOnOpen");
@@ -145,7 +152,7 @@ suite("Extension Test Suite", () => {
 					runOnSave: false,
 					runOnType: false,
 				},
-				documentContent: "select from",
+				documentContent: "select id,name from users;",
 			},
 			async (context, _harness) => {
 				// Wait a short time to ensure no linting happens

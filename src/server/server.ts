@@ -356,8 +356,22 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 		isSavedFn: (doc) => isSaved(doc),
 	});
 
-	const result = await executeLint(context, document, reason, lintDeps);
-	return result.diagnosticsCount;
+	connection.sendNotification("tsqlrefine/operationState", {
+		state: "started",
+	});
+	const startMs = Date.now();
+	try {
+		const result = await executeLint(context, document, reason, lintDeps);
+		const elapsedMs = Date.now() - startMs;
+		notificationManager.log(
+			`[executeLint] Completed in ${elapsedMs}ms (${result.diagnosticsCount} diagnostics)`,
+		);
+		return result.diagnosticsCount;
+	} finally {
+		connection.sendNotification("tsqlrefine/operationState", {
+			state: "completed",
+		});
+	}
 }
 
 // ============================================================================
@@ -384,7 +398,20 @@ async function formatDocument(uri: string): Promise<TextEdit[] | null> {
 		isSavedFn: (doc) => isSaved(doc),
 	});
 
-	return await executeFormat(context, document, formatDeps);
+	connection.sendNotification("tsqlrefine/operationState", {
+		state: "started",
+	});
+	const startMs = Date.now();
+	try {
+		const result = await executeFormat(context, document, formatDeps);
+		const elapsedMs = Date.now() - startMs;
+		notificationManager.log(`[executeFormat] Completed in ${elapsedMs}ms`);
+		return result;
+	} finally {
+		connection.sendNotification("tsqlrefine/operationState", {
+			state: "completed",
+		});
+	}
 }
 
 // ============================================================================
@@ -422,5 +449,18 @@ async function fixDocument(uri: string): Promise<TextEdit[] | null> {
 		isSavedFn: (doc) => isSaved(doc),
 	});
 
-	return await executeFix(context, document, fixDeps);
+	connection.sendNotification("tsqlrefine/operationState", {
+		state: "started",
+	});
+	const startMs = Date.now();
+	try {
+		const result = await executeFix(context, document, fixDeps);
+		const elapsedMs = Date.now() - startMs;
+		notificationManager.log(`[executeFix] Completed in ${elapsedMs}ms`);
+		return result;
+	} finally {
+		connection.sendNotification("tsqlrefine/operationState", {
+			state: "completed",
+		});
+	}
 }

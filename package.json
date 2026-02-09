@@ -2,7 +2,7 @@
 	"name": "tsqlrefine",
 	"displayName": "TSQLRefine",
 	"description": "T-SQL linter integration for VS Code using TSQLRefine",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"publisher": "masmgr",
 	"license": "MIT",
 	"repository": {
@@ -164,7 +164,7 @@
 	"scripts": {
 		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"compile": "tsc -p tsconfig.json",
-		"compile:test": "tsc -p tsconfig.test.json",
+		"compile:test": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true })\" && tsc -p tsconfig.test.json",
 		"build": "node esbuild.mjs",
 		"watch": "node esbuild.mjs --watch",
 		"watch:tsc": "tsc -watch -p tsconfig.json",

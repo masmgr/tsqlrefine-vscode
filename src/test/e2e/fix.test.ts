@@ -129,8 +129,8 @@ suite("Code Action Test Suite", () => {
 	test("code action appears when tsqlrefine diagnostics exist", async function () {
 		this.timeout(TEST_TIMEOUTS.MOCHA_TEST);
 
-		// Use SQL that will trigger tsqlrefine diagnostics
-		const invalidSql = "select from";
+		// Use SQL that triggers lint diagnostics without causing parse failure
+		const invalidSql = "select id,name from users;";
 
 		await runE2ETest(
 			{
@@ -149,45 +149,25 @@ suite("Code Action Test Suite", () => {
 				);
 
 				// Verify tsqlrefine diagnostics exist
-				const hasTsqlrefineDiag = diagnostics.some(
-					(d) => d.source === "tsqlrefine",
+				assert.ok(
+					diagnostics.some((d) => d.source === "tsqlrefine"),
+					"Expected tsqlrefine diagnostics",
 				);
 
-				if (hasTsqlrefineDiag) {
-					// Request code actions
-					const codeActions = await vscode.commands.executeCommand<
-						vscode.CodeAction[]
-					>(
-						"vscode.executeCodeActionProvider",
-						context.document.uri,
-						new vscode.Range(0, 0, 0, 11),
-					);
+				// Request code actions
+				const codeActions = await vscode.commands.executeCommand<
+					vscode.CodeAction[]
+				>(
+					"vscode.executeCodeActionProvider",
+					context.document.uri,
+					new vscode.Range(0, 0, 0, 11),
+				);
 
-					// If fix is available, check for the code action
-					// Note: Code action may not appear if tsqlrefine fix produces no changes
-					if (codeActions && codeActions.length > 0) {
-						// Check if a fix action exists (may or may not be present depending on tsqlrefine's fix capabilities)
-						const hasFixAction = codeActions.some(
-							(action) =>
-								action.title === "Fix all tsqlrefine issues" ||
-								action.kind?.value === vscode.CodeActionKind.QuickFix.value,
-						);
-						// The fix action may or may not be present - this is expected behavior
-						assert.ok(
-							typeof hasFixAction === "boolean",
-							"Code action provider returned actions (fix may or may not be available)",
-						);
-					} else {
-						// No code actions is also valid if fix produces no changes
-						assert.ok(
-							true,
-							"No code actions available (fix may not produce changes)",
-						);
-					}
-				} else {
-					// If no diagnostics, code action won't appear
-					assert.ok(true, "No tsqlrefine diagnostics to fix");
-				}
+				// Fix action may be absent if tsqlrefine produces no fix edits for this input.
+				assert.ok(
+					codeActions !== undefined,
+					"Code action provider should return a result",
+				);
 			},
 		);
 	});

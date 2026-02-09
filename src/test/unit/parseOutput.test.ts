@@ -3,6 +3,7 @@ import * as path from "node:path";
 import * as fc from "fast-check";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
+import { RULE_DOCS_BASE_URL } from "../../server/config/constants";
 import { parseOutput } from "../../server/lint/parseOutput";
 import { cliJsonOutput } from "../helpers/arbitraries";
 
@@ -19,7 +20,12 @@ function createJsonOutput(
 		severity?: number;
 		code?: string;
 		message: string;
-		data?: { ruleId?: string; category?: string; fixable?: boolean };
+		data?: {
+			ruleId?: string;
+			category?: string;
+			fixable?: boolean;
+			codeDescriptionHref?: string;
+		};
 	}>,
 ): string {
 	return JSON.stringify({
@@ -310,6 +316,116 @@ suite("parseOutput", () => {
 		const diag = diagnostics[0];
 		assert.ok(diag);
 		assert.deepStrictEqual(diag.data, { fixable: false });
+	});
+
+	suite("codeDescription.href", () => {
+		test("attaches codeDescription.href when code is present", () => {
+			const cwd = path.resolve("workspace");
+			const filePath = path.join(cwd, "query.sql");
+			const uri = URI.file(filePath).toString();
+			const stdout = createJsonOutput("query.sql", [
+				{
+					range: {
+						start: { line: 0, character: 0 },
+						end: { line: 0, character: 5 },
+					},
+					severity: 2,
+					code: "keyword-casing",
+					message: "Use uppercase keywords",
+				},
+			]);
+
+			const diagnostics = parseOutput({ stdout, uri, cwd });
+
+			assert.strictEqual(diagnostics.length, 1);
+			const diag = diagnostics[0];
+			assert.ok(diag);
+			assert.ok(diag.codeDescription);
+			assert.strictEqual(
+				diag.codeDescription.href,
+				`${RULE_DOCS_BASE_URL}/keyword-casing.md`,
+			);
+		});
+
+		test("uses CLI-provided codeDescriptionHref when available", () => {
+			const cwd = path.resolve("workspace");
+			const filePath = path.join(cwd, "query.sql");
+			const uri = URI.file(filePath).toString();
+			const stdout = createJsonOutput("query.sql", [
+				{
+					range: {
+						start: { line: 0, character: 0 },
+						end: { line: 0, character: 5 },
+					},
+					severity: 2,
+					code: "keyword-casing",
+					message: "Use uppercase keywords",
+					data: {
+						codeDescriptionHref: "https://custom.url/my-rule",
+					},
+				},
+			]);
+
+			const diagnostics = parseOutput({ stdout, uri, cwd });
+
+			assert.strictEqual(diagnostics.length, 1);
+			const diag = diagnostics[0];
+			assert.ok(diag);
+			assert.strictEqual(
+				diag.codeDescription?.href,
+				"https://custom.url/my-rule",
+			);
+		});
+
+		test("no codeDescription when code is absent", () => {
+			const cwd = path.resolve("workspace");
+			const filePath = path.join(cwd, "query.sql");
+			const uri = URI.file(filePath).toString();
+			const stdout = createJsonOutput("query.sql", [
+				{
+					range: {
+						start: { line: 0, character: 0 },
+						end: { line: 0, character: 5 },
+					},
+					message: "No code diagnostic",
+				},
+			]);
+
+			const diagnostics = parseOutput({ stdout, uri, cwd });
+
+			assert.strictEqual(diagnostics.length, 1);
+			const diag = diagnostics[0];
+			assert.ok(diag);
+			assert.strictEqual(diag.codeDescription, undefined);
+		});
+
+		test("URL-encodes rule codes with slashes", () => {
+			const cwd = path.resolve("workspace");
+			const filePath = path.join(cwd, "query.sql");
+			const uri = URI.file(filePath).toString();
+			const stdout = createJsonOutput("query.sql", [
+				{
+					range: {
+						start: { line: 0, character: 0 },
+						end: { line: 0, character: 5 },
+					},
+					severity: 2,
+					code: "semantic/schema-qualify",
+					message: "Schema qualify tables",
+				},
+			]);
+
+			const diagnostics = parseOutput({ stdout, uri, cwd });
+
+			assert.strictEqual(diagnostics.length, 1);
+			const diag = diagnostics[0];
+			assert.ok(diag);
+			assert.ok(diag.codeDescription);
+			assert.strictEqual(
+				diag.codeDescription.href,
+				`${RULE_DOCS_BASE_URL}/${encodeURIComponent("semantic/schema-qualify")}.md`,
+			);
+		});
 	});
 
 	suite("Error scenarios", () => {
@@ -619,6 +735,34 @@ suite("parseOutput", () => {
 							d.range.end.line === inputDiag.range.end.line &&
 							d.range.end.character === inputDiag.range.end.character
 						);
+					});
+				}),
+				{ numRuns: 200 },
+			);
+		});
+
+		test("property: diagnostics with code always have codeDescription.href", () => {
+			fc.assert(
+				fc.property(cliJsonOutput, (jsonOutput) => {
+					const stdout = JSON.stringify(jsonOutput);
+					const cwd = path.resolve("workspace");
+					const firstFilePath = jsonOutput.files[0]?.filePath ?? "test.sql";
+					const resolvedPath =
+						firstFilePath === "<stdin>"
+							? path.join(cwd, "test.sql")
+							: path.resolve(cwd, firstFilePath);
+					const uri = URI.file(resolvedPath).toString();
+
+					const diagnostics = parseOutput({ stdout, uri, cwd });
+
+					return diagnostics.every((d) => {
+						if (d.code != null) {
+							return (
+								typeof d.codeDescription?.href === "string" &&
+								d.codeDescription.href.length > 0
+							);
+						}
+						return d.codeDescription === undefined;
 					});
 				}),
 				{ numRuns: 200 },

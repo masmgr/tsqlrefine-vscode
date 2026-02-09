@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 import { createLanguageClient } from "./client/client";
 import { handleDidDeleteFiles, handleDidRenameFiles } from "./client/handlers";
+import { StatusBarManager } from "./client/statusBar";
 
 let client: LanguageClient | undefined;
 export let clientReady: Promise<void> = Promise.resolve();
@@ -29,6 +30,32 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 	client.onNotification("tsqlrefine/openInstallGuide", () => {
 		void vscode.commands.executeCommand("tsqlrefine.openInstallGuide");
 	});
+
+	// Status bar integration
+	const statusBarManager = new StatusBarManager();
+	statusBarManager.initialize(context);
+
+	const config = vscode.workspace.getConfiguration("tsqlrefine");
+	statusBarManager.setDisabled(!config.get<boolean>("enableLint", true));
+
+	client.onNotification(
+		"tsqlrefine/operationState",
+		(params: { state: "started" | "completed" }) => {
+			statusBarManager.setOperationState(params.state);
+		},
+	);
+
+	context.subscriptions.push(
+		vscode.languages.onDidChangeDiagnostics(() => {
+			statusBarManager.updateDiagnostics();
+		}),
+		vscode.workspace.onDidChangeConfiguration((e) => {
+			if (e.affectsConfiguration("tsqlrefine.enableLint")) {
+				const updated = vscode.workspace.getConfiguration("tsqlrefine");
+				statusBarManager.setDisabled(!updated.get<boolean>("enableLint", true));
+			}
+		}),
+	);
 
 	const startPromise = client.start();
 	const maybeReady = (client as { onReady?: () => Promise<void> }).onReady;

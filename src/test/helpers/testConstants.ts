@@ -31,6 +31,8 @@ export const TEST_DELAYS = {
 	CLIENT_READY: 10,
 	/** Wait time for process cleanup */
 	PROCESS_CLEANUP: 100,
+	/** Delay to allow LSP document synchronization after setup */
+	LSP_SYNC: 300,
 } as const;
 
 /**

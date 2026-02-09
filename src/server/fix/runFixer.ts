@@ -16,7 +16,7 @@ export type RunFixerOptions = {
  * Build command-line arguments for tsqlrefine fix operation.
  */
 function buildArgs(options: RunFixerOptions): string[] {
-	const args: string[] = ["fix", "-q"];
+	const args: string[] = ["fix", "-q", "--utf8"];
 	const configPath = normalizeConfigPath(options.settings.configPath);
 	if (configPath) {
 		args.push("-c", configPath);
