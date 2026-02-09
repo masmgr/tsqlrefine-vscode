@@ -96,6 +96,10 @@ export class E2ETestHarness {
 		const documentUri = await createFile(filename, content);
 		this.context.document = await createSqlDocument(documentUri, content);
 
+		// Allow time for LSP textDocument/didOpen and config change notifications
+		// to propagate to the language server before test body executes.
+		await sleep(TEST_DELAYS.LSP_SYNC);
+
 		this.isSetup = true;
 
 		return this.context as E2ETestContext;
