@@ -53,6 +53,28 @@ export class E2ETestHarness {
 	private context: Partial<E2ETestContext> = {};
 	private isSetup = false;
 
+	private normalizeUriKey(uri: vscode.Uri): string {
+		if (uri.scheme === "file") {
+			const normalizedPath =
+				process.platform === "win32" ? uri.fsPath.toLowerCase() : uri.fsPath;
+			return `file:${normalizedPath}`;
+		}
+		return uri.toString();
+	}
+
+	private getDiagnosticsForUri(uri: vscode.Uri): vscode.Diagnostic[] {
+		const targetKey = this.normalizeUriKey(uri);
+		for (const [
+			diagnosticUri,
+			diagnostics,
+		] of vscode.languages.getDiagnostics()) {
+			if (this.normalizeUriKey(diagnosticUri) === targetKey) {
+				return diagnostics;
+			}
+		}
+		return vscode.languages.getDiagnostics(uri);
+	}
+
 	/**
 	 * Sets up the E2E test environment.
 	 *
@@ -154,7 +176,7 @@ export class E2ETestHarness {
 		timeoutMs = TEST_TIMEOUTS.DIAGNOSTICS_WAIT,
 	): Promise<vscode.Diagnostic[]> {
 		// Check if predicate is already satisfied
-		const existing = vscode.languages.getDiagnostics(uri);
+		const existing = this.getDiagnosticsForUri(uri);
 		if (predicate(existing)) {
 			return existing;
 		}
@@ -164,16 +186,19 @@ export class E2ETestHarness {
 			let subscription: vscode.Disposable | null = null;
 			const timeout = setTimeout(() => {
 				subscription?.dispose();
-				resolve(vscode.languages.getDiagnostics(uri));
+				resolve(this.getDiagnosticsForUri(uri));
 			}, timeoutMs);
 
 			subscription = vscode.languages.onDidChangeDiagnostics((event) => {
 				if (
-					!event.uris.some((changed) => changed.toString() === uri.toString())
+					!event.uris.some(
+						(changed) =>
+							this.normalizeUriKey(changed) === this.normalizeUriKey(uri),
+					)
 				) {
 					return;
 				}
-				const current = vscode.languages.getDiagnostics(uri);
+				const current = this.getDiagnosticsForUri(uri);
 				if (!predicate(current)) {
 					return;
 				}

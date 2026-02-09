@@ -36,7 +36,7 @@ suite("Startup Verification Test Suite", () => {
 		await runE2ETest(
 			{
 				config: { runOnSave: false, runOnType: false, runOnOpen: false },
-				documentContent: "select from",
+				documentContent: "select id,name from users;",
 			},
 			async (context, harness) => {
 				await vscode.window.showTextDocument(context.document, {
@@ -49,7 +49,8 @@ suite("Startup Verification Test Suite", () => {
 				// Wait for diagnostics to verify linting works
 				const diagnostics = await harness.waitForDiagnostics(
 					context.document.uri,
-					(entries) => entries.length >= 1,
+					(entries) =>
+						entries.some((diagnostic) => diagnostic.source === "tsqlrefine"),
 				);
 				const match = diagnostics.find((diag) => diag.source === "tsqlrefine");
 				assert.ok(match, "Expected tsqlrefine diagnostic after manual run");
