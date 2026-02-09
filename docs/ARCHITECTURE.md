@@ -948,4 +948,4 @@ Potential additions:
 
 **Document Version**: 1.0
 **Last Updated**: 2026-01-18
-**Extension Version**: 0.0.1
+**Extension Version**: 0.0.2

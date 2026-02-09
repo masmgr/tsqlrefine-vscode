@@ -1,7 +1,7 @@
 # TSQLRefine
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.0.1-blue.svg)](https://github.com/masmgr/tsqlrefine-vscode)
+[![Version](https://img.shields.io/badge/version-0.0.2-blue.svg)](https://github.com/masmgr/tsqlrefine-vscode)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.108.1+-007ACC.svg)](https://code.visualstudio.com/)
 
 A lightweight Visual Studio Code extension that integrates [TSQLRefine](https://github.com/masmgr/tsqlrefine) into your editor, providing real-time linting, auto-fixing, and formatting for T-SQL files.
