@@ -33,7 +33,7 @@ export async function verifyTsqlRefineInstallation(
  * Build command-line arguments for tsqlrefine lint operation.
  */
 function buildArgs(options: RunLinterOptions): string[] {
-	const args: string[] = ["lint", "-q"];
+	const args: string[] = ["lint", "-q", "--utf8"];
 	const configPath = normalizeConfigPath(options.settings.configPath);
 	if (configPath) {
 		args.push("-c", configPath);
