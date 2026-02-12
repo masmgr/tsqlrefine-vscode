@@ -198,6 +198,7 @@
 		"typescript": "^5.9.3"
 	},
 	"lint-staged": {
+		"package-lock.json": [],
 		"*.ts": [
 			"biome format --write",
 			"biome lint --fix"
