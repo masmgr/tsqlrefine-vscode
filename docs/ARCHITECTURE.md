@@ -676,7 +676,7 @@ npm run compile:test   # Compile test files to out/ (tsc)
 
 Contains:
 - Sample SQL files for testing
-- Configuration files (`.tsqlrefinerc`)
+- Configuration files (`tsqlrefine.json`)
 - Test workspace settings
 
 ## Build System

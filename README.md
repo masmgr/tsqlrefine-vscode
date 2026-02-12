@@ -82,7 +82,7 @@ This extension activates for files with the following language IDs:
 ### Config file not being used
 
 1. Leave `configPath` empty for auto-detection
-2. Or set explicitly: `"tsqlrefine.configPath": "${workspaceFolder}/.tsqlrefinerc"`
+2. Or set explicitly: `"tsqlrefine.configPath": "${workspaceFolder}/tsqlrefine.json"`
 
 ## About This Extension
 

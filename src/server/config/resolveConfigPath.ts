@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { CONFIG_CACHE_MAX_SIZE, CONFIG_CACHE_TTL_MS } from "./constants";
 import { normalizeForCompare } from "../shared/normalize";
 
-const defaultConfigFileNames = [".tsqlrefinerc"];
+const defaultConfigFileNames = ["tsqlrefine.json"];
 
 type CacheEntry = {
 	value: string | null;

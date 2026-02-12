@@ -115,7 +115,7 @@ suite("runFixer", () => {
 			const options = createTestOptions({
 				signal: controller.signal,
 				settings: createTestSettings({
-					configPath: "/path/to/.tsqlrefinerc",
+					configPath: "/path/to/tsqlrefine.json",
 				}),
 			});
 

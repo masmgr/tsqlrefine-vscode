@@ -7,7 +7,7 @@ All settings are under the `tsqlrefine` namespace.
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `path` | string | `""` | Path to tsqlrefine executable (empty = search PATH) |
-| `configPath` | string | `""` | Path to `.tsqlrefinerc` config file (empty = auto-detect) |
+| `configPath` | string | `""` | Path to `tsqlrefine.json` config file (empty = auto-detect) |
 
 ## Lint Behavior
 
@@ -60,7 +60,7 @@ All settings are under the `tsqlrefine` namespace.
 ```json
 {
   "tsqlrefine.path": "C:\\tools\\tsqlrefine.exe",
-  "tsqlrefine.configPath": "${workspaceFolder}/.tsqlrefinerc"
+  "tsqlrefine.configPath": "${workspaceFolder}/tsqlrefine.json"
 }
 ```
 
