@@ -159,7 +159,18 @@
 					".sql"
 				]
 			}
-		]
+		],
+		"configurationDefaults": {
+			"[sql]": {
+				"editor.defaultFormatter": "masmgr.tsqlrefine"
+			},
+			"[tsql]": {
+				"editor.defaultFormatter": "masmgr.tsqlrefine"
+			},
+			"[mssql]": {
+				"editor.defaultFormatter": "masmgr.tsqlrefine"
+			}
+		}
 	},
 	"scripts": {
 		"typecheck": "tsc -p tsconfig.json --noEmit",
