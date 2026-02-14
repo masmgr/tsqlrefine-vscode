@@ -17,8 +17,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
         with:
           node-version: 24
           cache: npm
@@ -26,12 +26,16 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
 
+      # Audit production dependencies (fail on moderate+ vulnerabilities)
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+
       # Run unit tests with coverage (Linux only for performance)
       - run: npm run test:unit:coverage
         if: runner.os == 'Linux'
 
       # Upload coverage report
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: runner.os == 'Linux'
         with:
           name: coverage-report
@@ -44,7 +48,7 @@ jobs:
       - run: npm run build
 
       # Install .NET SDK and tsqlrefine CLI for E2E tests
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@baa11fbfe1d6520db94683bd5c7a3818018e4309 # v5
         with:
           dotnet-version: '8.0.x'
       - name: Install tsqlrefine CLI
@@ -70,7 +74,7 @@ jobs:
 
       - run: npm run package
         if: runner.os == 'Linux'
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: runner.os == 'Linux'
         with:
           name: vsix-package
