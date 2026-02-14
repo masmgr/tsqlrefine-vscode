@@ -73,13 +73,22 @@ function resolveWorkspaceRoot(
 
 	if (filePath) {
 		const normalizedFilePath = normalizeForCompare(filePath);
+		let bestMatch: string | null = null;
+		let bestLength = 0;
+
 		for (const folder of workspaceFolders) {
 			const normalizedFolder = normalizeForCompare(folder);
-			if (normalizedFilePath.startsWith(normalizedFolder)) {
-				return folder;
+			const prefix = normalizedFolder.endsWith(path.sep)
+				? normalizedFolder
+				: normalizedFolder + path.sep;
+
+			if (normalizedFilePath.startsWith(prefix) && prefix.length > bestLength) {
+				bestMatch = folder;
+				bestLength = prefix.length;
 			}
 		}
-		return null;
+
+		return bestMatch;
 	}
 
 	return workspaceFolders[0] ?? null;
