@@ -1,6 +1,7 @@
 import * as assert from "node:assert";
 import type { TsqlRefineSettings } from "../../server/config/settings";
 import {
+	buildArgs,
 	runLinter,
 	verifyTsqlRefineInstallation,
 	type RunLinterOptions,
@@ -61,51 +62,50 @@ suite("runLinter", () => {
 		assert.strictEqual(result.stderr, "");
 	});
 
-	suite("argument building", () => {
-		test("includes configPath in arguments when provided", async () => {
-			const controller = new AbortController();
-			controller.abort(); // Abort immediately to prevent actual CLI execution
+	suite("argument building (via buildArgs)", () => {
+		test("includes lint subcommand and standard flags", () => {
+			const options = createTestOptions();
+			const args = buildArgs(options);
+			assert.deepStrictEqual(args.slice(0, 3), ["lint", "-q", "--utf8"]);
+			assert.ok(args.includes("--stdin"));
+		});
 
+		test("includes -c flag when configPath is set", () => {
 			const options = createTestOptions({
-				signal: controller.signal,
 				settings: createTestSettings({
 					configPath: "/path/to/config.json",
 				}),
 			});
-
-			// The function should return cancelled result without error
-			const result = await runLinter(options);
-			assert.strictEqual(result.cancelled, true);
+			const args = buildArgs(options);
+			const cIndex = args.indexOf("-c");
+			assert.notStrictEqual(cIndex, -1);
+			assert.strictEqual(args[cIndex + 1], "/path/to/config.json");
 		});
 
-		test("excludes configPath when not provided", async () => {
-			const controller = new AbortController();
-			controller.abort();
-
+		test("omits -c flag when configPath is empty", () => {
 			const options = createTestOptions({
-				signal: controller.signal,
-				settings: createTestSettings({
-					configPath: "",
-				}),
+				settings: createTestSettings({ configPath: "" }),
 			});
-
-			const result = await runLinter(options);
-			assert.strictEqual(result.cancelled, true);
+			const args = buildArgs(options);
+			assert.strictEqual(args.indexOf("-c"), -1);
 		});
 
-		test("includes severity argument", async () => {
-			const controller = new AbortController();
-			controller.abort();
-
+		test("includes --severity flag with configured value", () => {
 			const options = createTestOptions({
-				signal: controller.signal,
-				settings: createTestSettings({
-					minSeverity: "warning",
-				}),
+				settings: createTestSettings({ minSeverity: "warning" }),
 			});
+			const args = buildArgs(options);
+			const sevIndex = args.indexOf("--severity");
+			assert.notStrictEqual(sevIndex, -1);
+			assert.strictEqual(args[sevIndex + 1], "warning");
+		});
 
-			const result = await runLinter(options);
-			assert.strictEqual(result.cancelled, true);
+		test("includes --output json flag", () => {
+			const options = createTestOptions();
+			const args = buildArgs(options);
+			const outputIndex = args.indexOf("--output");
+			assert.notStrictEqual(outputIndex, -1);
+			assert.strictEqual(args[outputIndex + 1], "json");
 		});
 	});
 });

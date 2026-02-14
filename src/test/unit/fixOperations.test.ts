@@ -328,7 +328,7 @@ suite("fixOperations", () => {
 		});
 	});
 
-	suite("Result handling logic", () => {
+	suite("Result handling patterns (simulated)", () => {
 		test("empty array is returned when text unchanged", () => {
 			const originalText = "SELECT 1;";
 			const fixedText = "SELECT 1;";
