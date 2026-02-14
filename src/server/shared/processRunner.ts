@@ -5,6 +5,7 @@ import {
 	COMMAND_CACHE_TTL_MS,
 	COMMAND_CHECK_TIMEOUT_MS,
 	DEFAULT_COMMAND_NAME,
+	MAX_OUTPUT_BYTES,
 } from "../config/constants";
 import { decodeCliOutput } from "../lint/decodeOutput";
 import { normalizeExecutablePath } from "./normalize";
@@ -150,6 +151,8 @@ export function runProcess(
 		const stdoutChunks: Buffer[] = [];
 		const stderrChunks: Buffer[] = [];
 		let timer: NodeJS.Timeout | null = null;
+		let outputBytes = 0;
+		let outputLimitExceeded = false;
 
 		const child = spawn(options.command, options.args, {
 			cwd: options.cwd,
@@ -227,9 +230,25 @@ export function runProcess(
 		);
 
 		child.stdout?.on("data", (data: Buffer) => {
+			outputBytes += data.length;
+			if (outputBytes > MAX_OUTPUT_BYTES) {
+				if (!outputLimitExceeded) {
+					outputLimitExceeded = true;
+					child.kill();
+				}
+				return;
+			}
 			stdoutChunks.push(data);
 		});
 		child.stderr?.on("data", (data: Buffer) => {
+			outputBytes += data.length;
+			if (outputBytes > MAX_OUTPUT_BYTES) {
+				if (!outputLimitExceeded) {
+					outputLimitExceeded = true;
+					child.kill();
+				}
+				return;
+			}
 			stderrChunks.push(data);
 		});
 
@@ -241,8 +260,10 @@ export function runProcess(
 			const { stdout, stderr } = decodeBuffers();
 			finish({
 				stdout,
-				stderr,
-				exitCode,
+				stderr: outputLimitExceeded
+					? `${stderr}\nOutput exceeded ${MAX_OUTPUT_BYTES} bytes limit`
+					: stderr,
+				exitCode: outputLimitExceeded ? null : exitCode,
 				timedOut,
 				cancelled,
 			});
