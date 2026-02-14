@@ -70,11 +70,13 @@
 				"tsqlrefine.path": {
 					"type": "string",
 					"default": "",
+					"scope": "machine-overridable",
 					"description": "Path to tsqlrefine executable."
 				},
 				"tsqlrefine.configPath": {
 					"type": "string",
 					"default": "",
+					"scope": "machine-overridable",
 					"description": "Path to tsqlrefine config file (passed with -c)."
 				},
 				"tsqlrefine.runOnSave": {
