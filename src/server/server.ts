@@ -1,5 +1,7 @@
 import {
 	CodeActionKind,
+	OptionalVersionedTextDocumentIdentifier,
+	TextDocumentEdit,
 	createConnection,
 	ProposedFeatures,
 	TextDocumentSyncKind,
@@ -182,6 +184,11 @@ connection.onRequest(
 connection.onRequest(
 	"tsqlrefine/fixDocument",
 	async (params: { uri: string }): Promise<{ ok: boolean; error?: string }> => {
+		const document = documents.get(params.uri);
+		if (!document) {
+			return { ok: false, error: "Document not found" };
+		}
+		const version = document.version;
 		const edits = await fixDocument(params.uri);
 		if (edits === null) {
 			return { ok: false, error: "Fix failed" };
@@ -189,11 +196,14 @@ connection.onRequest(
 		if (edits.length === 0) {
 			return { ok: true };
 		}
-		// Apply the edits to the document
+		// Apply the edits with version guard to prevent overwriting concurrent changes
 		const result = await connection.workspace.applyEdit({
-			changes: {
-				[params.uri]: edits,
-			},
+			documentChanges: [
+				TextDocumentEdit.create(
+					OptionalVersionedTextDocumentIdentifier.create(params.uri, version),
+					edits,
+				),
+			],
 		});
 		if (!result.applied) {
 			return { ok: false, error: "Failed to apply edits" };
