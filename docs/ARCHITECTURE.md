@@ -13,15 +13,18 @@
 
 ## Overview
 
-TSQLRefine is a Visual Studio Code extension that integrates TSQLRefine (a T-SQL linter) into the editor. It provides real-time linting for SQL files with support for both manual and automatic linting through a robust Language Server Protocol (LSP) architecture.
+TSQLRefine is a Visual Studio Code extension that integrates [TSQLRefine](https://github.com/masmgr/tsqlrefine) (a T-SQL linter, formatter, and fixer) into the editor. It provides real-time linting, formatting, and auto-fixing for SQL files through a robust Language Server Protocol (LSP) architecture.
 
 ### Key Features
 
 - **Real-time Linting**: Automatic linting on save, open, and while typing (configurable)
-- **Manual Control**: On-demand linting via command palette
+- **Formatting**: Full document formatting with format-on-save support
+- **Auto-fixing**: Code actions and manual fix commands for fixable issues
+- **Manual Control**: On-demand operations via command palette
 - **Non-blocking Operation**: LSP architecture ensures UI remains responsive
 - **Concurrency Management**: Sophisticated scheduling with resource control
-- **Unsaved File Support**: Lints unsaved documents via temporary files
+- **Stdin-based Operation**: All operations pipe document content via stdin
+- **Status Bar Integration**: Real-time diagnostic counts and operation state
 - **Windows Compatibility**: Special handling for Windows paths and executables
 
 ## System Architecture
@@ -39,6 +42,7 @@ This extension uses a **client-server architecture** based on the Language Serve
 │  │                                               │  │
 │  │  - Extension Activation (extension.ts)       │  │
 │  │  - Language Client (client.ts)               │  │
+│  │  - Status Bar Manager (statusBar.ts)         │  │
 │  │  - Command Registration                       │  │
 │  │  - File Event Handlers (handlers.ts)         │  │
 │  └───────────────────┬──────────────────────────┘  │
@@ -49,16 +53,17 @@ This extension uses a **client-server architecture** based on the Language Serve
 │  │                                               │  │
 │  │  - Document Synchronization                  │  │
 │  │  - Lint Scheduler                            │  │
-│  │  - TSQLRefine CLI Executor                     │  │
+│  │  - Format / Fix Operations                   │  │
+│  │  - Code Action Provider                      │  │
 │  │  - Diagnostic Publishing                     │  │
 │  └───────────────────┬──────────────────────────┘  │
 │                      │                             │
 └──────────────────────┼─────────────────────────────┘
                        │
-                       │ Process Spawn
+                       │ Process Spawn (stdin/stdout)
                        ▼
               ┌─────────────────┐
-              │  TSQLRefine CLI   │
+              │  TSQLRefine CLI  │
               │  (External)     │
               └─────────────────┘
 ```
@@ -67,18 +72,18 @@ This extension uses a **client-server architecture** based on the Language Serve
 
 - **Extension Host Process**: Runs the VS Code extension client code
   - Lightweight, focuses on UI integration
-  - Handles commands, file events, and user interactions
+  - Handles commands, file events, status bar, and user interactions
   - Managed by VS Code's extension host
 
 - **Language Server Process**: Runs in a separate Node.js process via IPC
-  - CPU-intensive linting operations
+  - CPU-intensive lint, format, and fix operations
   - Document state management
   - Independent from VS Code UI thread
 
 - **TSQLRefine CLI Process**: Spawned by the language server
-  - External tool execution
+  - External tool execution via stdin/stdout
   - Timeout and cancellation support
-  - Short-lived per-lint operation
+  - Short-lived per operation
 
 ## Core Components
 
@@ -88,13 +93,15 @@ This extension uses a **client-server architecture** based on the Language Serve
 
 The main extension activation point that:
 - Creates and starts the language client
-- Registers the `tsqlrefine.run` command
+- Registers commands (`tsqlrefine.run`, `tsqlrefine.format`, `tsqlrefine.fix`, `tsqlrefine.openInstallGuide`)
+- Initializes the `StatusBarManager` for diagnostic counts and operation state
 - Sets up file event handlers for delete/rename operations
+- Listens for `tsqlrefine/operationState` notifications to drive the status bar spinner
 - Manages extension lifecycle (activate/deactivate)
 
 **Key Exports**:
 ```typescript
-export function activate(context: vscode.ExtensionContext): TsqllintLiteApi
+export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi
 export async function deactivate(): Promise<void>
 ```
 
@@ -128,27 +135,40 @@ The core server implementation managing:
 - **onDidOpen**: Triggers lint if `runOnOpen` is enabled
 - **onDidChangeContent**: Triggers debounced lint if `runOnType` is enabled
 - **onDidSave**: Triggers lint if `runOnSave` is enabled, updates saved version
-- **onDidClose**: Cleans up resources (cancels lints, removes temp files, clears diagnostics)
+- **onDidClose**: Cancels in-flight lints, clears state and diagnostics
 
 #### State Management
 ```typescript
 const documents = new TextDocuments(TextDocument);
-const inFlightByUri = new Map<string, AbortController>();
-const savedVersionByUri = new Map<string, number>();
+const settingsManager = new SettingsManager(connection);
+const notificationManager = new NotificationManager(connection);
+const lintStateManager = new DocumentStateManager();
+const formatStateManager = new DocumentStateManager();
+const fixStateManager = new DocumentStateManager();
 const scheduler = new LintScheduler({ ... });
 ```
 
-#### Custom LSP Requests
+#### LSP Capabilities
+```typescript
+{
+  textDocumentSync: {
+    openClose: true,
+    change: TextDocumentSyncKind.Incremental,
+    save: { includeText: false },
+  },
+  documentFormattingProvider: true,
+  codeActionProvider: {
+    codeActionKinds: [CodeActionKind.QuickFix],
+  },
+}
+```
+
+#### Custom LSP Requests/Notifications
 - **`tsqlrefine/lintDocument`**: Manual lint request from client
 - **`tsqlrefine/clearDiagnostics`**: Clear diagnostics for specified URIs
-
-#### Unsaved File Handling
-For unsaved documents (new files, modified files):
-1. Creates temporary directory in `os.tmpdir()`
-2. Writes document content to `untitled.sql`
-3. Runs tsqlrefine on temporary file
-4. Maps results back to original URI
-5. Cleans up temporary files after completion
+- **`tsqlrefine/formatDocument`**: Manual format request from client
+- **`tsqlrefine/fixDocument`**: Manual fix request with workspace edit application
+- **`tsqlrefine/operationState`**: Notification sent to client for status bar spinner
 
 ### 5. Lint Scheduler
 
@@ -168,7 +188,7 @@ class Semaphore {
 }
 ```
 
-- **Max Concurrent Runs**: 4 (configurable)
+- **Max Concurrent Runs**: 4 (configurable via `MAX_CONCURRENT_RUNS`)
 - **Resource Pooling**: Uses semaphore to limit parallel executions
 - **Queue Management**: Queues pending lints when max concurrency reached
 
@@ -199,172 +219,193 @@ Manual lints (`reason: "manual"`) get special treatment:
 3. Wait for available slot using `semaphore.acquire()`
 4. Return result as Promise for synchronous feedback
 
-### 6. TSQLRefine Runner
+### 6. Process Runner
 
-**File**: [src/server/lint/runTsqllint.ts](../src/server/lint/runTsqllint.ts)
+**File**: [src/server/shared/processRunner.ts](../src/server/shared/processRunner.ts)
 
-Executes the tsqlrefine CLI with proper process management.
+Shared infrastructure for executing all CLI commands (lint, format, fix).
 
-#### Executable Resolution
-
-```typescript
-async function findTsqllintExecutable(
-  customPath: string,
-  signal: AbortSignal
-): Promise<string>
-```
-
-- **Custom Path Priority**: Uses `settings.path` if specified
-- **PATH Search**: Falls back to `which tsqlrefine` (Unix) or `where tsqlrefine` (Windows)
-- **Caching**: Results cached for 30 seconds (TTL)
-- **Platform Detection**: Checks file extension for Windows `.cmd`/`.bat` files
-
-#### Windows Executable Handling
-
-Windows batch files cannot be executed directly. The runner wraps them:
-```typescript
-if (exePath.endsWith('.cmd') || exePath.endsWith('.bat')) {
-  return { cmd: 'cmd.exe', args: ['/c', exePath, ...args] };
-}
-```
-
-#### Process Spawning
+#### Command Resolution
 
 ```typescript
-const child = spawn(cmd, args, {
-  cwd,
-  windowsHide: true,
-  signal: signal
-});
+async function resolveCommand(settings: TsqlRefineSettings): Promise<string>
 ```
 
-Key features:
-- **Working Directory**: Set to workspace folder or file directory
-- **Signal Support**: Respects AbortSignal for cancellation
-- **Stream Handling**: Captures stdout/stderr separately
-- **Encoding Detection**: Uses `chardet` and `iconv-lite` for encoding
+- **Custom Path Priority**: Uses `settings.path` if specified, validates with `assertPathExists()`
+- **PATH Search**: Falls back to spawning `tsqlrefine --version` to check availability
+- **Caching**: Results cached per configured path with 30-second TTL (`COMMAND_CACHE_TTL_MS`)
 
-#### Timeout Protection
+#### Installation Verification
 
 ```typescript
-const timeoutId = setTimeout(() => {
-  child.kill();
-  clearTimeout(timeoutId);
-  resolve({
-    stdout: '',
-    stderr: '',
-    timedOut: true,
-    cancelled: false
-  });
-}, settings.timeoutMs);
+async function verifyInstallation(
+  settings: TsqlRefineSettings
+): Promise<{ available: boolean; message?: string }>
 ```
 
-Default: 10 seconds (configurable via `settings.timeoutMs`)
+Called at startup and when settings change.
 
-#### Cancellation Handling
+#### Process Execution
 
-Monitors AbortSignal to kill process early:
 ```typescript
-signal?.addEventListener('abort', () => {
-  child.kill();
-  cancelled = true;
-});
+function runProcess(options: BaseProcessOptions): Promise<ProcessRunResult>
 ```
 
-### 7. Output Parser
+- Spawns the CLI with configurable command, args, cwd, timeout, and signal
+- Pipes document content to stdin as UTF-8
+- Captures stdout and stderr as buffers, decoded via `decodeCliOutput()`
+- Supports timeout (kills process) and cancellation (via AbortSignal)
+
+### 7. Operation Runners
+
+Three specialized runners that build CLI arguments and delegate to `runProcess()`:
+
+#### Lint Runner ([src/server/lint/runLinter.ts](../src/server/lint/runLinter.ts))
+
+Executes: `tsqlrefine lint -q --utf8 --output json --stdin`
+
+- Adds `-c <configPath>` if configured
+- Adds `--severity <minSeverity>` for filtering
+- Returns structured JSON output on stdout
+
+#### Format Runner ([src/server/format/runFormatter.ts](../src/server/format/runFormatter.ts))
+
+Executes: `tsqlrefine format -q --utf8 --stdin`
+
+- Adds `-c <configPath>` if configured
+- Uses `formatTimeoutMs` setting for timeout
+- Returns formatted SQL text on stdout
+
+#### Fix Runner ([src/server/fix/runFixer.ts](../src/server/fix/runFixer.ts))
+
+Executes: `tsqlrefine fix -q --utf8 --stdin`
+
+- Adds `-c <configPath>` if configured
+- Adds `--severity <minSeverity>` for severity-aware fixing
+- Returns fixed SQL text on stdout
+
+### 8. Output Parser
 
 **File**: [src/server/lint/parseOutput.ts](../src/server/lint/parseOutput.ts)
 
-Parses tsqlrefine output into VS Code diagnostics.
+Parses JSON output from `tsqlrefine lint --output json` into VS Code diagnostics.
 
-#### TSQLRefine Output Format
+#### JSON Output Structure
 
-```
-<file>(<line>,<col>): <severity> <rule> : <message>
-```
+```typescript
+type CliJsonOutput = {
+  tool: string;
+  version: string;
+  command: string;
+  files: CliFileResult[];
+};
 
-Example:
-```
-test.sql(5,1): error select-star : SELECT * not allowed
-test.sql(12,3): warning semicolon-termination : Missing semicolon
+type CliFileResult = {
+  filePath: string;
+  diagnostics: CliDiagnostic[];
+};
+
+type CliDiagnostic = {
+  range: {
+    start: { line: number; character: number };
+    end: { line: number; character: number };
+  };
+  severity?: number;
+  code?: string;
+  message: string;
+  data?: {
+    ruleId?: string;
+    category?: string;
+    fixable?: boolean;
+    codeDescriptionHref?: string;
+  };
+};
 ```
 
 #### Parsing Logic
 
-```typescript
-const LINT_PATTERN = /^(.+?)\((\d+),(\d+)\):\s+(warning|error)\s+([^\s]+)\s*:\s*(.*)$/;
-```
+- **JSON parsing**: `JSON.parse(stdout)` with error handling for malformed output
+- **Character-level ranges**: Uses exact `range.start`/`range.end` positions from JSON (0-based)
+- **Severity mapping**: `mapSeverity()` converts CLI numeric severities (1=Error, 2=Warning, 4=Hint, default=Information)
+- **Path normalization**: `normalizeForCompare()` handles Windows case-insensitivity
+- **Stdin marker**: `<stdin>` file paths are mapped back to the original document URI
+- **Code description**: `codeDescriptionHref` provides clickable rule documentation links in the Problems panel
+- **Fixable detection**: `data.fixable` boolean enables code action integration
 
-Extracts:
-1. **File path**: Normalized and resolved to absolute path
-2. **Line/Column**: 1-based indices from tsqlrefine
-3. **Severity**: Maps `error` → `DiagnosticSeverity.Error`, `warning` → `DiagnosticSeverity.Warning`
-4. **Rule name**: Used as diagnostic code
-5. **Message**: Full diagnostic message
-
-#### Range Mode
-
-Currently fixed to **"line"** mode:
-- Highlights entire line containing the issue
-- Uses line index from tsqlrefine output
-- Range: `[line, 0]` to `[line, lineLength]`
-
-#### Path Normalization
-
-```typescript
-function normalizeForCompare(p: string): string {
-  return process.platform === 'win32'
-    ? path.normalize(p).toLowerCase()
-    : path.normalize(p);
-}
-```
-
-Handles Windows case-insensitivity.
-
-#### Temporary File Mapping
-
-For unsaved documents:
-```typescript
-if (targetPaths && targetPaths.some(tp => normalizedPath === normalize(tp))) {
-  // Map temp file diagnostics back to original URI
-  return { uri: originalUri, ... };
-}
-```
-
-### 8. Output Decoder
+### 9. Output Decoder
 
 **File**: [src/server/lint/decodeOutput.ts](../src/server/lint/decodeOutput.ts)
 
-Handles encoding detection and conversion:
-- Uses `chardet` to detect buffer encoding
-- Converts to UTF-8 using `iconv-lite`
-- Falls back to UTF-8 if detection fails
+Simple UTF-8 output decoding:
+- **BOM removal**: Strips UTF-8 BOM (0xEF 0xBB 0xBF) if present
+- **UTF-8 decoding**: Converts buffer to string using Node.js `buffer.toString("utf8")`
+- **Line ending normalization**: `normalizeLineEndings()` utility for LF/CRLF conversion
 
-### 9. Configuration Settings
+### 10. Configuration Settings
 
 **File**: [src/server/config/settings.ts](../src/server/config/settings.ts)
 
 ```typescript
-export type TsqllintSettings = {
-  path?: string;          // Custom tsqlrefine path (optional)
-  configPath?: string;    // TSQLRefine config file (optional)
-  runOnSave: boolean;     // Auto-lint on save
-  runOnType: boolean;     // Auto-lint while typing
-  runOnOpen: boolean;     // Auto-lint on open
-  debounceMs: number;     // Debounce delay for typing
-  timeoutMs: number;      // Process timeout
-  rangeMode: 'character' | 'line';  // Diagnostic range mode (internal only)
+export type TsqlRefineSettings = {
+  path?: string;            // Custom tsqlrefine executable path
+  configPath?: string;      // TSQLRefine config file path
+  runOnSave: boolean;       // Auto-lint on save
+  runOnType: boolean;       // Auto-lint while typing
+  runOnOpen: boolean;       // Auto-lint on open
+  debounceMs: number;       // Debounce delay for typing
+  timeoutMs: number;        // Process timeout for lint
+  maxFileSizeKb: number;    // Max file size for auto-lint (0 = unlimited)
+  minSeverity: "error" | "warning" | "info" | "hint";
+  formatTimeoutMs?: number; // Process timeout for format
+  enableLint: boolean;      // Enable linting
+  enableFormat: boolean;    // Enable formatting
+  enableFix: boolean;       // Enable auto-fix
 };
 ```
 
 Settings are:
 - Defined in [package.json](../package.json) `contributes.configuration`
 - Loaded per-document scope (supports workspace and folder-level config)
-- Validated and normalized on server
+- Validated and normalized by `SettingsManager` on the server
+
+### 11. State Management
+
+The server uses three specialized managers under [src/server/state/](../src/server/state/):
+
+#### DocumentStateManager ([src/server/state/documentStateManager.ts](../src/server/state/documentStateManager.ts))
+
+Manages per-document state with two independent maps:
+- **In-flight tracking**: `Map<string, AbortController>` for running operations
+- **Saved version tracking**: `Map<string, number>` to distinguish saved vs modified documents
+
+Three independent instances are used for lint, format, and fix operations to avoid interference between operation types.
+
+#### NotificationManager ([src/server/state/notificationManager.ts](../src/server/state/notificationManager.ts))
+
+Centralized user notification management:
+- **Cooldown support**: Missing tsqlrefine notification has 5-minute cooldown
+- **Install guide integration**: Offers to open installation guide
+- **Error detection**: `isMissingTsqlRefineError()` detects missing installation
+- **Logging**: Provides `log()`, `warn()`, `error()` methods via `connection.console`
+
+#### SettingsManager ([src/server/state/settingsManager.ts](../src/server/state/settingsManager.ts))
+
+Settings retrieval and normalization:
+- **Global settings**: Cached settings for all documents
+- **Document-scoped settings**: Per-document settings via LSP `connection.workspace.getConfiguration`
+- **Validation**: Normalizes `maxFileSizeKb` values
+
+### 12. Code Action Provider
+
+The server provides quick fixes via LSP code actions:
+- **Trigger**: When tsqlrefine diagnostics with `data.fixable = true` exist in the document
+- **Action**: "Fix all tsqlrefine issues"
+- **Kind**: `CodeActionKind.QuickFix`
+- **Implementation**: Invokes `tsqlrefine.fix` command on the client, which sends `tsqlrefine/fixDocument` request
 
 ## Data Flow
 
-### Complete Lint Operation Flow
+### Lint Operation Flow
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -372,22 +413,21 @@ Settings are:
 │    - User saves file                                    │
 │    - User types (if runOnType enabled)                  │
 │    - User opens file (if runOnOpen enabled)             │
-│    - User runs command "TSQLRefine: Run"                  │
+│    - User runs command "TSQLRefine: Run"                │
 └────────────────────────┬────────────────────────────────┘
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────┐
 │ 2. CLIENT EVENT HANDLER                                 │
 │    - extension.ts receives VS Code event                │
-│    - Checks if client is ready                          │
 │    - Sends LSP notification/request to server           │
 └────────────────────────┬────────────────────────────────┘
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────┐
 │ 3. SERVER EVENT HANDLER (server.ts)                     │
-│    - onDidChangeContent / onDidSave / etc.              │
-│    - Checks settings (runOnSave, runOnType, etc.)       │
+│    - onDidChangeContent / onDidSave / onDidOpen         │
+│    - Checks settings (runOnSave, runOnType, enableLint) │
 │    - Calls requestLint()                                │
 └────────────────────────┬────────────────────────────────┘
                          │
@@ -395,7 +435,6 @@ Settings are:
 ┌─────────────────────────────────────────────────────────┐
 │ 4. LINT SCHEDULER (scheduler.ts)                        │
 │    - Receives lint request with reason + version        │
-│    - Stores pending lint in pendingByUri map            │
 │    - If "manual": await semaphore.acquire()             │
 │    - If "type": start debounce timer                    │
 │    - If "save"/"open": try immediate execution          │
@@ -406,54 +445,52 @@ Settings are:
 ┌─────────────────────────────────────────────────────────┐
 │ 5. ACQUIRE SEMAPHORE SLOT                               │
 │    - Wait for available slot (max 4 concurrent)         │
-│    - Retrieve pending lint from map                     │
-│    - Verify document version matches (or update)        │
+│    - Cancel any in-flight lint for same URI             │
+│    - Send operationState "started" notification         │
 └────────────────────────┬────────────────────────────────┘
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────┐
-│ 6. PREPARE LINT EXECUTION (server.ts:runLintNow)       │
-│    - Check if document is saved                         │
-│    - If unsaved: create temp file in os.tmpdir()        │
-│    - Create AbortController for cancellation            │
+│ 6. BUILD DOCUMENT CONTEXT                               │
 │    - Load document-scoped settings                      │
+│    - Create DocumentContext with paths and state         │
 └────────────────────────┬────────────────────────────────┘
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────┐
-│ 7. RUN TSQLLINT CLI (runTsqllint.ts)                    │
-│    - Resolve executable path (cache or search PATH)     │
-│    - Build command args: [filePath, -c configPath]      │
-│    - Spawn process with timeout and signal              │
-│    - Collect stdout/stderr streams                      │
-│    - Handle timeout/cancellation/completion             │
+│ 7. RUN LINTER CLI (runLinter.ts → processRunner.ts)     │
+│    - Resolve command (cache or check PATH)              │
+│    - Build args: lint -q --utf8 --output json --stdin   │
+│    - Spawn process, pipe document content to stdin      │
+│    - Collect stdout/stderr, handle timeout/cancellation │
 └────────────────────────┬────────────────────────────────┘
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────┐
-│ 8. DECODE OUTPUT (decodeOutput.ts)                      │
-│    - Detect encoding with chardet                       │
-│    - Convert to UTF-8 using iconv-lite                  │
+│ 8. CHECK EXIT CODE                                      │
+│    - 0/1 = success (parse stdout for diagnostics)       │
+│    - 2 = parse error, 3 = config error, 4 = runtime     │
+│    - Exit codes >= 2 show user-facing warning            │
 └────────────────────────┬────────────────────────────────┘
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────┐
-│ 9. PARSE OUTPUT (parseOutput.ts)                        │
-│    - Split stdout into lines                            │
-│    - Match pattern: file(line,col): severity rule : msg │
-│    - Normalize file paths                               │
-│    - Map temp file paths back to original URI           │
-│    - Create VS Code Diagnostic objects                  │
-│    - Set severity, range, message, code                 │
+│ 9. PARSE JSON OUTPUT (parseOutput.ts)                   │
+│    - JSON.parse(stdout) to CliJsonOutput structure       │
+│    - Map <stdin> paths back to original URI              │
+│    - Create VS Code Diagnostic objects                   │
+│    - Set severity, character-level range, code, source   │
+│    - Attach codeDescription.href for rule documentation  │
+│    - Mark fixable diagnostics via data.fixable           │
 └────────────────────────┬────────────────────────────────┘
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────┐
-│ 10. PUBLISH DIAGNOSTICS (server.ts)                    │
+│ 10. PUBLISH DIAGNOSTICS                                 │
 │     - connection.sendDiagnostics({ uri, diagnostics })  │
-│     - Cleanup temp files if created                     │
-│     - Log stderr warnings if present                    │
+│     - Send operationState "completed" notification      │
 │     - Release semaphore slot                            │
+│     - Drain queue for next pending lint                 │
 └────────────────────────┬────────────────────────────────┘
                          │
                          ▼
@@ -462,28 +499,44 @@ Settings are:
 │     - VS Code receives diagnostics via LSP              │
 │     - Shows squiggles in editor                         │
 │     - Updates Problems panel                            │
-│     - Badge count on file explorer                      │
-└─────────────────────────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────┐
-│ 12. DRAIN QUEUE (scheduler.ts)                          │
-│     - After release, check if queue has items           │
-│     - Try to acquire slot for next queued URI           │
-│     - Repeat until queue empty or no slots available    │
+│     - Status bar updates diagnostic counts              │
 └─────────────────────────────────────────────────────────┘
 ```
+
+### Format Operation Flow
+
+1. User triggers format (command, `Shift+Alt+F`, or format-on-save)
+2. Server receives `onDocumentFormatting` request
+3. Cancels any in-flight format for same URI
+4. Sends `operationState "started"` notification
+5. `runFormatter()` spawns CLI with `format -q --utf8 --stdin`
+6. Exit code 0 = success (stdout contains formatted SQL)
+7. Returns `TextEdit[]` for full document replacement
+8. Sends `operationState "completed"` notification
+
+### Fix Operation Flow
+
+1. User triggers fix command or selects code action
+2. Server receives `tsqlrefine/fixDocument` request
+3. Cancels any in-flight fix for same URI
+4. `runFixer()` spawns CLI with `fix -q --utf8 --stdin --severity`
+5. Exit code 0 = success (stdout contains fixed SQL)
+6. Returns `TextEdit[]` applied via `connection.workspace.applyEdit()`
+7. Lint is re-run automatically to update diagnostics
 
 ### State Management
 
 #### Per-URI State Tracking
 
 ```typescript
-// In-flight operations
-const inFlightByUri = new Map<string, AbortController>();
+// Three DocumentStateManager instances
+const lintStateManager = new DocumentStateManager();
+const formatStateManager = new DocumentStateManager();
+const fixStateManager = new DocumentStateManager();
 
-// Saved document versions
-const savedVersionByUri = new Map<string, number>();
+// Each manager tracks per-URI:
+// - inFlightByUri: Map<string, AbortController>
+// - savedVersionByUri: Map<string, number>
 
 // Scheduler state
 private readonly pendingByUri = new Map<string, PendingLint>();
@@ -494,39 +547,35 @@ private readonly queuedUris: string[] = [];
 #### State Transitions
 
 1. **Document Opens**
-   - Add to `savedVersionByUri` if file scheme
+   - Set saved version if file scheme
    - Trigger lint if `runOnOpen` enabled
 
 2. **Document Changes**
-   - Clear previous debounce timer
-   - Start new debounce if `runOnType` enabled
-   - Update pending version
+   - Cancel in-flight lint
+   - Start debounced lint if `runOnType` enabled
 
 3. **Document Saves**
-   - Update `savedVersionByUri` to current version
+   - Update saved version to current version
    - Trigger lint if `runOnSave` enabled
 
-4. **Lint Starts**
-   - Create AbortController
-   - Add to `inFlightByUri`
-   - Create temp file if unsaved
+4. **Operation Starts**
+   - Cancel previous in-flight operation for same URI
+   - Create new AbortController
 
-5. **Lint Completes**
-   - Remove from `inFlightByUri`
-   - Cleanup temp file
-   - Publish diagnostics
+5. **Operation Completes**
+   - Publish diagnostics (lint) or return edits (format/fix)
+   - Send operation state notification
 
 6. **Document Closes**
    - Cancel in-flight lints
-   - Clear all state
-   - Remove temp files
+   - Clear all state for URI
    - Clear diagnostics
 
 ## Configuration System
 
 ### Configuration Hierarchy
 
-1. **Default Settings** (in code)
+1. **Default Settings** (in code, `defaultSettings` object)
 2. **User Settings** (global)
 3. **Workspace Settings** (workspace root)
 4. **Folder Settings** (multi-root workspaces)
@@ -535,7 +584,7 @@ private readonly queuedUris: string[] = [];
 ### Settings Resolution
 
 ```typescript
-async function getSettingsForDocument(uri: string): Promise<TsqllintSettings> {
+async function getSettingsForDocument(uri: string): Promise<TsqlRefineSettings> {
   const scopedConfig = await connection.workspace.getConfiguration({
     scopeUri: uri,
     section: "tsqlrefine",
@@ -548,17 +597,14 @@ async function getSettingsForDocument(uri: string): Promise<TsqllintSettings> {
 }
 ```
 
-### Configuration Validation
-
-Settings are validated on the server side. The `rangeMode` setting is internal only and not exposed in the VS Code configuration UI.
-
 ### Configuration Updates
 
 When configuration changes:
 1. `onDidChangeConfiguration` event fires
-2. Server refreshes global settings
-3. Next lint operation uses updated settings
-4. No restart required
+2. Server refreshes global settings via `SettingsManager`
+3. If `path` setting changed, re-verifies installation
+4. Next operation uses updated settings
+5. No restart required
 
 ## Testing Architecture
 
@@ -569,9 +615,20 @@ When configuration changes:
 **Location**: [src/test/unit/](../src/test/unit/)
 
 Test individual functions in isolation:
-- **parseOutput.test.ts**: Output parsing logic
-- **runTsqllint.test.ts**: CLI execution and process management
+- **scheduler.test.ts**: LintScheduler concurrency, debouncing, queue management
+- **parseOutput.test.ts**: JSON output parsing and error scenarios
+- **decodeOutput.test.ts**: Encoding detection and BOM handling
+- **lintOperations.test.ts**: Lint operations and exit code handling
+- **formatOperations.test.ts**: Format operations
+- **fixOperations.test.ts**: Fix operations
+- **runFixer.test.ts**: Fixer CLI runner
 - **handlers.test.ts**: File event handlers
+- **resolveConfigPath.test.ts**: Config file resolution
+- **documentEdit.test.ts**: Document edit utility
+- **textUtils.test.ts**: Text processing utilities
+- **normalize.test.ts**: Path normalization
+- **settingsManager.test.ts**: Settings manager
+- **notificationManager.test.ts**: Notification manager
 
 **Run Command**: `npm run test:unit`
 
@@ -582,8 +639,12 @@ Test individual functions in isolation:
 **Location**: [src/test/e2e/](../src/test/e2e/)
 
 Test full integration with VS Code and tsqlrefine CLI:
-- **extension.test.ts**: Extension activation, command registration, client lifecycle
-- **localTsqllint.test.ts**: Tests with real tsqlrefine installation
+- **extension.test.ts**: Extension activation and commands
+- **runLinter.test.ts**: Linter CLI integration
+- **localTsqlRefine.test.ts**: Real tsqlrefine CLI integration
+- **startup.test.ts**: Startup verification
+- **formatter.test.ts**: Formatter E2E tests
+- **fix.test.ts**: Fix command and code action tests
 
 **Run Command**: `npm run test:e2e`
 
@@ -591,73 +652,22 @@ Test full integration with VS Code and tsqlrefine CLI:
 - `@vscode/test-cli` and `@vscode/test-electron` for VS Code instance
 - `.vscode-test.mjs` configuration
 
-**Prerequisites**: For localTsqllint tests, TSQLRefine must be installed and available in PATH
+#### 3. Property-Based Tests
+
+Integrated into unit test files using **fast-check**:
+- Custom arbitraries in [src/test/helpers/arbitraries.ts](../src/test/helpers/arbitraries.ts)
+- Verifies invariants like idempotence, round-trip, and monotonicity
+- Complements example-based tests for broader input coverage
 
 ### Test Helpers
 
 **Location**: [src/test/helpers/](../src/test/helpers/)
 
-#### testConstants.ts
-Centralized test timeouts, delays, and retry values:
-```typescript
-export const TEST_TIMEOUTS = {
-  MOCHA_TEST: 30000,
-  WAIT_FOR_DIAGNOSTICS: 15000,
-  // ...
-};
-
-export const TEST_DELAYS = {
-  AFTER_SAVE: 100,
-  BEFORE_EDIT: 50,
-  // ...
-};
-```
-
-#### cleanup.ts
-File system cleanup utilities with retry logic:
-```typescript
-async function cleanupTestFile(filePath: string): Promise<void>
-async function cleanupTestDir(dirPath: string): Promise<void>
-```
-
-#### testFixtures.ts
-Reusable test data factories:
-```typescript
-function createFakeCliScript(rule: string): string
-function createWorkspaceConfig(config: Partial<TsqllintSettings>): object
-```
-
-#### e2eTestHarness.ts
-E2E test setup/teardown automation:
-```typescript
-async function runE2ETest<T>(
-  options: E2ETestOptions,
-  testFn: (context: TestContext, harness: TestHarness) => Promise<T>
-): Promise<T>
-```
-
-Provides:
-- Automatic workspace setup
-- Fake CLI creation
-- Configuration management
-- Document lifecycle management
-- Diagnostic waiting utilities
-- Cleanup on success/failure
-
-#### fakeCli.ts
-Mock tsqlrefine CLI helper for unit tests:
-```typescript
-function createFakeCli(outputLines: string[]): string
-```
-
-Generates a Node.js script that mimics tsqlrefine output.
-
-### Test Organization Best Practices
-
-1. **Always use constants**: Never hardcode timeouts or delays
-2. **Always use harness**: New E2E tests must use `runE2ETest()`
-3. **Always use factories**: Don't create inline fake CLI scripts
-4. **Document changes**: Keep test architecture section updated
+- **testConstants.ts**: Centralized test timeouts, delays, and retry values
+- **testFixtures.ts**: Reusable test data factories
+- **e2eTestHarness.ts**: E2E test setup/teardown automation
+- **cleanup.ts**: File system cleanup utilities
+- **arbitraries.ts**: Custom fast-check arbitraries for property-based testing
 
 ### Build Process for Tests
 
@@ -674,10 +684,7 @@ npm run compile:test   # Compile test files to out/ (tsc)
 
 **Location**: [test/fixtures/workspace/](../test/fixtures/workspace/)
 
-Contains:
-- Sample SQL files for testing
-- Configuration files (`tsqlrefine.json`)
-- Test workspace settings
+Contains sample SQL files and configuration for E2E tests.
 
 ## Build System
 
@@ -708,6 +715,7 @@ npm run package             # Create .vsix package
 ```bash
 npm run lint           # Lint with Biome
 npm run format         # Format with Biome
+npm run verify         # Run all checks (test + typecheck + lint + format)
 ```
 
 ### esbuild Configuration
@@ -748,11 +756,6 @@ Configuration:
 }
 ```
 
-**Strict Mode Implications**:
-- Always handle array access with optional chaining or default values
-- Explicit undefined checks required
-- Type safety enforced at compilation
-
 ### Output Structure
 
 ```
@@ -778,7 +781,6 @@ out/                     # Test compilation output
 
 #### Path Handling
 ```typescript
-// Always use path module
 import * as path from 'node:path';
 
 // Normalize paths
@@ -795,16 +797,6 @@ function normalizeForCompare(p: string): string {
 }
 ```
 
-#### Executable Wrapping
-Windows `.cmd` and `.bat` files cannot be spawned directly:
-```typescript
-if (exePath.endsWith('.cmd') || exePath.endsWith('.bat')) {
-  spawn('cmd.exe', ['/c', exePath, ...args]);
-} else {
-  spawn(exePath, args);
-}
-```
-
 #### Path Separators
 Use `path.join()` and `path.resolve()` instead of string concatenation:
 ```typescript
@@ -815,24 +807,17 @@ const fullPath = path.join(dir, 'file.sql');
 const fullPath = dir + '/' + 'file.sql';
 ```
 
-### Unix/Linux/macOS Compatibility
-
-- Standard executable resolution via `which`
-- Case-sensitive path comparison
-- Direct process spawning (no wrapper needed)
-
 ### Cross-Platform Testing
 
-Tests run on both platforms via GitHub Actions (if configured):
-- Windows tests use `cmd.exe` wrapper
-- Unix tests use direct execution
+Tests run on all three platforms via GitHub Actions CI:
+- Ubuntu, Windows, and macOS
 - Path normalization ensures consistent behavior
 
 ## Performance Characteristics
 
 ### Concurrency Limits
 
-- **Max Concurrent Lints**: 4 (configurable)
+- **Max Concurrent Lints**: 4 (`MAX_CONCURRENT_RUNS`)
 - **Semaphore-based**: Prevents resource exhaustion
 - **Queue Depth**: Unlimited (in-memory)
 
@@ -844,108 +829,59 @@ Tests run on both platforms via GitHub Actions (if configured):
 
 ### Caching
 
-- **Executable Path**: 30-second TTL cache
-- **Document Versions**: Cached per-URI
-- **Settings**: Cached globally, refreshed on change
-
-### Memory Management
-
-- **Temporary Files**: Cleaned up after each lint
-- **AbortControllers**: Disposed after cancellation
-- **Diagnostics**: Cleared on document close
-- **Queue**: Drained automatically after slot release
+- **Command Availability**: 30-second TTL cache per configured path
+- **Config File Path**: 5-second TTL cache with 100-entry max
+- **Settings**: Cached globally, refreshed on configuration change
 
 ### Timeout Protection
 
-- **Default**: 10 seconds per lint operation
-- **Configurable**: Via `timeoutMs` setting
+- **Lint**: Default 10s (via `timeoutMs` setting)
+- **Format**: Default 10s (via `formatTimeoutMs` setting)
 - **Process Killing**: Forceful termination after timeout
-- **Diagnostic Clearing**: Removes stale results
 
 ## Error Handling
 
+### CLI Exit Codes
+
+| Exit Code | Meaning | Action |
+|-----------|---------|--------|
+| 0 | Success (no violations / operation succeeded) | Parse stdout |
+| 1 | Rule violations found (lint only) | Parse stdout for diagnostics |
+| 2 | Parse error (SQL could not be parsed) | Show warning |
+| 3 | Configuration error (config file load failure) | Show warning |
+| 4 | Runtime exception (internal error) | Show warning |
+
+Exit codes >= 2 trigger user-facing warnings with specific descriptions via `CLI_EXIT_CODE_DESCRIPTIONS`.
+
 ### Error Sources
 
-1. **Executable Not Found**
-   - Shows warning message
-   - Clears diagnostics
-   - Returns -1 (failure indicator)
+1. **Executable Not Found**: Triggers notification with install guide link (5-minute cooldown)
+2. **Spawn Errors**: Rejects promise, clears diagnostics
+3. **Timeout**: Kills process, returns partial output
+4. **Cancellation**: Respects AbortSignal, cleans up resources (no user notification)
+5. **CLI Errors**: Shared `handleOperationError()` provides consistent error handling for format/fix
 
-2. **Spawn Errors**
-   - Catches process spawn failures
-   - Displays user-friendly message
-   - Logs to output channel
-
-3. **Timeout**
-   - Kills process
-   - Shows timeout warning
-   - Clears diagnostics
-
-4. **Cancellation**
-   - Respects AbortSignal
-   - Cleans up resources
-   - No user notification (expected behavior)
-
-5. **TSQLRefine Errors** (stderr output)
-   - Shows first line as warning
-   - Logs full stderr to console
-   - Still publishes diagnostics from stdout
-
-### Error Propagation
-
-```
-TSQLRefine Error → runTsqllint() throws
-                ↓
-           runLintNow() catches
-                ↓
-           notifyRunFailure()
-                ↓
-           Clear diagnostics
-                ↓
-           Return -1
-```
-
-### User Notifications
-
-- **Warning Messages**: For errors and timeouts
-- **Console Logging**: For detailed error information
-- **Diagnostic Clearing**: On unrecoverable errors
-
-## Extension Points
-
-### Future Extensibility
+## Future Extensibility
 
 The architecture supports adding:
 
-1. **Custom Lint Rules**: Via tsqlrefine config files
-2. **Code Actions**: Fix suggestions based on rule violations
-3. **Range Mode**: Character-level highlighting (currently line-level)
-4. **Multiple File Types**: Extend beyond SQL files
-5. **Workspace-wide Linting**: Batch operation across files
-6. **Quick Fixes**: Automated rule violation fixes
-7. **Configuration UI**: Settings editor integration
-
-### LSP Capabilities
-
-Current capabilities:
-- TextDocumentSync (incremental)
-- Custom requests/notifications
-
-Potential additions:
-- CodeActions (quick fixes)
-- Hover (rule documentation)
-- CodeLens (inline lint counts)
-- WorkspaceSymbol (rule search)
+1. **Custom Lint Rules**: Via tsqlrefine config files and plugins
+2. **Multiple File Types**: Extend beyond SQL files
+3. **Workspace-wide Linting**: Batch operation across files
+4. **Hover Provider**: Show rule details on diagnostic hover
+5. **DiagnosticTag Support**: Visual differentiation for unnecessary/deprecated code
+6. **Configuration UI**: Settings editor integration
+7. **Config File Watching**: Re-lint on config changes
 
 ## References
 
 - [Language Server Protocol Specification](https://microsoft.github.io/language-server-protocol/)
 - [VS Code Extension API](https://code.visualstudio.com/api)
-- [TSQLRefine Documentation](https://github.com/tsqlrefine/tsqlrefine)
+- [TSQLRefine Documentation](https://github.com/masmgr/tsqlrefine)
 - [esbuild Documentation](https://esbuild.github.io/)
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2026-01-18
+**Document Version**: 2.0
+**Last Updated**: 2026-02-14
 **Extension Version**: 0.0.2
