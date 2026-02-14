@@ -681,7 +681,6 @@ Pull requests created by Dependabot are labeled with `dependencies` and `automat
 ### Windows Compatibility
 - Always use `path.resolve()` and `path.normalize()` for file paths
 - Use case-insensitive comparison on Windows (`normalizeForCompare()`)
-- Wrap `.cmd`/`.bat` executables with `cmd.exe /c`
 
 ### Concurrency and Cancellation
 - The `LintScheduler` prevents resource exhaustion with its semaphore
