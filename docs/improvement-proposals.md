@@ -1,24 +1,26 @@
 # Improvement Proposals
 
-This document outlines potential feature additions and improvements for the tsqlrefine VS Code extension, identified through a comprehensive codebase review at v0.0.1.
+This document outlines potential feature additions and improvements for the tsqlrefine VS Code extension, identified through a comprehensive codebase review at v0.0.1. Items 1-4 have been implemented in v0.0.2.
 
 ## Priority Summary
 
 The top 5 recommended improvements, balancing user impact against implementation effort:
 
-| # | Proposal | Category | Priority |
-|---|----------|----------|----------|
-| 1 | [Status bar integration](#status-bar-integration) | UX | High |
-| 2 | [Dedicated output channel](#dedicated-output-channel) | UX | High |
-| 3 | [Diagnostic `codeDescription.href`](#diagnostic-codedescriptionhref) | LSP | High |
-| 4 | [E2E tests in CI pipeline](#e2e-tests-in-ci-pipeline) | CI/CD | High |
-| 5 | [Config file auto-detection](#config-file-auto-detection) | Configuration | Medium |
+| # | Proposal | Category | Priority | Status |
+|---|----------|----------|----------|--------|
+| 1 | [Status bar integration](#status-bar-integration) | UX | High | Done (v0.0.2) |
+| 2 | [Dedicated output channel](#dedicated-output-channel) | UX | High | Done (v0.0.2) |
+| 3 | [Diagnostic `codeDescription.href`](#diagnostic-codedescriptionhref) | LSP | High | Done (v0.0.2) |
+| 4 | [E2E tests in CI pipeline](#e2e-tests-in-ci-pipeline) | CI/CD | High | Done (v0.0.2) |
+| 5 | [Config file auto-detection](#config-file-auto-detection) | Configuration | Medium | Pending |
 
 ---
 
 ## 1. UX Improvements
 
 ### Status Bar Integration
+
+> **Status: Implemented in v0.0.2** - See `src/client/statusBar.ts` and `src/client/statusBarFormat.ts`.
 
 **Priority:** High
 **Complexity:** Medium (~100 lines)
@@ -41,6 +43,8 @@ Add a status bar item showing diagnostic counts and extension state.
 ---
 
 ### Dedicated Output Channel
+
+> **Status: Implemented in v0.0.2** - The LSP client creates a dedicated output channel via `LanguageClient`, and `connection.console` provides structured logging on the server side.
 
 **Priority:** High
 **Complexity:** Medium (~80 lines)
@@ -87,6 +91,8 @@ Show LSP progress notifications during long-running operations.
 ## 2. LSP Feature Enhancements
 
 ### Diagnostic `codeDescription.href`
+
+> **Status: Implemented in v0.0.2** - `parseOutput.ts` reads `data.codeDescriptionHref` from CLI JSON output and attaches it to diagnostics.
 
 **Priority:** High
 **Complexity:** Low (~10 lines)
@@ -272,6 +278,8 @@ Provide more specific error context in failure notifications.
 
 ### E2E Tests in CI Pipeline
 
+> **Status: Implemented in v0.0.2** - CI workflow runs E2E tests on Ubuntu, Windows, and macOS with real tsqlrefine CLI installation.
+
 **Priority:** High
 **Complexity:** Medium
 
@@ -351,6 +359,8 @@ Create a contributor guide for the project.
 ---
 
 ### Update Extension Recommendations
+
+> **Status: Implemented** - ESLint recommendation replaced with Biome in `.vscode/extensions.json`.
 
 **Priority:** Low
 **Complexity:** Low (~2 lines)
