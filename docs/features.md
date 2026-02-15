@@ -46,6 +46,28 @@ Format your T-SQL code using TSQLRefine's formatter.
 - **Editor integration**: Use VS Code's built-in format commands (`Shift+Alt+F` / `Shift+Option+F`)
 - **Format on save**: Works with VS Code's `editor.formatOnSave` setting
 
+### Default Formatter
+
+This extension automatically registers itself as the default formatter for `sql`, `tsql`, and `mssql` languages. If another extension (e.g., mssql) overrides this, add the following to your `settings.json`:
+
+```json
+"[sql]": {
+    "editor.defaultFormatter": "masmgr.tsqlrefine"
+},
+"[tsql]": {
+    "editor.defaultFormatter": "masmgr.tsqlrefine"
+},
+"[mssql]": {
+    "editor.defaultFormatter": "masmgr.tsqlrefine"
+}
+```
+
+To enable format-on-save, add:
+
+```json
+"editor.formatOnSave": true
+```
+
 ## Commands
 
 | Command | Description |

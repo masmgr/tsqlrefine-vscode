@@ -176,6 +176,50 @@ suite("createDocumentContext", () => {
 		assert.ok(context.effectiveSettings.configPath);
 	});
 
+	test("does not match workspace folder that is a prefix of another folder name", async () => {
+		const work = path.resolve("workspace", "work");
+		const workbench = path.resolve("workspace", "workbench");
+		const filePath = path.join(workbench, "file.sql");
+		const uri = URI.file(filePath).toString();
+		const document = TextDocument.create(uri, "sql", 1, "SELECT 8;");
+
+		const options: DocumentContextOptions = {
+			document,
+			documentSettings: createTestSettings(),
+			workspaceFolders: [work, workbench],
+			isSavedFn: () => true,
+		};
+
+		const context = await createDocumentContext(options);
+
+		assert.strictEqual(
+			normalizeForCompare(context.workspaceRoot ?? ""),
+			normalizeForCompare(workbench),
+		);
+	});
+
+	test("returns deepest matching workspace folder in multi-root", async () => {
+		const outer = path.resolve("workspace");
+		const inner = path.resolve("workspace", "nested");
+		const filePath = path.join(inner, "sub", "file.sql");
+		const uri = URI.file(filePath).toString();
+		const document = TextDocument.create(uri, "sql", 1, "SELECT 9;");
+
+		const options: DocumentContextOptions = {
+			document,
+			documentSettings: createTestSettings(),
+			workspaceFolders: [outer, inner],
+			isSavedFn: () => true,
+		};
+
+		const context = await createDocumentContext(options);
+
+		assert.strictEqual(
+			normalizeForCompare(context.workspaceRoot ?? ""),
+			normalizeForCompare(inner),
+		);
+	});
+
 	test("handles empty configPath", async () => {
 		const filePath = path.resolve("workspace", "test.sql");
 		const uri = URI.file(filePath).toString();

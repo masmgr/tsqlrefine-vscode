@@ -16,7 +16,7 @@ suite("resolveConfigPath", () => {
 			await fs.mkdir(path.dirname(filePath), { recursive: true });
 
 			const resolved = await resolveConfigPath({
-				configuredConfigPath: `\${workspaceFolder}/.tsqlrefinerc`,
+				configuredConfigPath: `\${workspaceFolder}/tsqlrefine.json`,
 				filePath,
 				workspaceRoot,
 			});
@@ -24,22 +24,22 @@ suite("resolveConfigPath", () => {
 			assert.ok(resolved);
 			assert.strictEqual(
 				path.normalize(resolved),
-				path.normalize(path.join(workspaceRoot, ".tsqlrefinerc")),
+				path.normalize(path.join(workspaceRoot, "tsqlrefine.json")),
 			);
 		} finally {
 			await rmWithRetry(tempDir);
 		}
 	});
 
-	test("finds nearest .tsqlrefinerc when not configured", async () => {
+	test("finds nearest tsqlrefine.json when not configured", async () => {
 		const tempDir = await fs.mkdtemp(
 			path.join(os.tmpdir(), "tsqlrefine-test-"),
 		);
 		try {
 			const workspaceRoot = path.join(tempDir, "workspace");
-			const rootConfig = path.join(workspaceRoot, ".tsqlrefinerc");
+			const rootConfig = path.join(workspaceRoot, "tsqlrefine.json");
 			const nestedDir = path.join(workspaceRoot, "src", "nested");
-			const nestedConfig = path.join(nestedDir, ".tsqlrefinerc");
+			const nestedConfig = path.join(nestedDir, "tsqlrefine.json");
 			const filePath = path.join(nestedDir, "query.sql");
 
 			await fs.mkdir(nestedDir, { recursive: true });

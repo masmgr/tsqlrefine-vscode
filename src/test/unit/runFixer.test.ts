@@ -1,6 +1,10 @@
 import * as assert from "node:assert";
 import type { TsqlRefineSettings } from "../../server/config/settings";
-import { runFixer, type RunFixerOptions } from "../../server/fix/runFixer";
+import {
+	buildArgs,
+	runFixer,
+	type RunFixerOptions,
+} from "../../server/fix/runFixer";
 
 /**
  * Creates default test settings.
@@ -57,11 +61,46 @@ suite("runFixer", () => {
 		assert.strictEqual(result.stderr, "");
 	});
 
-	suite("argument building", () => {
-		// Note: These tests verify the behavior through integration with the actual
-		// CLI or through mock. Since runFixer calls resolveCommand which requires
-		// a valid tsqlrefine installation, we test the buildArgs logic indirectly.
+	suite("argument building (via buildArgs)", () => {
+		test("includes fix subcommand and standard flags", () => {
+			const options = createTestOptions();
+			const args = buildArgs(options);
+			assert.deepStrictEqual(args.slice(0, 3), ["fix", "-q", "--utf8"]);
+			assert.ok(args.includes("--stdin"));
+		});
 
+		test("includes -c flag when configPath is set", () => {
+			const options = createTestOptions({
+				settings: createTestSettings({
+					configPath: "/path/to/config.json",
+				}),
+			});
+			const args = buildArgs(options);
+			const cIndex = args.indexOf("-c");
+			assert.notStrictEqual(cIndex, -1);
+			assert.strictEqual(args[cIndex + 1], "/path/to/config.json");
+		});
+
+		test("omits -c flag when configPath is empty", () => {
+			const options = createTestOptions({
+				settings: createTestSettings({ configPath: "" }),
+			});
+			const args = buildArgs(options);
+			assert.strictEqual(args.indexOf("-c"), -1);
+		});
+
+		test("includes --severity flag with configured value", () => {
+			const options = createTestOptions({
+				settings: createTestSettings({ minSeverity: "warning" }),
+			});
+			const args = buildArgs(options);
+			const sevIndex = args.indexOf("--severity");
+			assert.notStrictEqual(sevIndex, -1);
+			assert.strictEqual(args[sevIndex + 1], "warning");
+		});
+	});
+
+	suite("timeout handling", () => {
 		test("uses formatTimeoutMs when available", async () => {
 			const controller = new AbortController();
 			controller.abort(); // Abort immediately to prevent actual CLI execution
@@ -115,7 +154,7 @@ suite("runFixer", () => {
 			const options = createTestOptions({
 				signal: controller.signal,
 				settings: createTestSettings({
-					configPath: "/path/to/.tsqlrefinerc",
+					configPath: "/path/to/tsqlrefine.json",
 				}),
 			});
 

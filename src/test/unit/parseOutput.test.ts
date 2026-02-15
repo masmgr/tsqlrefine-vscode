@@ -3,7 +3,6 @@ import * as path from "node:path";
 import * as fc from "fast-check";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
-import { RULE_DOCS_BASE_URL } from "../../server/config/constants";
 import { parseOutput } from "../../server/lint/parseOutput";
 import { cliJsonOutput } from "../helpers/arbitraries";
 
@@ -319,7 +318,7 @@ suite("parseOutput", () => {
 	});
 
 	suite("codeDescription.href", () => {
-		test("attaches codeDescription.href when code is present", () => {
+		test("no codeDescription when code is present but no codeDescriptionHref", () => {
 			const cwd = path.resolve("workspace");
 			const filePath = path.join(cwd, "query.sql");
 			const uri = URI.file(filePath).toString();
@@ -340,11 +339,8 @@ suite("parseOutput", () => {
 			assert.strictEqual(diagnostics.length, 1);
 			const diag = diagnostics[0];
 			assert.ok(diag);
-			assert.ok(diag.codeDescription);
-			assert.strictEqual(
-				diag.codeDescription.href,
-				`${RULE_DOCS_BASE_URL}/keyword-casing.md`,
-			);
+			assert.strictEqual(diag.code, "keyword-casing");
+			assert.strictEqual(diag.codeDescription, undefined);
 		});
 
 		test("uses CLI-provided codeDescriptionHref when available", () => {
@@ -399,7 +395,7 @@ suite("parseOutput", () => {
 			assert.strictEqual(diag.codeDescription, undefined);
 		});
 
-		test("URL-encodes rule codes with slashes", () => {
+		test("attaches codeDescription.href from CLI-provided data for slash codes", () => {
 			const cwd = path.resolve("workspace");
 			const filePath = path.join(cwd, "query.sql");
 			const uri = URI.file(filePath).toString();
@@ -412,6 +408,10 @@ suite("parseOutput", () => {
 					severity: 2,
 					code: "semantic/schema-qualify",
 					message: "Schema qualify tables",
+					data: {
+						codeDescriptionHref:
+							"https://example.com/rules/semantic/schema-qualify",
+					},
 				},
 			]);
 
@@ -420,10 +420,9 @@ suite("parseOutput", () => {
 			assert.strictEqual(diagnostics.length, 1);
 			const diag = diagnostics[0];
 			assert.ok(diag);
-			assert.ok(diag.codeDescription);
 			assert.strictEqual(
-				diag.codeDescription.href,
-				`${RULE_DOCS_BASE_URL}/${encodeURIComponent("semantic/schema-qualify")}.md`,
+				diag.codeDescription?.href,
+				"https://example.com/rules/semantic/schema-qualify",
 			);
 		});
 	});
@@ -741,7 +740,7 @@ suite("parseOutput", () => {
 			);
 		});
 
-		test("property: diagnostics with code always have codeDescription.href", () => {
+		test("property: codeDescription is set only when codeDescriptionHref is provided", () => {
 			fc.assert(
 				fc.property(cliJsonOutput, (jsonOutput) => {
 					const stdout = JSON.stringify(jsonOutput);
@@ -755,13 +754,30 @@ suite("parseOutput", () => {
 
 					const diagnostics = parseOutput({ stdout, uri, cwd });
 
-					return diagnostics.every((d) => {
-						if (d.code != null) {
+					// Collect all input diagnostics from matching files (same logic as parseOutput)
+					const normalizedTarget = resolvedPath.toLowerCase();
+					const inputDiags = jsonOutput.files.flatMap((f) => {
+						const resolved =
+							f.filePath === "<stdin>"
+								? normalizedTarget
+								: path.resolve(cwd, f.filePath).toLowerCase();
+						if (resolved !== normalizedTarget) return [];
+						return f.diagnostics ?? [];
+					});
+
+					return diagnostics.every((d, idx) => {
+						const inputDiag = inputDiags[idx];
+						const hasCode = inputDiag?.code != null;
+						const hasHref = !!inputDiag?.data?.codeDescriptionHref;
+
+						if (hasCode && hasHref) {
+							// When code is present and CLI provides href, codeDescription should be set
 							return (
 								typeof d.codeDescription?.href === "string" &&
 								d.codeDescription.href.length > 0
 							);
 						}
+						// Otherwise, codeDescription should be undefined
 						return d.codeDescription === undefined;
 					});
 				}),

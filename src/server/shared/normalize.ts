@@ -15,6 +15,10 @@ export function normalizeForCompare(filePath: string): string {
 /**
  * Normalize an executable path setting (trim and resolve).
  * Returns null if the value is empty or undefined.
+ *
+ * Note: This function trims both before and after resolution to ensure idempotence.
+ * path.resolve() can preserve trailing whitespace in some edge cases (e.g., "! /"),
+ * so we trim again to guarantee consistent results.
  */
 export function normalizeExecutablePath(
 	value: string | undefined,
@@ -26,7 +30,8 @@ export function normalizeExecutablePath(
 	if (!trimmed) {
 		return null;
 	}
-	return path.resolve(trimmed);
+	// Trim after resolve to handle edge cases like "! /" where resolve preserves trailing space
+	return path.resolve(trimmed).trim();
 }
 
 /**

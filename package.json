@@ -2,7 +2,7 @@
 	"name": "tsqlrefine",
 	"displayName": "TSQLRefine",
 	"description": "T-SQL linter integration for VS Code using TSQLRefine",
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"publisher": "masmgr",
 	"license": "MIT",
 	"repository": {
@@ -16,7 +16,7 @@
 	"icon": "icon.png",
 	"engines": {
 		"node": ">=24.0.0",
-		"vscode": "^1.108.1"
+		"vscode": "^1.109.0"
 	},
 	"categories": [
 		"Linters",
@@ -70,11 +70,13 @@
 				"tsqlrefine.path": {
 					"type": "string",
 					"default": "",
+					"scope": "machine-overridable",
 					"description": "Path to tsqlrefine executable."
 				},
 				"tsqlrefine.configPath": {
 					"type": "string",
 					"default": "",
+					"scope": "machine-overridable",
 					"description": "Path to tsqlrefine config file (passed with -c)."
 				},
 				"tsqlrefine.runOnSave": {
@@ -159,7 +161,18 @@
 					".sql"
 				]
 			}
-		]
+		],
+		"configurationDefaults": {
+			"[sql]": {
+				"editor.defaultFormatter": "masmgr.tsqlrefine"
+			},
+			"[tsql]": {
+				"editor.defaultFormatter": "masmgr.tsqlrefine"
+			},
+			"[mssql]": {
+				"editor.defaultFormatter": "masmgr.tsqlrefine"
+			}
+		}
 	},
 	"scripts": {
 		"typecheck": "tsc -p tsconfig.json --noEmit",
@@ -172,32 +185,34 @@
 		"package": "vsce package",
 		"lint": "biome lint .",
 		"format": "biome format --write .",
+		"format:check": "biome format .",
 		"test:unit": "npm run compile:test && mocha --config .mocharc.unit.json",
 		"test:unit:coverage": "npm run compile:test && c8 mocha --config .mocharc.unit.json",
 		"test:coverage": "npm run test:unit:coverage",
 		"test:e2e": "npm run build && npm run compile:test && vscode-test",
 		"test": "npm run test:unit",
 		"prepare": "husky",
-		"verify": "npm test && npm run typecheck && npm run lint && npm run format"
+		"verify": "npm test && npm run typecheck && npm run lint && npm run format:check"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.3.13",
+		"@biomejs/biome": "^2.3.14",
 		"@types/mocha": "^10.0.10",
 		"@types/node": "^24.10.9",
-		"@types/vscode": "^1.108.1",
-		"@vscode/test-cli": "^0.0.12",
+		"@types/vscode": "^1.109.0",
+		"@vscode/test-cli": "^0.0.11",
 		"@vscode/test-electron": "^2.5.2",
 		"@vscode/vsce": "^3.2.1",
 		"c8": "^10.1.3",
-		"esbuild": "^0.27.2",
+		"esbuild": "^0.27.3",
 		"fast-check": "^4.5.3",
 		"husky": "^9.1.7",
 		"lint-staged": "^16.2.7",
-		"mocha": "^11.7.5",
+		"mocha": "^11.3.0",
 		"source-map-support": "^0.5.21",
 		"typescript": "^5.9.3"
 	},
 	"lint-staged": {
+		"package-lock.json": [],
 		"*.ts": [
 			"biome format --write",
 			"biome lint --fix"

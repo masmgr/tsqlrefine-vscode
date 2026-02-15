@@ -24,9 +24,8 @@ export const MISSING_TSQLREFINE_NOTICE_COOLDOWN_MS = 5 * 60 * 1000;
 /** Default executable name */
 export const DEFAULT_COMMAND_NAME = "tsqlrefine";
 
-/** Base URL for tsqlrefine rule documentation */
-export const RULE_DOCS_BASE_URL =
-	"https://github.com/masmgr/tsqlrefine/blob/main/docs/rules";
+/** Maximum combined stdout+stderr buffer size (10 MB) */
+export const MAX_OUTPUT_BYTES = 10 * 1024 * 1024;
 
 /** Human-readable descriptions for CLI exit codes >= 2 */
 export const CLI_EXIT_CODE_DESCRIPTIONS: Record<number, string> = {
