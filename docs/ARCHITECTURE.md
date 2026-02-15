@@ -884,4 +884,4 @@ The architecture supports adding:
 
 **Document Version**: 2.0
 **Last Updated**: 2026-02-14
-**Extension Version**: 0.0.2
+**Extension Version**: 0.0.3

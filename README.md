@@ -1,7 +1,7 @@
 # TSQLRefine
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.0.2-blue.svg)](https://github.com/masmgr/tsqlrefine-vscode)
+[![Version](https://img.shields.io/badge/version-0.0.3-blue.svg)](https://github.com/masmgr/tsqlrefine-vscode)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.108.1+-007ACC.svg)](https://code.visualstudio.com/)
 [![CI](https://github.com/masmgr/tsqlrefine-vscode/workflows/CI/badge.svg)](https://github.com/masmgr/tsqlrefine-vscode/actions/workflows/ci.yml)
 [![Visual Studio Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/masmgr.tsqlrefine?label=VS%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=masmgr.tsqlrefine)
