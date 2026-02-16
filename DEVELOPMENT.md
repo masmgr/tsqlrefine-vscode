@@ -455,7 +455,7 @@ Runs when a release is published on GitHub:
 
 1. Update version in `package.json`:
    ```json
-   "version": "0.1.0"
+   "version": "1.0.0"
    ```
 
 2. Update `CHANGELOG.md` with release notes
@@ -463,14 +463,14 @@ Runs when a release is published on GitHub:
 3. Commit changes:
    ```bash
    git add package.json CHANGELOG.md
-   git commit -m "chore: bump version to 0.1.0"
+   git commit -m "chore: bump version to 1.0.0"
    git push
    ```
 
 4. Create a GitHub release:
    - Go to https://github.com/masmgr/tsqlrefine-vscode/releases
    - Click "Draft a new release"
-   - Tag: `v0.1.0` (matches package.json version)
+   - Tag: `v1.0.0` (matches package.json version)
    - Title: Release notes or version summary
    - Description: Detailed release notes
    - Click "Publish release"
