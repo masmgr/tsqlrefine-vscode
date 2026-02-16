@@ -2,7 +2,7 @@
 	"name": "tsqlrefine",
 	"displayName": "TSQLRefine",
 	"description": "T-SQL linter integration for VS Code using TSQLRefine",
-	"version": "0.0.3",
+	"version": "0.1.0",
 	"publisher": "masmgr",
 	"license": "MIT",
 	"repository": {
