@@ -23,6 +23,7 @@ function createTestSettings(
 		enableLint: true,
 		enableFormat: true,
 		enableFix: true,
+		allowPlugins: false,
 		...overrides,
 	};
 }
@@ -95,6 +96,7 @@ suite("runFormatter", () => {
 				enableLint: true,
 				enableFormat: true,
 				enableFix: true,
+				allowPlugins: false,
 			};
 
 			const options = createTestOptions({
@@ -141,6 +143,22 @@ suite("runFormatter", () => {
 			});
 			const args = buildArgs(options);
 			assert.strictEqual(args.indexOf("--severity"), -1);
+		});
+
+		test("includes --allow-plugins flag when allowPlugins is true", () => {
+			const options = createTestOptions({
+				settings: createTestSettings({ allowPlugins: true }),
+			});
+			const args = buildArgs(options);
+			assert.ok(args.includes("--allow-plugins"));
+		});
+
+		test("omits --allow-plugins flag when allowPlugins is false", () => {
+			const options = createTestOptions({
+				settings: createTestSettings({ allowPlugins: false }),
+			});
+			const args = buildArgs(options);
+			assert.strictEqual(args.includes("--allow-plugins"), false);
 		});
 	});
 });

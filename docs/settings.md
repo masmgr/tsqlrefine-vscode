@@ -35,6 +35,14 @@ All settings are under the `tsqlrefine` namespace.
 | `enableFormat` | boolean | `true` | Enable formatting |
 | `enableFix` | boolean | `true` | Enable auto-fix |
 
+## Security
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `allowPlugins` | boolean | `false` | Allow loading of tsqlrefine plugin DLLs from configuration |
+
+> **Warning:** Enabling `allowPlugins` allows tsqlrefine to load plugin DLLs specified in your configuration file, which execute arbitrary code. Only enable this if you trust the plugins referenced in your tsqlrefine configuration.
+
 ## Configuration Examples
 
 ### Basic Setup

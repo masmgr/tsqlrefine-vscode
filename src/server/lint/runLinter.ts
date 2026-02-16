@@ -38,6 +38,9 @@ export function buildArgs(options: RunLinterOptions): string[] {
 	if (configPath) {
 		args.push("-c", configPath);
 	}
+	if (options.settings.allowPlugins) {
+		args.push("--allow-plugins");
+	}
 	// Add severity threshold
 	args.push("--severity", options.settings.minSeverity);
 	// Use JSON output for structured diagnostics

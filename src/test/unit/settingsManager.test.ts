@@ -201,5 +201,39 @@ suite("SettingsManager", () => {
 
 			assert.strictEqual(settings.maxFileSizeKb, 0);
 		});
+
+		test("normalizes non-boolean allowPlugins to false", async () => {
+			const { connection } = createMockConnection({
+				allowPlugins: "yes" as unknown,
+			});
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			const settings = manager.getSettings();
+
+			assert.strictEqual(settings.allowPlugins, false);
+		});
+
+		test("preserves allowPlugins true when explicitly set", async () => {
+			const { connection } = createMockConnection({
+				allowPlugins: true,
+			});
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			const settings = manager.getSettings();
+
+			assert.strictEqual(settings.allowPlugins, true);
+		});
+
+		test("defaults allowPlugins to false when not configured", async () => {
+			const { connection } = createMockConnection({});
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			const settings = manager.getSettings();
+
+			assert.strictEqual(settings.allowPlugins, false);
+		});
 	});
 });

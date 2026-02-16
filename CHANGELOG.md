@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/), and this 
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-02-16
+
+### Added
+- Plugin support via `tsqlrefine.allowPlugins` setting (opt-in, default: `false`). When enabled, passes `--allow-plugins` to all CLI invocations to load plugin DLLs from configuration.
+
 ## [0.0.3] - 2026-02-15
 
 ### Added

@@ -23,6 +23,7 @@ function createTestSettings(
 		enableLint: true,
 		enableFormat: true,
 		enableFix: true,
+		allowPlugins: false,
 		...overrides,
 	};
 }
@@ -98,6 +99,22 @@ suite("runFixer", () => {
 			assert.notStrictEqual(sevIndex, -1);
 			assert.strictEqual(args[sevIndex + 1], "warning");
 		});
+
+		test("includes --allow-plugins flag when allowPlugins is true", () => {
+			const options = createTestOptions({
+				settings: createTestSettings({ allowPlugins: true }),
+			});
+			const args = buildArgs(options);
+			assert.ok(args.includes("--allow-plugins"));
+		});
+
+		test("omits --allow-plugins flag when allowPlugins is false", () => {
+			const options = createTestOptions({
+				settings: createTestSettings({ allowPlugins: false }),
+			});
+			const args = buildArgs(options);
+			assert.strictEqual(args.includes("--allow-plugins"), false);
+		});
 	});
 
 	suite("timeout handling", () => {
@@ -134,6 +151,7 @@ suite("runFixer", () => {
 				enableLint: true,
 				enableFormat: true,
 				enableFix: true,
+				allowPlugins: false,
 			};
 
 			const options = createTestOptions({
@@ -178,6 +196,7 @@ suite("runFixer", () => {
 				enableLint: true,
 				enableFormat: true,
 				enableFix: true,
+				allowPlugins: false,
 			};
 
 			const options = createTestOptions({

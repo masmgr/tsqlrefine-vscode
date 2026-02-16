@@ -12,6 +12,7 @@ export type TsqlRefineSettings = {
 	enableLint: boolean;
 	enableFormat: boolean;
 	enableFix: boolean;
+	allowPlugins: boolean;
 };
 
 export const defaultSettings: TsqlRefineSettings = {
@@ -26,4 +27,5 @@ export const defaultSettings: TsqlRefineSettings = {
 	enableLint: true,
 	enableFormat: true,
 	enableFix: true,
+	allowPlugins: false,
 };

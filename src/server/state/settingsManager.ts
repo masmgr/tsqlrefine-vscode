@@ -61,6 +61,9 @@ export class SettingsManager {
 		) {
 			normalized.minSeverity = "info";
 		}
+		if (typeof normalized.allowPlugins !== "boolean") {
+			normalized.allowPlugins = false;
+		}
 		return normalized;
 	}
 }

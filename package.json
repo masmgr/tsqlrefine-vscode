@@ -2,7 +2,7 @@
 	"name": "tsqlrefine",
 	"displayName": "TSQLRefine",
 	"description": "T-SQL linter integration for VS Code using TSQLRefine",
-	"version": "0.0.3",
+	"version": "0.1.0",
 	"publisher": "masmgr",
 	"license": "MIT",
 	"repository": {
@@ -139,6 +139,11 @@
 					"type": "boolean",
 					"default": true,
 					"description": "Enable auto-fix functionality."
+				},
+				"tsqlrefine.allowPlugins": {
+					"type": "boolean",
+					"default": false,
+					"description": "Allow loading of tsqlrefine plugin DLLs from configuration. Only enable if you trust the plugins referenced in your tsqlrefine configuration."
 				}
 			}
 		},
@@ -195,11 +200,11 @@
 		"verify": "npm test && npm run typecheck && npm run lint && npm run format:check"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.3.14",
+		"@biomejs/biome": "^2.4.0",
 		"@types/mocha": "^10.0.10",
 		"@types/node": "^24.10.9",
 		"@types/vscode": "^1.109.0",
-		"@vscode/test-cli": "^0.0.11",
+		"@vscode/test-cli": "^0.0.12",
 		"@vscode/test-electron": "^2.5.2",
 		"@vscode/vsce": "^3.2.1",
 		"c8": "^10.1.3",

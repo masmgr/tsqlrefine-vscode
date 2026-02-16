@@ -21,6 +21,9 @@ export function buildArgs(options: RunFormatterOptions): string[] {
 	if (configPath) {
 		args.push("-c", configPath);
 	}
+	if (options.settings.allowPlugins) {
+		args.push("--allow-plugins");
+	}
 	// Use --stdin to read content from stdin
 	args.push("--stdin");
 	return args;
