@@ -24,6 +24,7 @@ function createTestSettings(
 		enableLint: true,
 		enableFormat: true,
 		enableFix: true,
+		allowPlugins: false,
 		...overrides,
 	};
 }

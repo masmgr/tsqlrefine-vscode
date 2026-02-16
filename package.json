@@ -139,6 +139,11 @@
 					"type": "boolean",
 					"default": true,
 					"description": "Enable auto-fix functionality."
+				},
+				"tsqlrefine.allowPlugins": {
+					"type": "boolean",
+					"default": false,
+					"description": "Allow loading of tsqlrefine plugin DLLs from configuration. Only enable if you trust the plugins referenced in your tsqlrefine configuration."
 				}
 			}
 		},

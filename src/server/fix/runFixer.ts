@@ -21,6 +21,9 @@ export function buildArgs(options: RunFixerOptions): string[] {
 	if (configPath) {
 		args.push("-c", configPath);
 	}
+	if (options.settings.allowPlugins) {
+		args.push("--allow-plugins");
+	}
 	// Add severity threshold
 	args.push("--severity", options.settings.minSeverity);
 	// Use --stdin to read content from stdin

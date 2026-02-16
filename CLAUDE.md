@@ -95,6 +95,7 @@ Settings namespace: `tsqlrefine`
 | `enableLint` | boolean | true | Enable linting |
 | `enableFormat` | boolean | true | Enable formatting |
 | `enableFix` | boolean | true | Enable auto-fix |
+| `allowPlugins` | boolean | false | Allow loading tsqlrefine plugins (security-sensitive, opt-in) |
 
 ## Commands
 
