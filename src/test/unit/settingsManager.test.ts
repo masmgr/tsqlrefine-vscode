@@ -235,5 +235,87 @@ suite("SettingsManager", () => {
 
 			assert.strictEqual(settings.allowPlugins, false);
 		});
+
+		test("normalizes negative timeoutMs to default", async () => {
+			const { connection } = createMockConnection({ timeoutMs: -1 });
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			assert.strictEqual(
+				manager.getSettings().timeoutMs,
+				defaultSettings.timeoutMs,
+			);
+		});
+
+		test("normalizes NaN timeoutMs to default", async () => {
+			const { connection } = createMockConnection({ timeoutMs: Number.NaN });
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			assert.strictEqual(
+				manager.getSettings().timeoutMs,
+				defaultSettings.timeoutMs,
+			);
+		});
+
+		test("normalizes zero timeoutMs to default", async () => {
+			const { connection } = createMockConnection({ timeoutMs: 0 });
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			assert.strictEqual(
+				manager.getSettings().timeoutMs,
+				defaultSettings.timeoutMs,
+			);
+		});
+
+		test("preserves valid positive timeoutMs", async () => {
+			const { connection } = createMockConnection({ timeoutMs: 5000 });
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			assert.strictEqual(manager.getSettings().timeoutMs, 5000);
+		});
+
+		test("normalizes invalid formatTimeoutMs to default", async () => {
+			const { connection } = createMockConnection({ formatTimeoutMs: -1 });
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			assert.strictEqual(
+				manager.getSettings().formatTimeoutMs,
+				defaultSettings.formatTimeoutMs,
+			);
+		});
+
+		test("normalizes invalid fixTimeoutMs to default", async () => {
+			const { connection } = createMockConnection({ fixTimeoutMs: -1 });
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			assert.strictEqual(
+				manager.getSettings().fixTimeoutMs,
+				defaultSettings.fixTimeoutMs,
+			);
+		});
+
+		test("normalizes negative debounceMs to default", async () => {
+			const { connection } = createMockConnection({ debounceMs: -1 });
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			assert.strictEqual(
+				manager.getSettings().debounceMs,
+				defaultSettings.debounceMs,
+			);
+		});
+
+		test("preserves zero debounceMs (no debounce)", async () => {
+			const { connection } = createMockConnection({ debounceMs: 0 });
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			assert.strictEqual(manager.getSettings().debounceMs, 0);
+		});
 	});
 });

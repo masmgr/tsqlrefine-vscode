@@ -56,6 +56,28 @@ export class SettingsManager {
 		) {
 			normalized.maxFileSizeKb = 0;
 		}
+		if (!Number.isFinite(normalized.timeoutMs) || normalized.timeoutMs <= 0) {
+			normalized.timeoutMs = defaultSettings.timeoutMs;
+		}
+		if (
+			normalized.formatTimeoutMs !== undefined &&
+			(!Number.isFinite(normalized.formatTimeoutMs) ||
+				normalized.formatTimeoutMs <= 0)
+		) {
+			normalized.formatTimeoutMs =
+				defaultSettings.formatTimeoutMs ?? defaultSettings.timeoutMs;
+		}
+		if (
+			normalized.fixTimeoutMs !== undefined &&
+			(!Number.isFinite(normalized.fixTimeoutMs) ||
+				normalized.fixTimeoutMs <= 0)
+		) {
+			normalized.fixTimeoutMs =
+				defaultSettings.fixTimeoutMs ?? defaultSettings.timeoutMs;
+		}
+		if (!Number.isFinite(normalized.debounceMs) || normalized.debounceMs < 0) {
+			normalized.debounceMs = defaultSettings.debounceMs;
+		}
 		if (
 			!["error", "warning", "info", "hint"].includes(normalized.minSeverity)
 		) {
