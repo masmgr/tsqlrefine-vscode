@@ -105,6 +105,7 @@ Settings namespace: `tsqlrefine`
 | `tsqlrefine.format` | Format the active document |
 | `tsqlrefine.fix` | Apply auto-fixes to the active document |
 | `tsqlrefine.openInstallGuide` | Open installation guide URL |
+| `tsqlrefine.setAsDefaultFormatter` | Set TSQLRefine as default SQL formatter for workspace |
 
 ## Testing
 

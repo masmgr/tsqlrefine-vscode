@@ -123,6 +123,30 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 	);
 	context.subscriptions.push(fixCommand);
 
+	const LANGUAGE_IDS = ["sql", "tsql", "mssql"] as const;
+	const EXTENSION_ID = "masmgr.tsqlrefine";
+
+	const setAsDefaultFormatterCommand = vscode.commands.registerCommand(
+		"tsqlrefine.setAsDefaultFormatter",
+		async () => {
+			for (const languageId of LANGUAGE_IDS) {
+				const config = vscode.workspace.getConfiguration("editor", {
+					languageId,
+				});
+				await config.update(
+					"defaultFormatter",
+					EXTENSION_ID,
+					vscode.ConfigurationTarget.Workspace,
+					true,
+				);
+			}
+			await vscode.window.showInformationMessage(
+				"TSQLRefine is now the default SQL formatter for this workspace.",
+			);
+		},
+	);
+	context.subscriptions.push(setAsDefaultFormatterCommand);
+
 	context.subscriptions.push(
 		vscode.workspace.onDidDeleteFiles(async (event) => {
 			await handleDidDeleteFiles(event, client, clientReady);

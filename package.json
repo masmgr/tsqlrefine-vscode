@@ -62,6 +62,11 @@
 				"command": "tsqlrefine.openInstallGuide",
 				"title": "TSQLRefine: Open Install Guide",
 				"category": "TSQLRefine"
+			},
+			{
+				"command": "tsqlrefine.setAsDefaultFormatter",
+				"title": "TSQLRefine: Set as Default Formatter",
+				"category": "TSQLRefine"
 			}
 		],
 		"configuration": {
