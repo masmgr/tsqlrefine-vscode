@@ -285,7 +285,12 @@ async function handleDidChangeContent(document: TextDocument): Promise<void> {
 			return;
 		}
 		lintStateManager.cancelInFlight(document.uri);
-		requestLint(document.uri, "type", document.version, docSettings.debounceMs);
+		void requestLint(
+			document.uri,
+			"type",
+			document.version,
+			docSettings.debounceMs,
+		);
 	} catch (error) {
 		notificationManager.error(
 			`tsqlrefine: failed to react to change (${String(error)})`,
@@ -299,7 +304,7 @@ async function handleDidSave(document: TextDocument): Promise<void> {
 		lintStateManager.setSavedVersion(uri, document.version);
 		const docSettings = await settingsManager.getSettingsForDocument(uri);
 		if (docSettings.runOnSave && docSettings.enableLint) {
-			requestLint(uri, "save", document.version);
+			void requestLint(uri, "save", document.version);
 		}
 	} catch (error) {
 		notificationManager.error(
@@ -317,7 +322,7 @@ async function handleDidOpen(document: TextDocument): Promise<void> {
 
 		const docSettings = await settingsManager.getSettingsForDocument(uri);
 		if (docSettings.runOnOpen && docSettings.enableLint) {
-			requestLint(uri, "open", document.version);
+			void requestLint(uri, "open", document.version);
 		}
 	} catch (error) {
 		notificationManager.error(
