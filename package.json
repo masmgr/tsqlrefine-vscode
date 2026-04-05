@@ -119,6 +119,11 @@
 					"default": 10000,
 					"description": "Timeout in milliseconds for format execution."
 				},
+				"tsqlrefine.fixTimeoutMs": {
+					"type": "number",
+					"default": 10000,
+					"description": "Timeout in milliseconds for fix execution."
+				},
 				"tsqlrefine.minSeverity": {
 					"type": "string",
 					"default": "info",

@@ -43,8 +43,7 @@ export async function runFixer(
 
 	const command = await resolveCommand(options.settings);
 	const args = buildArgs(options);
-	const timeoutMs =
-		options.settings.formatTimeoutMs ?? options.settings.timeoutMs;
+	const timeoutMs = options.settings.fixTimeoutMs ?? options.settings.timeoutMs;
 
 	return runProcess({
 		command,

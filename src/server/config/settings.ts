@@ -9,6 +9,7 @@ export type TsqlRefineSettings = {
 	maxFileSizeKb: number;
 	minSeverity: "error" | "warning" | "info" | "hint";
 	formatTimeoutMs?: number;
+	fixTimeoutMs?: number;
 	enableLint: boolean;
 	enableFormat: boolean;
 	enableFix: boolean;
@@ -24,6 +25,7 @@ export const defaultSettings: TsqlRefineSettings = {
 	maxFileSizeKb: 0,
 	minSeverity: "info",
 	formatTimeoutMs: 10000,
+	fixTimeoutMs: 10000,
 	enableLint: true,
 	enableFormat: true,
 	enableFix: true,

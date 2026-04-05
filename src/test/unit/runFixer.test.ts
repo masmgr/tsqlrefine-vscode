@@ -118,14 +118,14 @@ suite("runFixer", () => {
 	});
 
 	suite("timeout handling", () => {
-		test("uses formatTimeoutMs when available", async () => {
+		test("uses fixTimeoutMs when available", async () => {
 			const controller = new AbortController();
 			controller.abort(); // Abort immediately to prevent actual CLI execution
 
 			const options = createTestOptions({
 				signal: controller.signal,
 				settings: createTestSettings({
-					formatTimeoutMs: 5000,
+					fixTimeoutMs: 5000,
 					timeoutMs: 10000,
 				}),
 			});
@@ -135,11 +135,11 @@ suite("runFixer", () => {
 			assert.strictEqual(result.cancelled, true);
 		});
 
-		test("falls back to timeoutMs when formatTimeoutMs is not set", async () => {
+		test("falls back to timeoutMs when fixTimeoutMs is not set", async () => {
 			const controller = new AbortController();
 			controller.abort();
 
-			// Create settings without formatTimeoutMs
+			// Create settings without fixTimeoutMs
 			const settingsWithoutFormat: TsqlRefineSettings = {
 				runOnSave: true,
 				runOnType: false,
