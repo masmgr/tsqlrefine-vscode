@@ -21,7 +21,14 @@ export async function handleDidDeleteFiles(
 		await clientReady;
 	}
 	const uris = event.files.map((file) => file.toString());
-	client.sendNotification("tsqlrefine/clearDiagnostics", { uris });
+	try {
+		client.sendNotification("tsqlrefine/clearDiagnostics", { uris });
+	} catch (error) {
+		console.error(
+			"tsqlrefine: failed to send clearDiagnostics on delete",
+			error,
+		);
+	}
 }
 
 /**
@@ -44,5 +51,12 @@ export async function handleDidRenameFiles(
 		await clientReady;
 	}
 	const uris = event.files.map((file) => file.oldUri.toString());
-	client.sendNotification("tsqlrefine/clearDiagnostics", { uris });
+	try {
+		client.sendNotification("tsqlrefine/clearDiagnostics", { uris });
+	} catch (error) {
+		console.error(
+			"tsqlrefine: failed to send clearDiagnostics on rename",
+			error,
+		);
+	}
 }

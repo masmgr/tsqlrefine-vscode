@@ -136,6 +136,21 @@ suite("handlers", () => {
 			const notifications = getMockNotifications(mockClient);
 			assert.strictEqual(notifications.length, 1);
 		});
+		test("does not throw when sendNotification throws", async () => {
+			const mockClient = {
+				sendNotification() {
+					throw new Error("connection lost");
+				},
+				__notifications: [],
+			} as unknown as MockLanguageClient;
+
+			const event = {
+				files: [URI.file("/path/to/file.sql")],
+			};
+
+			// Should not throw
+			await handleDidDeleteFiles(event, mockClient, Promise.resolve());
+		});
 	});
 
 	suite("handleDidRenameFiles", () => {
@@ -214,6 +229,27 @@ suite("handlers", () => {
 
 			const notifications = getMockNotifications(mockClient);
 			assert.strictEqual(notifications.length, 1);
+		});
+
+		test("does not throw when sendNotification throws", async () => {
+			const mockClient = {
+				sendNotification() {
+					throw new Error("connection lost");
+				},
+				__notifications: [],
+			} as unknown as MockLanguageClient;
+
+			const event = {
+				files: [
+					{
+						oldUri: URI.file("/path/to/old.sql"),
+						newUri: URI.file("/path/to/new.sql"),
+					},
+				],
+			};
+
+			// Should not throw
+			await handleDidRenameFiles(event, mockClient, Promise.resolve());
 		});
 	});
 });
