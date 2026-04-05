@@ -69,20 +69,27 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 	const lintCommand = vscode.commands.registerCommand(
 		"tsqlrefine.run",
 		async () => {
-			const activeEditor = vscode.window.activeTextEditor;
-			if (!activeEditor) {
-				return;
+			try {
+				const activeEditor = vscode.window.activeTextEditor;
+				if (!activeEditor) {
+					return;
+				}
+				if (clientReady) {
+					await clientReady;
+				}
+				if (!client) {
+					console.error("tsqlrefine: Language client is not initialized");
+					return;
+				}
+				await client.sendRequest("tsqlrefine/lintDocument", {
+					uri: activeEditor.document.uri.toString(),
+				});
+			} catch (error) {
+				console.error("tsqlrefine: lint command failed", error);
+				void vscode.window.showErrorMessage(
+					`TSQLRefine lint failed: ${String(error)}`,
+				);
 			}
-			if (clientReady) {
-				await clientReady;
-			}
-			if (!client) {
-				console.error("tsqlrefine: Language client is not initialized");
-				return;
-			}
-			await client.sendRequest("tsqlrefine/lintDocument", {
-				uri: activeEditor.document.uri.toString(),
-			});
 		},
 	);
 	context.subscriptions.push(lintCommand);
@@ -90,14 +97,21 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 	const formatCommand = vscode.commands.registerCommand(
 		"tsqlrefine.format",
 		async () => {
-			const activeEditor = vscode.window.activeTextEditor;
-			if (!activeEditor) {
-				return;
+			try {
+				const activeEditor = vscode.window.activeTextEditor;
+				if (!activeEditor) {
+					return;
+				}
+				if (clientReady) {
+					await clientReady;
+				}
+				await vscode.commands.executeCommand("editor.action.formatDocument");
+			} catch (error) {
+				console.error("tsqlrefine: format command failed", error);
+				void vscode.window.showErrorMessage(
+					`TSQLRefine format failed: ${String(error)}`,
+				);
 			}
-			if (clientReady) {
-				await clientReady;
-			}
-			await vscode.commands.executeCommand("editor.action.formatDocument");
 		},
 	);
 	context.subscriptions.push(formatCommand);
@@ -105,20 +119,27 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 	const fixCommand = vscode.commands.registerCommand(
 		"tsqlrefine.fix",
 		async () => {
-			const activeEditor = vscode.window.activeTextEditor;
-			if (!activeEditor) {
-				return;
+			try {
+				const activeEditor = vscode.window.activeTextEditor;
+				if (!activeEditor) {
+					return;
+				}
+				if (clientReady) {
+					await clientReady;
+				}
+				if (!client) {
+					console.error("tsqlrefine: Language client is not initialized");
+					return;
+				}
+				await client.sendRequest("tsqlrefine/fixDocument", {
+					uri: activeEditor.document.uri.toString(),
+				});
+			} catch (error) {
+				console.error("tsqlrefine: fix command failed", error);
+				void vscode.window.showErrorMessage(
+					`TSQLRefine fix failed: ${String(error)}`,
+				);
 			}
-			if (clientReady) {
-				await clientReady;
-			}
-			if (!client) {
-				console.error("tsqlrefine: Language client is not initialized");
-				return;
-			}
-			await client.sendRequest("tsqlrefine/fixDocument", {
-				uri: activeEditor.document.uri.toString(),
-			});
 		},
 	);
 	context.subscriptions.push(fixCommand);
