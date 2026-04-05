@@ -13,7 +13,8 @@
 			"!**/*.mjs",
 			"!*.md",
 			"!*.yml",
-			"!*.yaml"
+			"!*.yaml",
+			"!package-lock.json"
 		]
 	},
 	"linter": {
