@@ -1,6 +1,7 @@
 import type { Connection, TextEdit } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { CLI_EXIT_CODE_DESCRIPTIONS } from "../config/constants";
+import { detectEndOfLine, normalizeLineEndings } from "../lint/decodeOutput";
 import type { DocumentContext } from "../shared/documentContext";
 import { createFullDocumentEdit } from "../shared/documentEdit";
 import { handleOperationError } from "../shared/errorHandling";
@@ -109,7 +110,10 @@ export async function executeFormat(
 		return null;
 	}
 
-	const formattedText = result.stdout;
+	const formattedText = normalizeLineEndings(
+		result.stdout,
+		detectEndOfLine(documentText),
+	);
 
 	if (formattedText === documentText) {
 		return [];

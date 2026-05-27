@@ -105,7 +105,19 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 				if (clientReady) {
 					await clientReady;
 				}
-				await vscode.commands.executeCommand("editor.action.formatDocument");
+				if (!client) {
+					console.error("tsqlrefine: Language client is not initialized");
+					return;
+				}
+				const result = await client.sendRequest<{
+					ok: boolean;
+					error?: string;
+				}>("tsqlrefine/formatDocument", {
+					uri: activeEditor.document.uri.toString(),
+				});
+				if (!result.ok) {
+					throw new Error(result.error ?? "Format failed");
+				}
 			} catch (error) {
 				console.error("tsqlrefine: format command failed", error);
 				void vscode.window.showErrorMessage(

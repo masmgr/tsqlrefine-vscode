@@ -91,6 +91,12 @@ connection.onInitialize((params) => {
 		[];
 	return {
 		capabilities: {
+			workspace: {
+				workspaceFolders: {
+					supported: true,
+					changeNotifications: true,
+				},
+			},
 			textDocumentSync: {
 				openClose: true,
 				change: TextDocumentSyncKind.Incremental,
@@ -107,6 +113,17 @@ connection.onInitialize((params) => {
 connection.onInitialized(async () => {
 	await settingsManager.refreshSettings();
 	await verifyInstallation();
+});
+
+connection.workspace.onDidChangeWorkspaceFolders((event) => {
+	const removed = new Set(
+		event.removed.map((folder) => URI.parse(folder.uri).fsPath),
+	);
+	const added = event.added.map((folder) => URI.parse(folder.uri).fsPath);
+	workspaceFolders = [
+		...workspaceFolders.filter((folder) => !removed.has(folder)),
+		...added,
+	];
 });
 
 connection.onDidChangeConfiguration(async () => {
@@ -173,9 +190,28 @@ connection.onDocumentFormatting(
 connection.onRequest(
 	"tsqlrefine/formatDocument",
 	async (params: { uri: string }): Promise<{ ok: boolean; error?: string }> => {
+		const document = documents.get(params.uri);
+		if (!document) {
+			return { ok: false, error: "Document not found" };
+		}
+		const version = document.version;
 		const edits = await formatDocument(params.uri);
 		if (edits === null) {
 			return { ok: false, error: "Format failed" };
+		}
+		if (edits.length === 0) {
+			return { ok: true };
+		}
+		const result = await connection.workspace.applyEdit({
+			documentChanges: [
+				TextDocumentEdit.create(
+					OptionalVersionedTextDocumentIdentifier.create(params.uri, version),
+					edits,
+				),
+			],
+		});
+		if (!result.applied) {
+			return { ok: false, error: "Failed to apply edits" };
 		}
 		return { ok: true };
 	},
