@@ -89,6 +89,11 @@ connection.onInitialize((params) => {
 	workspaceFolders =
 		params.workspaceFolders?.map((folder) => URI.parse(folder.uri).fsPath) ??
 		[];
+	// `trace` is "off" | "messages" | "verbose"; anything other than "off"
+	// (or absent) enables verbose debug logging on the server.
+	notificationManager.setDebugEnabled(
+		params.trace != null && params.trace !== "off",
+	);
 	return {
 		capabilities: {
 			workspace: {
@@ -114,6 +119,16 @@ connection.onInitialized(async () => {
 	await settingsManager.refreshSettings();
 	await verifyInstallation();
 });
+
+// Track the client's trace setting so verbose debug logging can be gated.
+connection.onNotification(
+	"$/setTrace",
+	(params: { value?: "off" | "messages" | "verbose" }) => {
+		notificationManager.setDebugEnabled(
+			params.value != null && params.value !== "off",
+		);
+	},
+);
 
 connection.workspace.onDidChangeWorkspaceFolders((event) => {
 	const removed = new Set(

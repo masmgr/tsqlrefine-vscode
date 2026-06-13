@@ -65,6 +65,37 @@ suite("parseOutput", () => {
 		assert.deepStrictEqual(diag.range.end, { line: 1, character: 8 });
 	});
 
+	test("passes lazy debug messages to logger and resolves to strings", () => {
+		const filePath = path.resolve("workspace", "query.sql");
+		const uri = URI.file(filePath).toString();
+		const stdout = createJsonOutput(filePath, [
+			{
+				range: {
+					start: { line: 0, character: 0 },
+					end: { line: 0, character: 1 },
+				},
+				message: "msg",
+			},
+		]);
+
+		const messages: string[] = [];
+		parseOutput({
+			stdout,
+			uri,
+			cwd: null,
+			logger: {
+				debug: (message) => {
+					messages.push(typeof message === "function" ? message() : message);
+				},
+			},
+		});
+
+		// Logger should have been invoked, and every resolved message is a string.
+		assert.ok(messages.length > 0);
+		assert.ok(messages.every((m) => typeof m === "string"));
+		assert.ok(messages.some((m) => m.includes("Target paths")));
+	});
+
 	test("handles relative paths against cwd", () => {
 		const cwd = path.resolve("workspace");
 		const filePath = path.join(cwd, "query.sql");

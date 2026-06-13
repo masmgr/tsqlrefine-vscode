@@ -11,6 +11,7 @@ interface MockConnectionCalls {
 	consoleLog: string[];
 	consoleWarn: string[];
 	consoleError: string[];
+	consoleDebug: string[];
 }
 
 /**
@@ -26,6 +27,7 @@ function createMockConnection(warningResponse?: { title: string }): {
 		consoleLog: [],
 		consoleWarn: [],
 		consoleError: [],
+		consoleDebug: [],
 	};
 
 	const connection = {
@@ -44,6 +46,9 @@ function createMockConnection(warningResponse?: { title: string }): {
 			},
 			error: (message: string) => {
 				calls.consoleError.push(message);
+			},
+			debug: (message: string) => {
+				calls.consoleDebug.push(message);
 			},
 		},
 		sendNotification: (method: string) => {
@@ -298,6 +303,75 @@ suite("NotificationManager", () => {
 
 			assert.strictEqual(calls.consoleError.length, 1);
 			assert.strictEqual(calls.consoleError[0], "Test error message");
+		});
+	});
+
+	suite("debug", () => {
+		test("is disabled by default", () => {
+			const { connection } = createMockConnection();
+			const manager = new NotificationManager(connection);
+
+			assert.strictEqual(manager.isDebugEnabled(), false);
+		});
+
+		test("does not log when disabled", () => {
+			const { connection, calls } = createMockConnection();
+			const manager = new NotificationManager(connection);
+
+			manager.debug("Test debug message");
+
+			assert.strictEqual(calls.consoleDebug.length, 0);
+		});
+
+		test("logs string message when enabled", () => {
+			const { connection, calls } = createMockConnection();
+			const manager = new NotificationManager(connection);
+			manager.setDebugEnabled(true);
+
+			manager.debug("Test debug message");
+
+			assert.strictEqual(calls.consoleDebug.length, 1);
+			assert.strictEqual(calls.consoleDebug[0], "Test debug message");
+		});
+
+		test("does not evaluate lazy factory when disabled", () => {
+			const { connection, calls } = createMockConnection();
+			const manager = new NotificationManager(connection);
+			let evaluated = false;
+
+			manager.debug(() => {
+				evaluated = true;
+				return "expensive message";
+			});
+
+			assert.strictEqual(evaluated, false);
+			assert.strictEqual(calls.consoleDebug.length, 0);
+		});
+
+		test("evaluates lazy factory when enabled", () => {
+			const { connection, calls } = createMockConnection();
+			const manager = new NotificationManager(connection);
+			manager.setDebugEnabled(true);
+			let evaluated = false;
+
+			manager.debug(() => {
+				evaluated = true;
+				return "expensive message";
+			});
+
+			assert.strictEqual(evaluated, true);
+			assert.strictEqual(calls.consoleDebug.length, 1);
+			assert.strictEqual(calls.consoleDebug[0], "expensive message");
+		});
+
+		test("setDebugEnabled toggles state", () => {
+			const { connection } = createMockConnection();
+			const manager = new NotificationManager(connection);
+
+			manager.setDebugEnabled(true);
+			assert.strictEqual(manager.isDebugEnabled(), true);
+			manager.setDebugEnabled(false);
+			assert.strictEqual(manager.isDebugEnabled(), false);
 		});
 	});
 });

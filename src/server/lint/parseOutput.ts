@@ -39,14 +39,21 @@ type CliDiagnostic = {
 	};
 };
 
+/**
+ * Debug logger that accepts either a string or a lazily-evaluated message
+ * factory. The factory form avoids the cost of building expensive log
+ * messages (e.g. `JSON.stringify`) on the hot path when no logger is attached.
+ */
+export type LazyDebugLogger = {
+	debug: (message: string | (() => string)) => void;
+};
+
 export type ParseOutputOptions = {
 	stdout: string;
 	uri: string;
 	cwd: string | null;
 	targetPaths?: string[];
-	logger?: {
-		debug: (message: string) => void;
-	};
+	logger?: LazyDebugLogger;
 };
 
 function mapSeverity(severity: number | undefined): DiagnosticSeverity {
@@ -93,7 +100,7 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 	const cwd = options.cwd ?? path.dirname(targetPath);
 
 	options.logger?.debug(
-		`[parseOutput] Target paths: ${JSON.stringify([...targetPaths])}`,
+		() => `[parseOutput] Target paths: ${JSON.stringify([...targetPaths])}`,
 	);
 	options.logger?.debug(`[parseOutput] CWD: ${cwd}`);
 
@@ -106,7 +113,7 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 				: normalizeForCompare(path.resolve(cwd, file.filePath));
 
 		options.logger?.debug(
-			`[parseOutput] File: ${file.filePath} -> Resolved: ${resolvedPath}`,
+			() => `[parseOutput] File: ${file.filePath} -> Resolved: ${resolvedPath}`,
 		);
 
 		if (!targetPaths.has(resolvedPath)) {
@@ -127,7 +134,8 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 				typeof diag.range?.end?.character !== "number"
 			) {
 				options.logger?.debug(
-					`[parseOutput] Skipping malformed diagnostic: ${JSON.stringify(diag)}`,
+					() =>
+						`[parseOutput] Skipping malformed diagnostic: ${JSON.stringify(diag)}`,
 				);
 				continue;
 			}

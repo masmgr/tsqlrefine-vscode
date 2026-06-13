@@ -11,7 +11,9 @@ export type OperationLogContext = {
 };
 
 type DebugLogger = {
-	debug(message: string): void;
+	debug(message: string | (() => string)): void;
+	/** When present and returning false, message construction is skipped. */
+	isDebugEnabled?(): boolean;
 };
 
 /**
@@ -21,6 +23,11 @@ export function logOperationContext(
 	logger: DebugLogger,
 	context: OperationLogContext,
 ): void {
+	// Skip building the per-field messages entirely when debug is disabled.
+	if (logger.isDebugEnabled?.() === false) {
+		return;
+	}
+
 	const prefix = `[execute${context.operation}]`;
 
 	logger.debug(`${prefix} URI: ${context.uri}`);

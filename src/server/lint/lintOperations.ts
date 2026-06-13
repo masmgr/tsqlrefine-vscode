@@ -148,7 +148,8 @@ export async function executeLint(
 		cwd,
 		targetPaths,
 		logger: {
-			debug: (message: string) => notificationManager.debug(message),
+			debug: (message: string | (() => string)) =>
+				notificationManager.debug(message),
 		},
 	});
 
