@@ -74,9 +74,7 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 				if (!activeEditor) {
 					return;
 				}
-				if (clientReady) {
-					await clientReady;
-				}
+				await clientReady;
 				if (!client) {
 					console.error("tsqlrefine: Language client is not initialized");
 					return;
@@ -102,9 +100,7 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 				if (!activeEditor) {
 					return;
 				}
-				if (clientReady) {
-					await clientReady;
-				}
+				await clientReady;
 				if (!client) {
 					console.error("tsqlrefine: Language client is not initialized");
 					return;
@@ -136,9 +132,7 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 				if (!activeEditor) {
 					return;
 				}
-				if (clientReady) {
-					await clientReady;
-				}
+				await clientReady;
 				if (!client) {
 					console.error("tsqlrefine: Language client is not initialized");
 					return;

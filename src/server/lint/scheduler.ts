@@ -61,6 +61,7 @@ export class LintScheduler {
 	private readonly pendingByUri = new Map<string, PendingLint>();
 	private readonly debounceTimerByUri = new Map<string, NodeJS.Timeout>();
 	private readonly queuedUris: string[] = [];
+	private readonly queuedUriSet = new Set<string>();
 	private draining = false;
 
 	constructor(options: SchedulerOptions) {
@@ -72,6 +73,7 @@ export class LintScheduler {
 		this.clearDebounce(uri);
 		this.pendingByUri.delete(uri);
 		this.removeFromQueue(uri);
+		this.queuedUriSet.delete(uri);
 	}
 
 	requestLint(
@@ -175,12 +177,17 @@ export class LintScheduler {
 	}
 
 	private queueUri(uri: string): void {
-		if (!this.queuedUris.includes(uri)) {
+		if (!this.queuedUriSet.has(uri)) {
+			this.queuedUriSet.add(uri);
 			this.queuedUris.push(uri);
 		}
 	}
 
 	private removeFromQueue(uri: string): void {
+		if (!this.queuedUriSet.has(uri)) {
+			return;
+		}
+		this.queuedUriSet.delete(uri);
 		const index = this.queuedUris.indexOf(uri);
 		if (index >= 0) {
 			this.queuedUris.splice(index, 1);
@@ -203,6 +210,7 @@ export class LintScheduler {
 					release();
 					continue;
 				}
+				this.queuedUriSet.delete(nextUri);
 				if (!this.pendingByUri.has(nextUri)) {
 					release();
 					continue;
