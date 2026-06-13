@@ -103,6 +103,7 @@ export async function executeLint(
 	}
 
 	if (result.timedOut) {
+		lintStateManager.clearInFlight(uri);
 		const formatted = "tsqlrefine: lint timed out";
 		// Don't await - warning message may block in some environments
 		void connection.window.showWarningMessage(formatted);
