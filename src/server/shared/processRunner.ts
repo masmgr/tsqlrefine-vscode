@@ -1,18 +1,18 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs/promises";
-import type { TsqlRefineSettings } from "../config/settings";
 import {
 	COMMAND_CACHE_TTL_MS,
 	COMMAND_CHECK_TIMEOUT_MS,
 	DEFAULT_COMMAND_NAME,
 	MAX_OUTPUT_BYTES,
 } from "../config/constants";
+import type { TsqlRefineSettings } from "../config/settings";
 import { decodeCliOutput } from "../lint/decodeOutput";
 import { normalizeExecutablePath } from "./normalize";
 import {
 	type BaseProcessOptions,
-	type ProcessRunResult,
 	createCancelledResult,
+	type ProcessRunResult,
 } from "./types";
 
 /**
@@ -57,20 +57,26 @@ export async function assertPathExists(filePath: string): Promise<void> {
  */
 export async function checkCommandAvailable(command: string): Promise<boolean> {
 	return new Promise((resolve) => {
+		let settled = false;
+		const finish = (result: boolean) => {
+			if (settled) return;
+			settled = true;
+			resolve(result);
+		};
 		const child = spawn(command, ["--version"], {
 			stdio: "ignore",
 		});
 		const timer = setTimeout(() => {
 			child.kill();
-			resolve(false);
+			finish(false);
 		}, COMMAND_CHECK_TIMEOUT_MS);
 		child.on("error", () => {
 			clearTimeout(timer);
-			resolve(false);
+			finish(false);
 		});
 		child.on("close", (code) => {
 			clearTimeout(timer);
-			resolve(code === 0);
+			finish(code === 0);
 		});
 	});
 }
