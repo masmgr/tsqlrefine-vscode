@@ -42,7 +42,7 @@ export async function executeFormat(
 	} = context;
 
 	if (!effectiveSettings.enableFormat) {
-		notificationManager.log(
+		notificationManager.debug(
 			`tsqlrefine: format is disabled (enableFormat=false) for ${uri}`,
 		);
 		return null;

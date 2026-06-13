@@ -42,7 +42,7 @@ export async function executeFix(
 	} = context;
 
 	if (!effectiveSettings.enableFix) {
-		notificationManager.log(
+		notificationManager.debug(
 			`tsqlrefine: fix is disabled (enableFix=false) for ${uri}`,
 		);
 		return null;

@@ -45,7 +45,7 @@ export type ParseOutputOptions = {
 	cwd: string | null;
 	targetPaths?: string[];
 	logger?: {
-		log: (message: string) => void;
+		debug: (message: string) => void;
 	};
 };
 
@@ -74,12 +74,12 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 	try {
 		parsed = JSON.parse(options.stdout) as CliJsonOutput;
 	} catch {
-		options.logger?.log(`[parseOutput] Failed to parse JSON output`);
+		options.logger?.debug(`[parseOutput] Failed to parse JSON output`);
 		return [];
 	}
 
 	if (!Array.isArray(parsed.files)) {
-		options.logger?.log(`[parseOutput] No files array in JSON output`);
+		options.logger?.debug(`[parseOutput] No files array in JSON output`);
 		return [];
 	}
 
@@ -92,10 +92,10 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 	);
 	const cwd = options.cwd ?? path.dirname(targetPath);
 
-	options.logger?.log(
+	options.logger?.debug(
 		`[parseOutput] Target paths: ${JSON.stringify([...targetPaths])}`,
 	);
-	options.logger?.log(`[parseOutput] CWD: ${cwd}`);
+	options.logger?.debug(`[parseOutput] CWD: ${cwd}`);
 
 	const diagnostics: Diagnostic[] = [];
 
@@ -105,12 +105,12 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 				? targetPath
 				: normalizeForCompare(path.resolve(cwd, file.filePath));
 
-		options.logger?.log(
+		options.logger?.debug(
 			`[parseOutput] File: ${file.filePath} -> Resolved: ${resolvedPath}`,
 		);
 
 		if (!targetPaths.has(resolvedPath)) {
-			options.logger?.log(`[parseOutput] Path not in target paths, skipping`);
+			options.logger?.debug(`[parseOutput] Path not in target paths, skipping`);
 			continue;
 		}
 

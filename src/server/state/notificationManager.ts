@@ -70,6 +70,13 @@ export class NotificationManager {
 	}
 
 	/**
+	 * Log a debug message to the console (verbose tracing, not shown by default).
+	 */
+	debug(message: string): void {
+		this.connection.console.debug(message);
+	}
+
+	/**
 	 * Log a message to the console.
 	 */
 	log(message: string): void {

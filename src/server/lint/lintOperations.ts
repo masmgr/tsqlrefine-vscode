@@ -56,7 +56,7 @@ export async function executeLint(
 		const sizeBytes = getDocumentSizeBytes(document);
 		if (sizeBytes > maxBytes) {
 			const sizeKb = Math.ceil(sizeBytes / 1024);
-			notificationManager.log(
+			notificationManager.debug(
 				`[executeLint] Skipping lint: file is ${sizeKb}KB > maxFileSizeKb=${effectiveSettings.maxFileSizeKb}`,
 			);
 			connection.sendDiagnostics({
@@ -147,7 +147,7 @@ export async function executeLint(
 		cwd,
 		targetPaths,
 		logger: {
-			log: (message: string) => notificationManager.log(message),
+			debug: (message: string) => notificationManager.debug(message),
 		},
 	});
 

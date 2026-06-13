@@ -1,11 +1,11 @@
 import {
 	CodeActionKind,
 	OptionalVersionedTextDocumentIdentifier,
-	TextDocumentEdit,
-	createConnection,
 	ProposedFeatures,
+	TextDocumentEdit,
 	TextDocumentSyncKind,
 	TextDocuments,
+	createConnection,
 	type CodeAction,
 	type CodeActionParams,
 	type DocumentFormattingParams,
@@ -304,7 +304,7 @@ async function verifyInstallation(): Promise<void> {
 		await notificationManager.maybeNotifyMissingTsqlRefine(message);
 		notificationManager.warn(`[startup] ${message}`);
 	} else {
-		notificationManager.log("[startup] tsqlrefine installation verified");
+		notificationManager.debug("[startup] tsqlrefine installation verified");
 	}
 }
 
@@ -414,7 +414,7 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 	try {
 		const result = await executeLint(context, document, reason, lintDeps);
 		const elapsedMs = Date.now() - startMs;
-		notificationManager.log(
+		notificationManager.debug(
 			`[executeLint] Completed in ${elapsedMs}ms (${result.diagnosticsCount} diagnostics)`,
 		);
 		return result.diagnosticsCount;
@@ -456,7 +456,7 @@ async function formatDocument(uri: string): Promise<TextEdit[] | null> {
 	try {
 		const result = await executeFormat(context, document, formatDeps);
 		const elapsedMs = Date.now() - startMs;
-		notificationManager.log(`[executeFormat] Completed in ${elapsedMs}ms`);
+		notificationManager.debug(`[executeFormat] Completed in ${elapsedMs}ms`);
 		return result;
 	} finally {
 		connection.sendNotification("tsqlrefine/operationState", {
@@ -507,7 +507,7 @@ async function fixDocument(uri: string): Promise<TextEdit[] | null> {
 	try {
 		const result = await executeFix(context, document, fixDeps);
 		const elapsedMs = Date.now() - startMs;
-		notificationManager.log(`[executeFix] Completed in ${elapsedMs}ms`);
+		notificationManager.debug(`[executeFix] Completed in ${elapsedMs}ms`);
 		return result;
 	} finally {
 		connection.sendNotification("tsqlrefine/operationState", {
