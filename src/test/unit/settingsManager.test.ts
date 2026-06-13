@@ -141,6 +141,67 @@ suite("SettingsManager", () => {
 		});
 	});
 
+	suite("getSettingsForDocument caching", () => {
+		test("caches result and avoids repeated LSP round-trips", async () => {
+			const { connection, calls } = createMockConnection({ timeoutMs: 20000 });
+			const manager = new SettingsManager(connection);
+
+			const first = await manager.getSettingsForDocument("file:///test.sql");
+			const second = await manager.getSettingsForDocument("file:///test.sql");
+
+			// Second call served from cache: only one getConfiguration call total.
+			assert.strictEqual(calls.getConfiguration.length, 1);
+			assert.deepStrictEqual(first, second);
+		});
+
+		test("caches per-document independently", async () => {
+			const { connection, calls } = createMockConnection();
+			const manager = new SettingsManager(connection);
+
+			await manager.getSettingsForDocument("file:///a.sql");
+			await manager.getSettingsForDocument("file:///b.sql");
+
+			assert.strictEqual(calls.getConfiguration.length, 2);
+		});
+
+		test("invalidateDocument clears the cached entry", async () => {
+			const { connection, calls } = createMockConnection();
+			const manager = new SettingsManager(connection);
+
+			await manager.getSettingsForDocument("file:///test.sql");
+			manager.invalidateDocument("file:///test.sql");
+			await manager.getSettingsForDocument("file:///test.sql");
+
+			assert.strictEqual(calls.getConfiguration.length, 2);
+		});
+
+		test("invalidateAll clears all cached entries", async () => {
+			const { connection, calls } = createMockConnection();
+			const manager = new SettingsManager(connection);
+
+			await manager.getSettingsForDocument("file:///a.sql");
+			await manager.getSettingsForDocument("file:///b.sql");
+			manager.invalidateAll();
+			await manager.getSettingsForDocument("file:///a.sql");
+			await manager.getSettingsForDocument("file:///b.sql");
+
+			assert.strictEqual(calls.getConfiguration.length, 4);
+		});
+
+		test("refreshSettings invalidates the document cache", async () => {
+			const { connection, calls } = createMockConnection();
+			const manager = new SettingsManager(connection);
+
+			await manager.getSettingsForDocument("file:///test.sql");
+			await manager.refreshSettings(); // global fetch (1 call)
+			// Cache was cleared by refreshSettings, so this re-fetches.
+			await manager.getSettingsForDocument("file:///test.sql");
+
+			// 1 (initial doc) + 1 (refresh) + 1 (doc re-fetch) = 3
+			assert.strictEqual(calls.getConfiguration.length, 3);
+		});
+	});
+
 	suite("normalizeSettings", () => {
 		test("normalizes negative maxFileSizeKb to 0", async () => {
 			const { connection } = createMockConnection({

@@ -124,6 +124,8 @@ connection.workspace.onDidChangeWorkspaceFolders((event) => {
 		...workspaceFolders.filter((folder) => !removed.has(folder)),
 		...added,
 	];
+	// Document-scoped settings can depend on workspace folders.
+	settingsManager.invalidateAll();
 });
 
 connection.onDidChangeConfiguration(async () => {
@@ -155,6 +157,7 @@ documents.onDidClose((change) => {
 	const uri = change.document.uri;
 	scheduler.clear(uri);
 	lintStateManager.clearAll(uri);
+	settingsManager.invalidateDocument(uri);
 	connection.sendDiagnostics({ uri, diagnostics: [] });
 });
 

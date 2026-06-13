@@ -15,6 +15,17 @@ export const CONFIG_CACHE_TTL_MS = 5000;
 /** Maximum entries in config path cache */
 export const CONFIG_CACHE_MAX_SIZE = 100;
 
+/**
+ * Cache TTL for per-document settings resolution (2 seconds).
+ * Short-lived to avoid repeated LSP round-trips during rapid typing while
+ * still picking up configuration changes promptly. Cache is also fully
+ * invalidated on configuration change events.
+ */
+export const DOCUMENT_SETTINGS_CACHE_TTL_MS = 2000;
+
+/** Maximum entries in per-document settings cache */
+export const DOCUMENT_SETTINGS_CACHE_MAX_SIZE = 100;
+
 /** Maximum concurrent lint operations */
 export const MAX_CONCURRENT_RUNS = 4;
 
