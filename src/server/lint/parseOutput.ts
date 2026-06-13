@@ -119,6 +119,18 @@ export function parseOutput(options: ParseOutputOptions): Diagnostic[] {
 		}
 
 		for (const diag of file.diagnostics) {
+			if (
+				typeof diag.message !== "string" ||
+				typeof diag.range?.start?.line !== "number" ||
+				typeof diag.range?.start?.character !== "number" ||
+				typeof diag.range?.end?.line !== "number" ||
+				typeof diag.range?.end?.character !== "number"
+			) {
+				options.logger?.debug(
+					`[parseOutput] Skipping malformed diagnostic: ${JSON.stringify(diag)}`,
+				);
+				continue;
+			}
 			const diagnostic: Diagnostic = {
 				message: diag.message,
 				severity: mapSeverity(diag.severity),
