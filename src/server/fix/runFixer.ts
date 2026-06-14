@@ -4,7 +4,6 @@ import { resolveCommand, runProcess } from "../shared/processRunner";
 import { type ProcessRunResult, createCancelledResult } from "../shared/types";
 
 export type RunFixerOptions = {
-	filePath: string;
 	cwd: string;
 	settings: TsqlRefineSettings;
 	signal: AbortSignal;
@@ -15,17 +14,17 @@ export type RunFixerOptions = {
 /**
  * Build command-line arguments for tsqlrefine fix operation.
  */
-export function buildArgs(options: RunFixerOptions): string[] {
+export function buildArgs(settings: TsqlRefineSettings): string[] {
 	const args: string[] = ["fix", "-q", "--utf8"];
-	const configPath = normalizeConfigPath(options.settings.configPath);
+	const configPath = normalizeConfigPath(settings.configPath);
 	if (configPath) {
 		args.push("-c", configPath);
 	}
-	if (options.settings.allowPlugins) {
+	if (settings.allowPlugins) {
 		args.push("--allow-plugins");
 	}
 	// Add severity threshold
-	args.push("--severity", options.settings.minSeverity);
+	args.push("--severity", settings.minSeverity);
 	// Use --stdin to read content from stdin
 	args.push("--stdin");
 	return args;
@@ -42,9 +41,8 @@ export async function runFixer(
 	}
 
 	const command = await resolveCommand(options.settings);
-	const args = buildArgs(options);
-	const timeoutMs =
-		options.settings.formatTimeoutMs ?? options.settings.timeoutMs;
+	const args = buildArgs(options.settings);
+	const timeoutMs = options.settings.fixTimeoutMs ?? options.settings.timeoutMs;
 
 	return runProcess({
 		command,

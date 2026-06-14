@@ -20,6 +20,17 @@ export function decodeCliOutput(buffer: Buffer): string {
 export type EndOfLine = "LF" | "CRLF";
 
 /**
+ * Detects the document line ending style from the first newline.
+ */
+export function detectEndOfLine(text: string): EndOfLine {
+	const firstLf = text.indexOf("\n");
+	if (firstLf > 0 && text[firstLf - 1] === "\r") {
+		return "CRLF";
+	}
+	return "LF";
+}
+
+/**
  * Normalizes line endings in the given text to match the specified EOL style.
  */
 export function normalizeLineEndings(text: string, eol: EndOfLine): string {

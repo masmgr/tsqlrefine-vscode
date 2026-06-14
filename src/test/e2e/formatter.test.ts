@@ -110,9 +110,8 @@ suite("Formatter Test Suite", () => {
 		);
 	});
 
-	// Note: tsqlrefine.format command delegates to editor.action.formatDocument
-	// which is already tested above. The command exists as a convenience for
-	// users who want to explicitly invoke TSQLRefine formatting.
+	// The command uses the extension's dedicated formatting request, independent
+	// of whichever formatter VS Code would otherwise choose.
 	test("tsqlrefine.format command is registered", async function () {
 		this.timeout(TEST_TIMEOUTS.MOCHA_TEST);
 

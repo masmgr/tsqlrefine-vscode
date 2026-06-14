@@ -56,7 +56,7 @@ export async function executeLint(
 		const sizeBytes = getDocumentSizeBytes(document);
 		if (sizeBytes > maxBytes) {
 			const sizeKb = Math.ceil(sizeBytes / 1024);
-			notificationManager.log(
+			notificationManager.debug(
 				`[executeLint] Skipping lint: file is ${sizeKb}KB > maxFileSizeKb=${effectiveSettings.maxFileSizeKb}`,
 			);
 			connection.sendDiagnostics({
@@ -103,6 +103,7 @@ export async function executeLint(
 	}
 
 	if (result.timedOut) {
+		lintStateManager.clearInFlight(uri);
 		const formatted = "tsqlrefine: lint timed out";
 		// Don't await - warning message may block in some environments
 		void connection.window.showWarningMessage(formatted);
@@ -147,7 +148,8 @@ export async function executeLint(
 		cwd,
 		targetPaths,
 		logger: {
-			log: (message: string) => notificationManager.log(message),
+			debug: (message: string | (() => string)) =>
+				notificationManager.debug(message),
 		},
 	});
 

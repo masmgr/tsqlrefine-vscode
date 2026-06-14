@@ -35,7 +35,6 @@ function createTestOptions(
 	overrides: Partial<RunFixerOptions> = {},
 ): RunFixerOptions {
 	return {
-		filePath: "test.sql",
 		cwd: process.cwd(),
 		settings: createTestSettings(),
 		signal: new AbortController().signal,
@@ -65,7 +64,7 @@ suite("runFixer", () => {
 	suite("argument building (via buildArgs)", () => {
 		test("includes fix subcommand and standard flags", () => {
 			const options = createTestOptions();
-			const args = buildArgs(options);
+			const args = buildArgs(options.settings);
 			assert.deepStrictEqual(args.slice(0, 3), ["fix", "-q", "--utf8"]);
 			assert.ok(args.includes("--stdin"));
 		});
@@ -76,7 +75,7 @@ suite("runFixer", () => {
 					configPath: "/path/to/config.json",
 				}),
 			});
-			const args = buildArgs(options);
+			const args = buildArgs(options.settings);
 			const cIndex = args.indexOf("-c");
 			assert.notStrictEqual(cIndex, -1);
 			assert.strictEqual(args[cIndex + 1], "/path/to/config.json");
@@ -86,7 +85,7 @@ suite("runFixer", () => {
 			const options = createTestOptions({
 				settings: createTestSettings({ configPath: "" }),
 			});
-			const args = buildArgs(options);
+			const args = buildArgs(options.settings);
 			assert.strictEqual(args.indexOf("-c"), -1);
 		});
 
@@ -94,7 +93,7 @@ suite("runFixer", () => {
 			const options = createTestOptions({
 				settings: createTestSettings({ minSeverity: "warning" }),
 			});
-			const args = buildArgs(options);
+			const args = buildArgs(options.settings);
 			const sevIndex = args.indexOf("--severity");
 			assert.notStrictEqual(sevIndex, -1);
 			assert.strictEqual(args[sevIndex + 1], "warning");
@@ -104,7 +103,7 @@ suite("runFixer", () => {
 			const options = createTestOptions({
 				settings: createTestSettings({ allowPlugins: true }),
 			});
-			const args = buildArgs(options);
+			const args = buildArgs(options.settings);
 			assert.ok(args.includes("--allow-plugins"));
 		});
 
@@ -112,20 +111,20 @@ suite("runFixer", () => {
 			const options = createTestOptions({
 				settings: createTestSettings({ allowPlugins: false }),
 			});
-			const args = buildArgs(options);
+			const args = buildArgs(options.settings);
 			assert.strictEqual(args.includes("--allow-plugins"), false);
 		});
 	});
 
 	suite("timeout handling", () => {
-		test("uses formatTimeoutMs when available", async () => {
+		test("uses fixTimeoutMs when available", async () => {
 			const controller = new AbortController();
 			controller.abort(); // Abort immediately to prevent actual CLI execution
 
 			const options = createTestOptions({
 				signal: controller.signal,
 				settings: createTestSettings({
-					formatTimeoutMs: 5000,
+					fixTimeoutMs: 5000,
 					timeoutMs: 10000,
 				}),
 			});
@@ -135,11 +134,11 @@ suite("runFixer", () => {
 			assert.strictEqual(result.cancelled, true);
 		});
 
-		test("falls back to timeoutMs when formatTimeoutMs is not set", async () => {
+		test("falls back to timeoutMs when fixTimeoutMs is not set", async () => {
 			const controller = new AbortController();
 			controller.abort();
 
-			// Create settings without formatTimeoutMs
+			// Create settings without fixTimeoutMs
 			const settingsWithoutFormat: TsqlRefineSettings = {
 				runOnSave: true,
 				runOnType: false,

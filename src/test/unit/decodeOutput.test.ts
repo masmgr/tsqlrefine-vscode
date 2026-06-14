@@ -2,6 +2,7 @@ import * as assert from "node:assert";
 import * as fc from "fast-check";
 import {
 	decodeCliOutput,
+	detectEndOfLine,
 	normalizeLineEndings,
 } from "../../server/lint/decodeOutput";
 import { utf8BufferWithOptionalBom } from "../helpers/arbitraries";
@@ -188,6 +189,20 @@ suite("decodeOutput", () => {
 				}),
 			);
 		});
+	});
+});
+
+suite("detectEndOfLine", () => {
+	test("detects CRLF from first newline", () => {
+		assert.strictEqual(detectEndOfLine("line1\r\nline2\nline3"), "CRLF");
+	});
+
+	test("detects LF when first newline is LF", () => {
+		assert.strictEqual(detectEndOfLine("line1\nline2\r\nline3"), "LF");
+	});
+
+	test("defaults to LF for single-line text", () => {
+		assert.strictEqual(detectEndOfLine("SELECT 1;"), "LF");
 	});
 });
 

@@ -1,11 +1,12 @@
 import type { Connection, TextEdit } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { CLI_EXIT_CODE_DESCRIPTIONS } from "../config/constants";
+import { detectEndOfLine, normalizeLineEndings } from "../lint/decodeOutput";
 import type { DocumentContext } from "../shared/documentContext";
 import { createFullDocumentEdit } from "../shared/documentEdit";
 import { handleOperationError } from "../shared/errorHandling";
 import { logOperationContext } from "../shared/logging";
-import { firstLine, resolveTargetFilePath } from "../shared/textUtils";
+import { firstLine } from "../shared/textUtils";
 import type { ProcessRunResult } from "../shared/types";
 import type { DocumentStateManager } from "../state/documentStateManager";
 import type { NotificationManager } from "../state/notificationManager";
@@ -41,7 +42,7 @@ export async function executeFormat(
 	} = context;
 
 	if (!effectiveSettings.enableFormat) {
-		notificationManager.log(
+		notificationManager.debug(
 			`tsqlrefine: format is disabled (enableFormat=false) for ${uri}`,
 		);
 		return null;
@@ -49,8 +50,6 @@ export async function executeFormat(
 
 	const controller = new AbortController();
 	formatStateManager.setInFlight(uri, controller);
-
-	const targetFilePath = resolveTargetFilePath(filePath);
 
 	logOperationContext(notificationManager, {
 		operation: "Format",
@@ -63,14 +62,15 @@ export async function executeFormat(
 	let result: ProcessRunResult;
 	try {
 		result = await runFormatter({
-			filePath: targetFilePath,
 			cwd,
 			settings: effectiveSettings,
 			signal: controller.signal,
 			stdin: documentText,
 		});
 	} catch (error) {
-		formatStateManager.clearInFlight(uri);
+		if (formatStateManager.isCurrentInFlight(uri, controller)) {
+			formatStateManager.clearInFlight(uri);
+		}
 		return await handleFormatError(error, deps);
 	}
 
@@ -109,7 +109,10 @@ export async function executeFormat(
 		return null;
 	}
 
-	const formattedText = result.stdout;
+	const formattedText = normalizeLineEndings(
+		result.stdout,
+		detectEndOfLine(documentText),
+	);
 
 	if (formattedText === documentText) {
 		return [];

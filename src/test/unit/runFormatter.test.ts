@@ -35,7 +35,6 @@ function createTestOptions(
 	overrides: Partial<RunFormatterOptions> = {},
 ): RunFormatterOptions {
 	return {
-		filePath: "test.sql",
 		cwd: process.cwd(),
 		settings: createTestSettings(),
 		signal: new AbortController().signal,
@@ -112,7 +111,7 @@ suite("runFormatter", () => {
 	suite("argument building (via buildArgs)", () => {
 		test("includes format subcommand and standard flags", () => {
 			const options = createTestOptions();
-			const args = buildArgs(options);
+			const args = buildArgs(options.settings);
 			assert.deepStrictEqual(args.slice(0, 3), ["format", "-q", "--utf8"]);
 			assert.ok(args.includes("--stdin"));
 		});
@@ -123,7 +122,7 @@ suite("runFormatter", () => {
 					configPath: "/path/to/config.json",
 				}),
 			});
-			const args = buildArgs(options);
+			const args = buildArgs(options.settings);
 			const cIndex = args.indexOf("-c");
 			assert.notStrictEqual(cIndex, -1);
 			assert.strictEqual(args[cIndex + 1], "/path/to/config.json");
@@ -133,7 +132,7 @@ suite("runFormatter", () => {
 			const options = createTestOptions({
 				settings: createTestSettings({ configPath: "" }),
 			});
-			const args = buildArgs(options);
+			const args = buildArgs(options.settings);
 			assert.strictEqual(args.indexOf("-c"), -1);
 		});
 
@@ -141,7 +140,7 @@ suite("runFormatter", () => {
 			const options = createTestOptions({
 				settings: createTestSettings({ minSeverity: "warning" }),
 			});
-			const args = buildArgs(options);
+			const args = buildArgs(options.settings);
 			assert.strictEqual(args.indexOf("--severity"), -1);
 		});
 
@@ -149,7 +148,7 @@ suite("runFormatter", () => {
 			const options = createTestOptions({
 				settings: createTestSettings({ allowPlugins: true }),
 			});
-			const args = buildArgs(options);
+			const args = buildArgs(options.settings);
 			assert.ok(args.includes("--allow-plugins"));
 		});
 
@@ -157,7 +156,7 @@ suite("runFormatter", () => {
 			const options = createTestOptions({
 				settings: createTestSettings({ allowPlugins: false }),
 			});
-			const args = buildArgs(options);
+			const args = buildArgs(options.settings);
 			assert.strictEqual(args.includes("--allow-plugins"), false);
 		});
 	});

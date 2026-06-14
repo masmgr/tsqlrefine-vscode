@@ -16,9 +16,10 @@ function createMockNotificationManager(): {
 	const logs: string[] = [];
 
 	const manager = {
-		log: (message: string) => {
+		debug: (message: string) => {
 			logs.push(message);
 		},
+		log: () => {},
 		warn: () => {},
 		error: () => {},
 		notifyStderr: () => {},

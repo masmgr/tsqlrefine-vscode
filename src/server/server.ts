@@ -1,11 +1,11 @@
 import {
 	CodeActionKind,
 	OptionalVersionedTextDocumentIdentifier,
-	TextDocumentEdit,
-	createConnection,
 	ProposedFeatures,
+	TextDocumentEdit,
 	TextDocumentSyncKind,
 	TextDocuments,
+	createConnection,
 	type CodeAction,
 	type CodeActionParams,
 	type DocumentFormattingParams,
@@ -89,8 +89,19 @@ connection.onInitialize((params) => {
 	workspaceFolders =
 		params.workspaceFolders?.map((folder) => URI.parse(folder.uri).fsPath) ??
 		[];
+	// `trace` is "off" | "messages" | "verbose"; anything other than "off"
+	// (or absent) enables verbose debug logging on the server.
+	notificationManager.setDebugEnabled(
+		params.trace != null && params.trace !== "off",
+	);
 	return {
 		capabilities: {
+			workspace: {
+				workspaceFolders: {
+					supported: true,
+					changeNotifications: true,
+				},
+			},
 			textDocumentSync: {
 				openClose: true,
 				change: TextDocumentSyncKind.Incremental,
@@ -107,6 +118,29 @@ connection.onInitialize((params) => {
 connection.onInitialized(async () => {
 	await settingsManager.refreshSettings();
 	await verifyInstallation();
+});
+
+// Track the client's trace setting so verbose debug logging can be gated.
+connection.onNotification(
+	"$/setTrace",
+	(params: { value?: "off" | "messages" | "verbose" }) => {
+		notificationManager.setDebugEnabled(
+			params.value != null && params.value !== "off",
+		);
+	},
+);
+
+connection.workspace.onDidChangeWorkspaceFolders((event) => {
+	const removed = new Set(
+		event.removed.map((folder) => URI.parse(folder.uri).fsPath),
+	);
+	const added = event.added.map((folder) => URI.parse(folder.uri).fsPath);
+	workspaceFolders = [
+		...workspaceFolders.filter((folder) => !removed.has(folder)),
+		...added,
+	];
+	// Document-scoped settings can depend on workspace folders.
+	settingsManager.invalidateAll();
 });
 
 connection.onDidChangeConfiguration(async () => {
@@ -138,6 +172,7 @@ documents.onDidClose((change) => {
 	const uri = change.document.uri;
 	scheduler.clear(uri);
 	lintStateManager.clearAll(uri);
+	settingsManager.invalidateDocument(uri);
 	connection.sendDiagnostics({ uri, diagnostics: [] });
 });
 
@@ -173,9 +208,28 @@ connection.onDocumentFormatting(
 connection.onRequest(
 	"tsqlrefine/formatDocument",
 	async (params: { uri: string }): Promise<{ ok: boolean; error?: string }> => {
+		const document = documents.get(params.uri);
+		if (!document) {
+			return { ok: false, error: "Document not found" };
+		}
+		const version = document.version;
 		const edits = await formatDocument(params.uri);
 		if (edits === null) {
 			return { ok: false, error: "Format failed" };
+		}
+		if (edits.length === 0) {
+			return { ok: true };
+		}
+		const result = await connection.workspace.applyEdit({
+			documentChanges: [
+				TextDocumentEdit.create(
+					OptionalVersionedTextDocumentIdentifier.create(params.uri, version),
+					edits,
+				),
+			],
+		});
+		if (!result.applied) {
+			return { ok: false, error: "Failed to apply edits" };
 		}
 		return { ok: true };
 	},
@@ -268,7 +322,7 @@ async function verifyInstallation(): Promise<void> {
 		await notificationManager.maybeNotifyMissingTsqlRefine(message);
 		notificationManager.warn(`[startup] ${message}`);
 	} else {
-		notificationManager.log("[startup] tsqlrefine installation verified");
+		notificationManager.debug("[startup] tsqlrefine installation verified");
 	}
 }
 
@@ -285,7 +339,12 @@ async function handleDidChangeContent(document: TextDocument): Promise<void> {
 			return;
 		}
 		lintStateManager.cancelInFlight(document.uri);
-		requestLint(document.uri, "type", document.version, docSettings.debounceMs);
+		void requestLint(
+			document.uri,
+			"type",
+			document.version,
+			docSettings.debounceMs,
+		);
 	} catch (error) {
 		notificationManager.error(
 			`tsqlrefine: failed to react to change (${String(error)})`,
@@ -299,7 +358,7 @@ async function handleDidSave(document: TextDocument): Promise<void> {
 		lintStateManager.setSavedVersion(uri, document.version);
 		const docSettings = await settingsManager.getSettingsForDocument(uri);
 		if (docSettings.runOnSave && docSettings.enableLint) {
-			requestLint(uri, "save", document.version);
+			void requestLint(uri, "save", document.version);
 		}
 	} catch (error) {
 		notificationManager.error(
@@ -317,7 +376,7 @@ async function handleDidOpen(document: TextDocument): Promise<void> {
 
 		const docSettings = await settingsManager.getSettingsForDocument(uri);
 		if (docSettings.runOnOpen && docSettings.enableLint) {
-			requestLint(uri, "open", document.version);
+			void requestLint(uri, "open", document.version);
 		}
 	} catch (error) {
 		notificationManager.error(
@@ -373,7 +432,7 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 	try {
 		const result = await executeLint(context, document, reason, lintDeps);
 		const elapsedMs = Date.now() - startMs;
-		notificationManager.log(
+		notificationManager.debug(
 			`[executeLint] Completed in ${elapsedMs}ms (${result.diagnosticsCount} diagnostics)`,
 		);
 		return result.diagnosticsCount;
@@ -415,7 +474,7 @@ async function formatDocument(uri: string): Promise<TextEdit[] | null> {
 	try {
 		const result = await executeFormat(context, document, formatDeps);
 		const elapsedMs = Date.now() - startMs;
-		notificationManager.log(`[executeFormat] Completed in ${elapsedMs}ms`);
+		notificationManager.debug(`[executeFormat] Completed in ${elapsedMs}ms`);
 		return result;
 	} finally {
 		connection.sendNotification("tsqlrefine/operationState", {
@@ -466,7 +525,7 @@ async function fixDocument(uri: string): Promise<TextEdit[] | null> {
 	try {
 		const result = await executeFix(context, document, fixDeps);
 		const elapsedMs = Date.now() - startMs;
-		notificationManager.log(`[executeFix] Completed in ${elapsedMs}ms`);
+		notificationManager.debug(`[executeFix] Completed in ${elapsedMs}ms`);
 		return result;
 	} finally {
 		connection.sendNotification("tsqlrefine/operationState", {

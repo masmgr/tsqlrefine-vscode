@@ -69,20 +69,25 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 	const lintCommand = vscode.commands.registerCommand(
 		"tsqlrefine.run",
 		async () => {
-			const activeEditor = vscode.window.activeTextEditor;
-			if (!activeEditor) {
-				return;
-			}
-			if (clientReady) {
+			try {
+				const activeEditor = vscode.window.activeTextEditor;
+				if (!activeEditor) {
+					return;
+				}
 				await clientReady;
+				if (!client) {
+					console.error("tsqlrefine: Language client is not initialized");
+					return;
+				}
+				await client.sendRequest("tsqlrefine/lintDocument", {
+					uri: activeEditor.document.uri.toString(),
+				});
+			} catch (error) {
+				console.error("tsqlrefine: lint command failed", error);
+				void vscode.window.showErrorMessage(
+					`TSQLRefine lint failed: ${String(error)}`,
+				);
 			}
-			if (!client) {
-				console.error("tsqlrefine: Language client is not initialized");
-				return;
-			}
-			await client.sendRequest("tsqlrefine/lintDocument", {
-				uri: activeEditor.document.uri.toString(),
-			});
 		},
 	);
 	context.subscriptions.push(lintCommand);
@@ -90,14 +95,31 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 	const formatCommand = vscode.commands.registerCommand(
 		"tsqlrefine.format",
 		async () => {
-			const activeEditor = vscode.window.activeTextEditor;
-			if (!activeEditor) {
-				return;
-			}
-			if (clientReady) {
+			try {
+				const activeEditor = vscode.window.activeTextEditor;
+				if (!activeEditor) {
+					return;
+				}
 				await clientReady;
+				if (!client) {
+					console.error("tsqlrefine: Language client is not initialized");
+					return;
+				}
+				const result = await client.sendRequest<{
+					ok: boolean;
+					error?: string;
+				}>("tsqlrefine/formatDocument", {
+					uri: activeEditor.document.uri.toString(),
+				});
+				if (!result.ok) {
+					throw new Error(result.error ?? "Format failed");
+				}
+			} catch (error) {
+				console.error("tsqlrefine: format command failed", error);
+				void vscode.window.showErrorMessage(
+					`TSQLRefine format failed: ${String(error)}`,
+				);
 			}
-			await vscode.commands.executeCommand("editor.action.formatDocument");
 		},
 	);
 	context.subscriptions.push(formatCommand);
@@ -105,23 +127,52 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 	const fixCommand = vscode.commands.registerCommand(
 		"tsqlrefine.fix",
 		async () => {
-			const activeEditor = vscode.window.activeTextEditor;
-			if (!activeEditor) {
-				return;
-			}
-			if (clientReady) {
+			try {
+				const activeEditor = vscode.window.activeTextEditor;
+				if (!activeEditor) {
+					return;
+				}
 				await clientReady;
+				if (!client) {
+					console.error("tsqlrefine: Language client is not initialized");
+					return;
+				}
+				await client.sendRequest("tsqlrefine/fixDocument", {
+					uri: activeEditor.document.uri.toString(),
+				});
+			} catch (error) {
+				console.error("tsqlrefine: fix command failed", error);
+				void vscode.window.showErrorMessage(
+					`TSQLRefine fix failed: ${String(error)}`,
+				);
 			}
-			if (!client) {
-				console.error("tsqlrefine: Language client is not initialized");
-				return;
-			}
-			await client.sendRequest("tsqlrefine/fixDocument", {
-				uri: activeEditor.document.uri.toString(),
-			});
 		},
 	);
 	context.subscriptions.push(fixCommand);
+
+	const LANGUAGE_IDS = ["sql", "tsql", "mssql"] as const;
+	const EXTENSION_ID = "masmgr.tsqlrefine";
+
+	const setAsDefaultFormatterCommand = vscode.commands.registerCommand(
+		"tsqlrefine.setAsDefaultFormatter",
+		async () => {
+			for (const languageId of LANGUAGE_IDS) {
+				const config = vscode.workspace.getConfiguration("editor", {
+					languageId,
+				});
+				await config.update(
+					"defaultFormatter",
+					EXTENSION_ID,
+					vscode.ConfigurationTarget.Workspace,
+					true,
+				);
+			}
+			await vscode.window.showInformationMessage(
+				"TSQLRefine is now the default SQL formatter for this workspace.",
+			);
+		},
+	);
+	context.subscriptions.push(setAsDefaultFormatterCommand);
 
 	context.subscriptions.push(
 		vscode.workspace.onDidDeleteFiles(async (event) => {

@@ -141,6 +141,67 @@ suite("SettingsManager", () => {
 		});
 	});
 
+	suite("getSettingsForDocument caching", () => {
+		test("caches result and avoids repeated LSP round-trips", async () => {
+			const { connection, calls } = createMockConnection({ timeoutMs: 20000 });
+			const manager = new SettingsManager(connection);
+
+			const first = await manager.getSettingsForDocument("file:///test.sql");
+			const second = await manager.getSettingsForDocument("file:///test.sql");
+
+			// Second call served from cache: only one getConfiguration call total.
+			assert.strictEqual(calls.getConfiguration.length, 1);
+			assert.deepStrictEqual(first, second);
+		});
+
+		test("caches per-document independently", async () => {
+			const { connection, calls } = createMockConnection();
+			const manager = new SettingsManager(connection);
+
+			await manager.getSettingsForDocument("file:///a.sql");
+			await manager.getSettingsForDocument("file:///b.sql");
+
+			assert.strictEqual(calls.getConfiguration.length, 2);
+		});
+
+		test("invalidateDocument clears the cached entry", async () => {
+			const { connection, calls } = createMockConnection();
+			const manager = new SettingsManager(connection);
+
+			await manager.getSettingsForDocument("file:///test.sql");
+			manager.invalidateDocument("file:///test.sql");
+			await manager.getSettingsForDocument("file:///test.sql");
+
+			assert.strictEqual(calls.getConfiguration.length, 2);
+		});
+
+		test("invalidateAll clears all cached entries", async () => {
+			const { connection, calls } = createMockConnection();
+			const manager = new SettingsManager(connection);
+
+			await manager.getSettingsForDocument("file:///a.sql");
+			await manager.getSettingsForDocument("file:///b.sql");
+			manager.invalidateAll();
+			await manager.getSettingsForDocument("file:///a.sql");
+			await manager.getSettingsForDocument("file:///b.sql");
+
+			assert.strictEqual(calls.getConfiguration.length, 4);
+		});
+
+		test("refreshSettings invalidates the document cache", async () => {
+			const { connection, calls } = createMockConnection();
+			const manager = new SettingsManager(connection);
+
+			await manager.getSettingsForDocument("file:///test.sql");
+			await manager.refreshSettings(); // global fetch (1 call)
+			// Cache was cleared by refreshSettings, so this re-fetches.
+			await manager.getSettingsForDocument("file:///test.sql");
+
+			// 1 (initial doc) + 1 (refresh) + 1 (doc re-fetch) = 3
+			assert.strictEqual(calls.getConfiguration.length, 3);
+		});
+	});
+
 	suite("normalizeSettings", () => {
 		test("normalizes negative maxFileSizeKb to 0", async () => {
 			const { connection } = createMockConnection({
@@ -234,6 +295,88 @@ suite("SettingsManager", () => {
 			const settings = manager.getSettings();
 
 			assert.strictEqual(settings.allowPlugins, false);
+		});
+
+		test("normalizes negative timeoutMs to default", async () => {
+			const { connection } = createMockConnection({ timeoutMs: -1 });
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			assert.strictEqual(
+				manager.getSettings().timeoutMs,
+				defaultSettings.timeoutMs,
+			);
+		});
+
+		test("normalizes NaN timeoutMs to default", async () => {
+			const { connection } = createMockConnection({ timeoutMs: Number.NaN });
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			assert.strictEqual(
+				manager.getSettings().timeoutMs,
+				defaultSettings.timeoutMs,
+			);
+		});
+
+		test("normalizes zero timeoutMs to default", async () => {
+			const { connection } = createMockConnection({ timeoutMs: 0 });
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			assert.strictEqual(
+				manager.getSettings().timeoutMs,
+				defaultSettings.timeoutMs,
+			);
+		});
+
+		test("preserves valid positive timeoutMs", async () => {
+			const { connection } = createMockConnection({ timeoutMs: 5000 });
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			assert.strictEqual(manager.getSettings().timeoutMs, 5000);
+		});
+
+		test("normalizes invalid formatTimeoutMs to default", async () => {
+			const { connection } = createMockConnection({ formatTimeoutMs: -1 });
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			assert.strictEqual(
+				manager.getSettings().formatTimeoutMs,
+				defaultSettings.formatTimeoutMs,
+			);
+		});
+
+		test("normalizes invalid fixTimeoutMs to default", async () => {
+			const { connection } = createMockConnection({ fixTimeoutMs: -1 });
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			assert.strictEqual(
+				manager.getSettings().fixTimeoutMs,
+				defaultSettings.fixTimeoutMs,
+			);
+		});
+
+		test("normalizes negative debounceMs to default", async () => {
+			const { connection } = createMockConnection({ debounceMs: -1 });
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			assert.strictEqual(
+				manager.getSettings().debounceMs,
+				defaultSettings.debounceMs,
+			);
+		});
+
+		test("preserves zero debounceMs (no debounce)", async () => {
+			const { connection } = createMockConnection({ debounceMs: 0 });
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			assert.strictEqual(manager.getSettings().debounceMs, 0);
 		});
 	});
 });

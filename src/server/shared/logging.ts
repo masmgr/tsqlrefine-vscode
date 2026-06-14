@@ -1,5 +1,3 @@
-import type { NotificationManager } from "../state/notificationManager";
-
 export type OperationLogContext = {
 	operation: "Lint" | "Format" | "Fix";
 	uri: string;
@@ -12,31 +10,40 @@ export type OperationLogContext = {
 	isSavedFile?: boolean;
 };
 
+type DebugLogger = {
+	debug(message: string | (() => string)): void;
+	/** When present and returning false, message construction is skipped. */
+	isDebugEnabled?(): boolean;
+};
+
 /**
  * Log operation context with consistent formatting.
  */
 export function logOperationContext(
-	notificationManager: NotificationManager,
+	logger: DebugLogger,
 	context: OperationLogContext,
 ): void {
+	// Skip building the per-field messages entirely when debug is disabled.
+	if (logger.isDebugEnabled?.() === false) {
+		return;
+	}
+
 	const prefix = `[execute${context.operation}]`;
 
-	notificationManager.log(`${prefix} URI: ${context.uri}`);
-	notificationManager.log(`${prefix} File path: ${context.filePath}`);
+	logger.debug(`${prefix} URI: ${context.uri}`);
+	logger.debug(`${prefix} File path: ${context.filePath}`);
 
 	if (context.targetFilePath !== undefined) {
-		notificationManager.log(
-			`${prefix} Target file path: ${context.targetFilePath}`,
-		);
+		logger.debug(`${prefix} Target file path: ${context.targetFilePath}`);
 	}
 
-	notificationManager.log(`${prefix} CWD: ${context.cwd}`);
+	logger.debug(`${prefix} CWD: ${context.cwd}`);
 
 	if (context.isSavedFile !== undefined) {
-		notificationManager.log(`${prefix} Is saved: ${context.isSavedFile}`);
+		logger.debug(`${prefix} Is saved: ${context.isSavedFile}`);
 	}
 
-	notificationManager.log(
+	logger.debug(
 		`${prefix} Config path: ${context.configPath ?? "(tsqlrefine default)"}`,
 	);
 }

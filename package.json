@@ -62,6 +62,11 @@
 				"command": "tsqlrefine.openInstallGuide",
 				"title": "TSQLRefine: Open Install Guide",
 				"category": "TSQLRefine"
+			},
+			{
+				"command": "tsqlrefine.setAsDefaultFormatter",
+				"title": "TSQLRefine: Set as Default Formatter",
+				"category": "TSQLRefine"
 			}
 		],
 		"configuration": {
@@ -114,6 +119,11 @@
 					"default": 10000,
 					"description": "Timeout in milliseconds for format execution."
 				},
+				"tsqlrefine.fixTimeoutMs": {
+					"type": "number",
+					"default": 10000,
+					"description": "Timeout in milliseconds for fix execution."
+				},
 				"tsqlrefine.minSeverity": {
 					"type": "string",
 					"default": "info",
@@ -144,6 +154,16 @@
 					"type": "boolean",
 					"default": false,
 					"description": "Allow loading of tsqlrefine plugin DLLs from configuration. Only enable if you trust the plugins referenced in your tsqlrefine configuration."
+				},
+				"tsqlrefine.trace.server": {
+					"type": "string",
+					"enum": [
+						"off",
+						"messages",
+						"verbose"
+					],
+					"default": "off",
+					"description": "Traces the communication between VS Code and the tsqlrefine language server. Set to 'verbose' to enable detailed server debug logging."
 				}
 			}
 		},
@@ -200,21 +220,21 @@
 		"verify": "npm test && npm run typecheck && npm run lint && npm run format:check"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.4.7",
+		"@biomejs/biome": "^2.4.15",
 		"@types/mocha": "^10.0.10",
-		"@types/node": "^24.10.9",
-		"@types/vscode": "^1.110.0",
+		"@types/node": "^25.5.2",
+		"@types/vscode": "^1.120.0",
 		"@vscode/test-cli": "^0.0.12",
 		"@vscode/test-electron": "^2.5.2",
-		"@vscode/vsce": "^3.2.1",
-		"c8": "^10.1.3",
-		"esbuild": "^0.27.4",
-		"fast-check": "^4.6.0",
+		"@vscode/vsce": "^3.9.1",
+		"c8": "^11.0.0",
+		"esbuild": "^0.28.0",
+		"fast-check": "^4.8.0",
 		"husky": "^9.1.7",
 		"lint-staged": "^16.4.0",
-		"mocha": "^11.3.0",
+		"mocha": "^11.7.6",
 		"source-map-support": "^0.5.21",
-		"typescript": "^5.9.3"
+		"typescript": "^6.0.2"
 	},
 	"lint-staged": {
 		"package-lock.json": [],
@@ -226,7 +246,7 @@
 	},
 	"dependencies": {
 		"vscode-languageclient": "^9.0.1",
-		"vscode-languageserver": "^9.0.1",
+		"vscode-languageserver": "^10.0.0",
 		"vscode-languageserver-textdocument": "^1.0.11",
 		"vscode-uri": "^3.0.8"
 	},
