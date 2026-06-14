@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/), and this 
 
 ## [Unreleased]
 
+### Added
+- `tsqlrefine.setAsDefaultFormatter` command to resolve conflicts with other SQL formatter extensions (e.g. mssql)
+- `tsqlrefine.fixTimeoutMs` setting for independent timeout control on fix operations (previously shared `timeoutMs`)
+- Verbose tracing via `connection.console.debug()` for detailed operation logs when trace logging is enabled
+
+### Fixed
+- Format/fix operations no longer clobber a newer in-flight operation when an error clears the in-flight state (`clearInFlight` guard)
+- `checkCommandAvailable` in processRunner no longer double-resolves on concurrent calls
+- Lint timeout now correctly clears the in-flight AbortController, preventing stale controllers
+- Malformed diagnostics from CLI output are skipped instead of crashing the parser
+- Formatter request handling updated to match current LSP server contract
+- Error handling added to user-facing command handlers and `sendNotification` calls in file event handlers
+- Fire-and-forget `requestLint` calls marked with `void` to suppress unhandled-promise warnings
+- Numeric `timeout` and `debounce` settings now validated and normalised
+- `engines.vscode` aligned with `@types/vscode` version to fix extension packaging
+- Transitive dependency vulnerabilities resolved (`npm audit`)
+
+### Changed
+- Per-document settings are now cached to reduce LSP round-trips (5 s TTL, 100-entry LRU)
+- Debug/trace logging is lazy-evaluated and gated behind the trace setting to reduce overhead
+- Unused `filePath` option removed from `runFormatter` / `runFixer` signatures
+
 ## [1.0.0] - 2026-02-17
 
 ## [0.1.1] - 2026-02-17
