@@ -6,7 +6,7 @@ import type { DocumentContext } from "../shared/documentContext";
 import { createFullDocumentEdit } from "../shared/documentEdit";
 import { handleOperationError } from "../shared/errorHandling";
 import { logOperationContext } from "../shared/logging";
-import { firstLine, resolveTargetFilePath } from "../shared/textUtils";
+import { firstLine } from "../shared/textUtils";
 import type { ProcessRunResult } from "../shared/types";
 import type { DocumentStateManager } from "../state/documentStateManager";
 import type { NotificationManager } from "../state/notificationManager";
@@ -51,8 +51,6 @@ export async function executeFormat(
 	const controller = new AbortController();
 	formatStateManager.setInFlight(uri, controller);
 
-	const targetFilePath = resolveTargetFilePath(filePath);
-
 	logOperationContext(notificationManager, {
 		operation: "Format",
 		uri,
@@ -64,14 +62,15 @@ export async function executeFormat(
 	let result: ProcessRunResult;
 	try {
 		result = await runFormatter({
-			filePath: targetFilePath,
 			cwd,
 			settings: effectiveSettings,
 			signal: controller.signal,
 			stdin: documentText,
 		});
 	} catch (error) {
-		formatStateManager.clearInFlight(uri);
+		if (formatStateManager.isCurrentInFlight(uri, controller)) {
+			formatStateManager.clearInFlight(uri);
+		}
 		return await handleFormatError(error, deps);
 	}
 

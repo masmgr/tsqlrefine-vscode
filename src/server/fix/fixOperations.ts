@@ -6,7 +6,7 @@ import type { DocumentContext } from "../shared/documentContext";
 import { createFullDocumentEdit } from "../shared/documentEdit";
 import { handleOperationError } from "../shared/errorHandling";
 import { logOperationContext } from "../shared/logging";
-import { firstLine, resolveTargetFilePath } from "../shared/textUtils";
+import { firstLine } from "../shared/textUtils";
 import type { ProcessRunResult } from "../shared/types";
 import type { DocumentStateManager } from "../state/documentStateManager";
 import type { NotificationManager } from "../state/notificationManager";
@@ -51,8 +51,6 @@ export async function executeFix(
 	const controller = new AbortController();
 	fixStateManager.setInFlight(uri, controller);
 
-	const targetFilePath = resolveTargetFilePath(filePath);
-
 	logOperationContext(notificationManager, {
 		operation: "Fix",
 		uri,
@@ -64,14 +62,15 @@ export async function executeFix(
 	let result: ProcessRunResult;
 	try {
 		result = await runFixer({
-			filePath: targetFilePath,
 			cwd,
 			settings: effectiveSettings,
 			signal: controller.signal,
 			stdin: documentText,
 		});
 	} catch (error) {
-		fixStateManager.clearInFlight(uri);
+		if (fixStateManager.isCurrentInFlight(uri, controller)) {
+			fixStateManager.clearInFlight(uri);
+		}
 		return await handleFixError(error, deps);
 	}
 
