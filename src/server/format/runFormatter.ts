@@ -4,7 +4,6 @@ import { resolveCommand, runProcess } from "../shared/processRunner";
 import { type ProcessRunResult, createCancelledResult } from "../shared/types";
 
 export type RunFormatterOptions = {
-	filePath: string;
 	cwd: string;
 	settings: TsqlRefineSettings;
 	signal: AbortSignal;
@@ -15,13 +14,13 @@ export type RunFormatterOptions = {
 /**
  * Build command-line arguments for tsqlrefine format operation.
  */
-export function buildArgs(options: RunFormatterOptions): string[] {
+export function buildArgs(settings: TsqlRefineSettings): string[] {
 	const args: string[] = ["format", "-q", "--utf8"];
-	const configPath = normalizeConfigPath(options.settings.configPath);
+	const configPath = normalizeConfigPath(settings.configPath);
 	if (configPath) {
 		args.push("-c", configPath);
 	}
-	if (options.settings.allowPlugins) {
+	if (settings.allowPlugins) {
 		args.push("--allow-plugins");
 	}
 	// Use --stdin to read content from stdin
@@ -40,7 +39,7 @@ export async function runFormatter(
 	}
 
 	const command = await resolveCommand(options.settings);
-	const args = buildArgs(options);
+	const args = buildArgs(options.settings);
 	const timeoutMs =
 		options.settings.formatTimeoutMs ?? options.settings.timeoutMs;
 
