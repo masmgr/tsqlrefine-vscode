@@ -1,4 +1,6 @@
 import * as assert from "node:assert";
+import { executeLint } from "../../server/lint/lintOperations";
+import { NotificationManager } from "../../server/state/notificationManager";
 import type { Connection } from "vscode-languageserver/node";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
@@ -310,5 +312,47 @@ suite("lintOperations", () => {
 			assert.strictEqual(context.documentText, "SELECT 2;");
 			assert.strictEqual(context.isSavedFile, false);
 		});
+	});
+
+	test("treats a null exit code as failure without clearing diagnostics", async () => {
+		const diagnosticsCalls: unknown[] = [];
+		const connection = {
+			window: { showWarningMessage: async () => undefined },
+			console: {
+				debug: () => {},
+				log: () => {},
+				warn: () => {},
+				error: () => {},
+			},
+			sendDiagnostics: (params: unknown) => diagnosticsCalls.push(params),
+		} as unknown as Connection;
+		const document = TextDocumentImpl.create(
+			"file:///test.sql",
+			"sql",
+			1,
+			"SELECT 1;",
+		);
+		const context = createMockDocumentContext({
+			uri: document.uri,
+			documentText: document.getText(),
+			effectiveSettings: createTestSettings(),
+		});
+
+		const result = await executeLint(context, document, "manual", {
+			connection,
+			notificationManager: new NotificationManager(connection),
+			lintStateManager: new DocumentStateManager(),
+			runner: async () => ({
+				stdout: "{truncated",
+				stderr: "output limit exceeded",
+				exitCode: null,
+				timedOut: false,
+				cancelled: false,
+			}),
+		});
+
+		assert.strictEqual(result.success, false);
+		assert.strictEqual(result.diagnosticsCount, -1);
+		assert.strictEqual(diagnosticsCalls.length, 0);
 	});
 });

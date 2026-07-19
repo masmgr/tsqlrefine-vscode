@@ -106,8 +106,29 @@ suite("createDocumentContext", () => {
 		const context = await createDocumentContext(options);
 
 		assert.strictEqual(context.uri, uri);
+		assert.strictEqual(context.filePath, "");
 		assert.strictEqual(context.documentText, "SELECT 3;");
 		assert.strictEqual(context.isSavedFile, false);
+	});
+
+	test("uses first workspace folder as cwd for untitled document", async () => {
+		const workspaceRoot = path.resolve("workspace");
+		const document = TextDocument.create(
+			"untitled:Untitled-1",
+			"sql",
+			1,
+			"SELECT 3;",
+		);
+		const context = await createDocumentContext({
+			document,
+			documentSettings: createTestSettings(),
+			workspaceFolders: [workspaceRoot],
+			isSavedFn: () => false,
+		});
+
+		assert.strictEqual(context.filePath, "");
+		assert.strictEqual(context.workspaceRoot, workspaceRoot);
+		assert.strictEqual(context.cwd, workspaceRoot);
 	});
 
 	test("uses first workspace folder when file is not in any workspace", async () => {

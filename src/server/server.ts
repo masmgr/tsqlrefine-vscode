@@ -59,13 +59,13 @@ const lintDeps: LintOperationDeps = {
 const formatDeps: FormatOperationDeps = {
 	connection,
 	notificationManager,
-	formatStateManager,
+	stateManager: formatStateManager,
 };
 
 const fixDeps: FixOperationDeps = {
 	connection,
 	notificationManager,
-	fixStateManager,
+	stateManager: fixStateManager,
 };
 
 // ============================================================================
@@ -214,24 +214,12 @@ connection.onRequest(
 		}
 		const version = document.version;
 		const edits = await formatDocument(params.uri);
-		if (edits === null) {
-			return { ok: false, error: "Format failed" };
-		}
-		if (edits.length === 0) {
-			return { ok: true };
-		}
-		const result = await connection.workspace.applyEdit({
-			documentChanges: [
-				TextDocumentEdit.create(
-					OptionalVersionedTextDocumentIdentifier.create(params.uri, version),
-					edits,
-				),
-			],
-		});
-		if (!result.applied) {
-			return { ok: false, error: "Failed to apply edits" };
-		}
-		return { ok: true };
+		return await applyEditsWithVersionGuard(
+			params.uri,
+			version,
+			edits,
+			"Format",
+		);
 	},
 );
 
@@ -244,23 +232,17 @@ connection.onRequest(
 		}
 		const version = document.version;
 		const edits = await fixDocument(params.uri);
-		if (edits === null) {
-			return { ok: false, error: "Fix failed" };
+		const applyResult = await applyEditsWithVersionGuard(
+			params.uri,
+			version,
+			edits,
+			"Fix",
+		);
+		if (!applyResult.ok) {
+			return applyResult;
 		}
-		if (edits.length === 0) {
+		if (edits?.length === 0) {
 			return { ok: true };
-		}
-		// Apply the edits with version guard to prevent overwriting concurrent changes
-		const result = await connection.workspace.applyEdit({
-			documentChanges: [
-				TextDocumentEdit.create(
-					OptionalVersionedTextDocumentIdentifier.create(params.uri, version),
-					edits,
-				),
-			],
-		});
-		if (!result.applied) {
-			return { ok: false, error: "Failed to apply edits" };
 		}
 		// Re-run lint to update diagnostics after fix
 		await requestLint(params.uri, "manual", null);
@@ -294,6 +276,7 @@ connection.onCodeAction(
 			command: {
 				title: "Fix all tsqlrefine issues",
 				command: "tsqlrefine.fix",
+				arguments: [params.textDocument.uri],
 			},
 		};
 
@@ -315,6 +298,7 @@ connection.listen();
 async function verifyInstallation(): Promise<void> {
 	const result = await verifyTsqlRefineInstallation(
 		settingsManager.getSettings(),
+		workspaceFolders[0] ?? process.cwd(),
 	);
 
 	if (!result.available) {
@@ -412,35 +396,15 @@ async function runLintWithCancel(
 }
 
 async function runLintNow(uri: string, reason: LintReason): Promise<number> {
-	const document = documents.get(uri);
-	if (!document) {
-		return 0;
-	}
-
-	const documentSettings = await settingsManager.getSettingsForDocument(uri);
-	const context = await createDocumentContext({
-		document,
-		documentSettings,
-		workspaceFolders,
-		isSavedFn: (doc) => isSaved(doc),
-	});
-
-	connection.sendNotification("tsqlrefine/operationState", {
-		state: "started",
-	});
-	const startMs = Date.now();
-	try {
-		const result = await executeLint(context, document, reason, lintDeps);
-		const elapsedMs = Date.now() - startMs;
-		notificationManager.debug(
-			`[executeLint] Completed in ${elapsedMs}ms (${result.diagnosticsCount} diagnostics)`,
-		);
-		return result.diagnosticsCount;
-	} finally {
-		connection.sendNotification("tsqlrefine/operationState", {
-			state: "completed",
-		});
-	}
+	return await withDocumentOperation(
+		uri,
+		"Lint",
+		async (context, document) => {
+			const result = await executeLint(context, document, reason, lintDeps);
+			return result.diagnosticsCount;
+		},
+		0,
+	);
 }
 
 // ============================================================================
@@ -448,39 +412,13 @@ async function runLintNow(uri: string, reason: LintReason): Promise<number> {
 // ============================================================================
 
 async function formatDocument(uri: string): Promise<TextEdit[] | null> {
-	const document = documents.get(uri);
-	if (!document) {
-		return null;
-	}
-
-	const documentSettings = await settingsManager.getSettingsForDocument(uri);
-	if (!documentSettings.enableFormat) {
-		return null;
-	}
-
 	formatStateManager.cancelInFlight(uri);
-
-	const context = await createDocumentContext({
-		document,
-		documentSettings,
-		workspaceFolders,
-		isSavedFn: (doc) => isSaved(doc),
-	});
-
-	connection.sendNotification("tsqlrefine/operationState", {
-		state: "started",
-	});
-	const startMs = Date.now();
-	try {
-		const result = await executeFormat(context, document, formatDeps);
-		const elapsedMs = Date.now() - startMs;
-		notificationManager.debug(`[executeFormat] Completed in ${elapsedMs}ms`);
-		return result;
-	} finally {
-		connection.sendNotification("tsqlrefine/operationState", {
-			state: "completed",
-		});
-	}
+	return await withDocumentOperation(
+		uri,
+		"Format",
+		(context, document) => executeFormat(context, document, formatDeps),
+		null,
+	);
 }
 
 // ============================================================================
@@ -499,37 +437,83 @@ function isSaved(document: TextDocument): boolean {
 // ============================================================================
 
 async function fixDocument(uri: string): Promise<TextEdit[] | null> {
+	fixStateManager.cancelInFlight(uri);
+	return await withDocumentOperation(
+		uri,
+		"Fix",
+		(context, document) => executeFix(context, document, fixDeps),
+		null,
+	);
+}
+
+async function withDocumentOperation<T>(
+	uri: string,
+	operation: "Lint" | "Format" | "Fix",
+	run: (
+		context: Awaited<ReturnType<typeof createDocumentContext>>,
+		document: TextDocument,
+	) => Promise<T>,
+	notFoundResult: T,
+): Promise<T> {
 	const document = documents.get(uri);
 	if (!document) {
-		return null;
+		return notFoundResult;
 	}
-
 	const documentSettings = await settingsManager.getSettingsForDocument(uri);
-	if (!documentSettings.enableFix) {
-		return null;
+	const enabled =
+		operation === "Lint"
+			? documentSettings.enableLint
+			: operation === "Format"
+				? documentSettings.enableFormat
+				: documentSettings.enableFix;
+	if (!enabled) {
+		return notFoundResult;
 	}
-
-	fixStateManager.cancelInFlight(uri);
-
 	const context = await createDocumentContext({
 		document,
 		documentSettings,
 		workspaceFolders,
 		isSavedFn: (doc) => isSaved(doc),
 	});
-
 	connection.sendNotification("tsqlrefine/operationState", {
 		state: "started",
 	});
 	const startMs = Date.now();
 	try {
-		const result = await executeFix(context, document, fixDeps);
+		const result = await run(context, document);
 		const elapsedMs = Date.now() - startMs;
-		notificationManager.debug(`[executeFix] Completed in ${elapsedMs}ms`);
+		notificationManager.debug(
+			`[execute${operation}] Completed in ${elapsedMs}ms`,
+		);
 		return result;
 	} finally {
 		connection.sendNotification("tsqlrefine/operationState", {
 			state: "completed",
 		});
 	}
+}
+
+async function applyEditsWithVersionGuard(
+	uri: string,
+	version: number,
+	edits: TextEdit[] | null,
+	operation: "Format" | "Fix",
+): Promise<{ ok: boolean; error?: string }> {
+	if (edits === null) {
+		return { ok: false, error: `${operation} failed` };
+	}
+	if (edits.length === 0) {
+		return { ok: true };
+	}
+	const result = await connection.workspace.applyEdit({
+		documentChanges: [
+			TextDocumentEdit.create(
+				OptionalVersionedTextDocumentIdentifier.create(uri, version),
+				edits,
+			),
+		],
+	});
+	return result.applied
+		? { ok: true }
+		: { ok: false, error: "Failed to apply edits" };
 }

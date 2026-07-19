@@ -3,6 +3,18 @@ import { runProcess } from "../../server/shared/processRunner";
 import { MAX_OUTPUT_BYTES } from "../../server/config/constants";
 
 suite("runProcess", () => {
+	test("handles a child closing stdin before a large write completes", async () => {
+		const result = await runProcess({
+			command: process.execPath,
+			args: ["-e", "process.exit(0)"],
+			cwd: process.cwd(),
+			timeoutMs: 5000,
+			signal: new AbortController().signal,
+			stdin: "x".repeat(4 * 1024 * 1024),
+		});
+
+		assert.strictEqual(result.exitCode, 0);
+	});
 	suite("output limit", () => {
 		test("kills process when stdout exceeds MAX_OUTPUT_BYTES", async () => {
 			const controller = new AbortController();

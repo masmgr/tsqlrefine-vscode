@@ -14,21 +14,12 @@ export async function handleDidDeleteFiles(
 	client: LanguageClient | undefined,
 	clientReady: Promise<void>,
 ): Promise<void> {
-	if (!client) {
-		return;
-	}
-	if (clientReady) {
-		await clientReady;
-	}
-	const uris = event.files.map((file) => file.toString());
-	try {
-		client.sendNotification("tsqlrefine/clearDiagnostics", { uris });
-	} catch (error) {
-		console.error(
-			"tsqlrefine: failed to send clearDiagnostics on delete",
-			error,
-		);
-	}
+	await clearDiagnostics(
+		event.files.map((file) => file.toString()),
+		"delete",
+		client,
+		clientReady,
+	);
 }
 
 /**
@@ -44,18 +35,29 @@ export async function handleDidRenameFiles(
 	client: LanguageClient | undefined,
 	clientReady: Promise<void>,
 ): Promise<void> {
+	await clearDiagnostics(
+		event.files.map((file) => file.oldUri.toString()),
+		"rename",
+		client,
+		clientReady,
+	);
+}
+
+async function clearDiagnostics(
+	uris: string[],
+	eventName: "delete" | "rename",
+	client: LanguageClient | undefined,
+	clientReady: Promise<void>,
+): Promise<void> {
 	if (!client) {
 		return;
 	}
-	if (clientReady) {
-		await clientReady;
-	}
-	const uris = event.files.map((file) => file.oldUri.toString());
+	await clientReady;
 	try {
 		client.sendNotification("tsqlrefine/clearDiagnostics", { uris });
 	} catch (error) {
 		console.error(
-			"tsqlrefine: failed to send clearDiagnostics on rename",
+			`tsqlrefine: failed to send clearDiagnostics on ${eventName}`,
 			error,
 		);
 	}

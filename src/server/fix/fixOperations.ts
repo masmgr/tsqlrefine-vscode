@@ -1,22 +1,13 @@
-import type { Connection, TextEdit } from "vscode-languageserver/node";
+import type { TextEdit } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
-import { CLI_EXIT_CODE_DESCRIPTIONS } from "../config/constants";
-import { detectEndOfLine, normalizeLineEndings } from "../lint/decodeOutput";
+import {
+	type CliEditOperationDeps,
+	executeCliEditOperation,
+} from "../shared/cliEditOperation";
 import type { DocumentContext } from "../shared/documentContext";
-import { createFullDocumentEdit } from "../shared/documentEdit";
-import { handleOperationError } from "../shared/errorHandling";
-import { logOperationContext } from "../shared/logging";
-import { firstLine } from "../shared/textUtils";
-import type { ProcessRunResult } from "../shared/types";
-import type { DocumentStateManager } from "../state/documentStateManager";
-import type { NotificationManager } from "../state/notificationManager";
 import { runFixer } from "./runFixer";
 
-export type FixOperationDeps = {
-	connection: Connection;
-	notificationManager: NotificationManager;
-	fixStateManager: DocumentStateManager;
-};
+export type FixOperationDeps = CliEditOperationDeps;
 
 /**
  * Execute fix operation on a document.
@@ -31,100 +22,9 @@ export async function executeFix(
 	document: TextDocument,
 	deps: FixOperationDeps,
 ): Promise<TextEdit[] | null> {
-	const { connection, notificationManager, fixStateManager } = deps;
-	const {
-		uri,
-		filePath,
-		cwd,
-		effectiveSettings,
-		effectiveConfigPath,
-		documentText,
-	} = context;
-
-	if (!effectiveSettings.enableFix) {
-		notificationManager.debug(
-			`tsqlrefine: fix is disabled (enableFix=false) for ${uri}`,
-		);
-		return null;
-	}
-
-	const controller = new AbortController();
-	fixStateManager.setInFlight(uri, controller);
-
-	logOperationContext(notificationManager, {
-		operation: "Fix",
-		uri,
-		filePath,
-		cwd,
-		configPath: effectiveConfigPath,
+	return await executeCliEditOperation(context, document, deps, {
+		operationName: "fix",
+		runner: runFixer,
+		isEnabled: ({ effectiveSettings }) => effectiveSettings.enableFix,
 	});
-
-	let result: ProcessRunResult;
-	try {
-		result = await runFixer({
-			cwd,
-			settings: effectiveSettings,
-			signal: controller.signal,
-			stdin: documentText,
-		});
-	} catch (error) {
-		if (fixStateManager.isCurrentInFlight(uri, controller)) {
-			fixStateManager.clearInFlight(uri);
-		}
-		return await handleFixError(error, deps);
-	}
-
-	if (fixStateManager.isCurrentInFlight(uri, controller)) {
-		fixStateManager.clearInFlight(uri);
-	}
-
-	if (result.timedOut) {
-		const formatted = "tsqlrefine: fix timed out";
-		// Don't await - warning message may block in some environments
-		void connection.window.showWarningMessage(formatted);
-		notificationManager.warn(formatted);
-		return null;
-	}
-
-	if (controller.signal.aborted || result.cancelled) {
-		return null;
-	}
-
-	if (result.stderr.trim()) {
-		notificationManager.warn(`tsqlrefine fix stderr: ${result.stderr}`);
-	}
-
-	if (result.exitCode !== 0) {
-		const description =
-			result.exitCode !== null
-				? (CLI_EXIT_CODE_DESCRIPTIONS[result.exitCode] ??
-					`exit code ${result.exitCode}`)
-				: "unknown error";
-		const stderrDetail = result.stderr.trim();
-		const detail = stderrDetail ? ` (${firstLine(stderrDetail)})` : "";
-		const formatted = `tsqlrefine: fix failed - ${description}${detail}`;
-
-		void connection.window.showWarningMessage(formatted);
-		notificationManager.warn(formatted);
-		return null;
-	}
-
-	const fixedText = normalizeLineEndings(
-		result.stdout,
-		detectEndOfLine(documentText),
-	);
-
-	if (fixedText === documentText) {
-		return [];
-	}
-
-	return [createFullDocumentEdit(document, fixedText)];
-}
-
-async function handleFixError(
-	error: unknown,
-	deps: FixOperationDeps,
-): Promise<null> {
-	await handleOperationError(error, deps, "fix");
-	return null;
 }

@@ -88,8 +88,9 @@ export async function checkCommandAvailable(command: string): Promise<boolean> {
  */
 export async function resolveCommand(
 	settings: TsqlRefineSettings,
+	basePath: string = process.cwd(),
 ): Promise<string> {
-	const configuredPath = normalizeExecutablePath(settings.path);
+	const configuredPath = normalizeExecutablePath(settings.path, basePath);
 	if (configuredPath) {
 		await assertPathExists(configuredPath);
 		return configuredPath;
@@ -130,9 +131,10 @@ export async function resolveCommand(
  */
 export async function verifyInstallation(
 	settings: TsqlRefineSettings,
+	basePath: string = process.cwd(),
 ): Promise<{ available: boolean; message?: string }> {
 	try {
-		await resolveCommand(settings);
+		await resolveCommand(settings, basePath);
 		return { available: true };
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
@@ -157,6 +159,7 @@ export function runProcess(
 		const stdoutChunks: Buffer[] = [];
 		const stderrChunks: Buffer[] = [];
 		let timer: NodeJS.Timeout | null = null;
+		let forceKillTimer: NodeJS.Timeout | null = null;
 		let outputBytes = 0;
 		let outputLimitExceeded = false;
 
@@ -164,9 +167,22 @@ export function runProcess(
 			cwd: options.cwd,
 			stdio: [options.stdin != null ? "pipe" : "ignore", "pipe", "pipe"],
 		});
+		const terminateChild = () => {
+			child.kill();
+			if (process.platform !== "win32" && !forceKillTimer) {
+				forceKillTimer = setTimeout(() => {
+					if (!child.killed || child.exitCode === null) {
+						child.kill("SIGKILL");
+					}
+				}, 1000);
+			}
+		};
 
 		// Write stdin content if provided (as UTF-8 encoded Buffer)
 		if (options.stdin != null && child.stdin) {
+			// A CLI may exit before consuming stdin. Without an error listener an
+			// EPIPE emitted by the pipe would be an uncaught exception in the LSP.
+			child.stdin.on("error", () => {});
 			const stdinBuffer = Buffer.from(options.stdin, "utf8");
 			child.stdin.write(stdinBuffer);
 			child.stdin.end();
@@ -202,12 +218,16 @@ export function runProcess(
 				clearTimeout(timer);
 				timer = null;
 			}
+			if (forceKillTimer) {
+				clearTimeout(forceKillTimer);
+				forceKillTimer = null;
+			}
 			reject(error);
 		};
 
 		timer = setTimeout(() => {
 			timedOut = true;
-			child.kill();
+			terminateChild();
 			const { stdout, stderr } = decodeBuffers();
 			finish({
 				stdout,
@@ -222,7 +242,7 @@ export function runProcess(
 			"abort",
 			() => {
 				cancelled = true;
-				child.kill();
+				terminateChild();
 				const { stdout, stderr } = decodeBuffers();
 				finish({
 					stdout,
@@ -240,7 +260,7 @@ export function runProcess(
 			if (outputBytes > MAX_OUTPUT_BYTES) {
 				if (!outputLimitExceeded) {
 					outputLimitExceeded = true;
-					child.kill();
+					terminateChild();
 				}
 				return;
 			}
@@ -251,7 +271,7 @@ export function runProcess(
 			if (outputBytes > MAX_OUTPUT_BYTES) {
 				if (!outputLimitExceeded) {
 					outputLimitExceeded = true;
-					child.kill();
+					terminateChild();
 				}
 				return;
 			}
@@ -263,6 +283,10 @@ export function runProcess(
 		});
 
 		child.on("close", (exitCode) => {
+			if (forceKillTimer) {
+				clearTimeout(forceKillTimer);
+				forceKillTimer = null;
+			}
 			const { stdout, stderr } = decodeBuffers();
 			finish({
 				stdout,

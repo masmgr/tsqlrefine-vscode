@@ -1,7 +1,6 @@
 import type { TsqlRefineSettings } from "../config/settings";
-import { normalizeConfigPath } from "../shared/normalize";
-import { resolveCommand, runProcess } from "../shared/processRunner";
-import { type ProcessRunResult, createCancelledResult } from "../shared/types";
+import { buildCliArgs, runCliOperation } from "../shared/cliRunner";
+import type { ProcessRunResult } from "../shared/types";
 
 export type RunFormatterOptions = {
 	cwd: string;
@@ -15,17 +14,7 @@ export type RunFormatterOptions = {
  * Build command-line arguments for tsqlrefine format operation.
  */
 export function buildArgs(settings: TsqlRefineSettings): string[] {
-	const args: string[] = ["format", "-q", "--utf8"];
-	const configPath = normalizeConfigPath(settings.configPath);
-	if (configPath) {
-		args.push("-c", configPath);
-	}
-	if (settings.allowPlugins) {
-		args.push("--allow-plugins");
-	}
-	// Use --stdin to read content from stdin
-	args.push("--stdin");
-	return args;
+	return buildCliArgs(settings, { operation: "format" });
 }
 
 /**
@@ -34,17 +23,12 @@ export function buildArgs(settings: TsqlRefineSettings): string[] {
 export async function runFormatter(
 	options: RunFormatterOptions,
 ): Promise<ProcessRunResult> {
-	if (options.signal.aborted) {
-		return createCancelledResult();
-	}
-
-	const command = await resolveCommand(options.settings);
 	const args = buildArgs(options.settings);
 	const timeoutMs =
 		options.settings.formatTimeoutMs ?? options.settings.timeoutMs;
 
-	return runProcess({
-		command,
+	return runCliOperation({
+		settings: options.settings,
 		args,
 		cwd: options.cwd,
 		timeoutMs,

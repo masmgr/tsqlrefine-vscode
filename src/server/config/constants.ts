@@ -32,6 +32,9 @@ export const MAX_CONCURRENT_RUNS = 4;
 /** Cooldown for missing tsqlrefine notification (5 minutes) */
 export const MISSING_TSQLREFINE_NOTICE_COOLDOWN_MS = 5 * 60 * 1000;
 
+/** Cooldown for repeated CLI stderr popups (30 seconds) */
+export const STDERR_NOTICE_COOLDOWN_MS = 30 * 1000;
+
 /** Default executable name */
 export const DEFAULT_COMMAND_NAME = "tsqlrefine";
 

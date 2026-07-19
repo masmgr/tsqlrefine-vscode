@@ -1,11 +1,7 @@
 import type { TsqlRefineSettings } from "../config/settings";
-import { normalizeConfigPath } from "../shared/normalize";
-import {
-	resolveCommand,
-	runProcess,
-	verifyInstallation,
-} from "../shared/processRunner";
-import { type ProcessRunResult, createCancelledResult } from "../shared/types";
+import { buildCliArgs, runCliOperation } from "../shared/cliRunner";
+export { verifyInstallation as verifyTsqlRefineInstallation } from "../shared/processRunner";
+import type { ProcessRunResult } from "../shared/types";
 
 export type RunLinterOptions = {
 	filePath: string;
@@ -17,37 +13,14 @@ export type RunLinterOptions = {
 };
 
 /**
- * Verify that tsqlrefine is available for the given settings.
- * This is a lightweight check used at startup and when settings change.
- *
- * @param settings - The tsqlrefine settings to verify
- * @returns Object with available status and error message if not available
- */
-export async function verifyTsqlRefineInstallation(
-	settings: TsqlRefineSettings,
-): Promise<{ available: boolean; message?: string }> {
-	return verifyInstallation(settings);
-}
-
-/**
  * Build command-line arguments for tsqlrefine lint operation.
  */
 export function buildArgs(options: RunLinterOptions): string[] {
-	const args: string[] = ["lint", "-q", "--utf8"];
-	const configPath = normalizeConfigPath(options.settings.configPath);
-	if (configPath) {
-		args.push("-c", configPath);
-	}
-	if (options.settings.allowPlugins) {
-		args.push("--allow-plugins");
-	}
-	// Add severity threshold
-	args.push("--severity", options.settings.minSeverity);
-	// Use JSON output for structured diagnostics
-	args.push("--output", "json");
-	// Use --stdin to read content from stdin
-	args.push("--stdin");
-	return args;
+	return buildCliArgs(options.settings, {
+		operation: "lint",
+		includeSeverity: true,
+		outputJson: true,
+	});
 }
 
 /**
@@ -56,15 +29,10 @@ export function buildArgs(options: RunLinterOptions): string[] {
 export async function runLinter(
 	options: RunLinterOptions,
 ): Promise<ProcessRunResult> {
-	if (options.signal.aborted) {
-		return createCancelledResult();
-	}
-
-	const command = await resolveCommand(options.settings);
 	const args = buildArgs(options);
 
-	return runProcess({
-		command,
+	return runCliOperation({
+		settings: options.settings,
 		args,
 		cwd: options.cwd,
 		timeoutMs: options.settings.timeoutMs,

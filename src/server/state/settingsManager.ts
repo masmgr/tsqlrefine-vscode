@@ -60,6 +60,9 @@ export class SettingsManager {
 			cached &&
 			Date.now() - cached.cachedAtMs < DOCUMENT_SETTINGS_CACHE_TTL_MS
 		) {
+			// Refresh insertion order so eviction behaves as LRU.
+			this.documentSettingsCache.delete(uri);
+			this.documentSettingsCache.set(uri, cached);
 			return cached.settings;
 		}
 

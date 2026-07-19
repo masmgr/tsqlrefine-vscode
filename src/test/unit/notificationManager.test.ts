@@ -164,6 +164,16 @@ suite("NotificationManager", () => {
 	});
 
 	suite("notifyStderr", () => {
+		test("suppresses repeated popups during the cooldown", () => {
+			const { connection, calls } = createMockConnection();
+			const manager = new NotificationManager(connection);
+
+			manager.notifyStderr("first warning");
+			manager.notifyStderr("second warning");
+
+			assert.strictEqual(calls.showWarningMessage.length, 1);
+			assert.strictEqual(calls.consoleWarn.length, 2);
+		});
 		test("shows warning for non-empty stderr", () => {
 			const { connection, calls } = createMockConnection();
 			const manager = new NotificationManager(connection);

@@ -17,6 +17,7 @@ export type LintOperationDeps = {
 	connection: Connection;
 	notificationManager: NotificationManager;
 	lintStateManager: DocumentStateManager;
+	runner?: typeof runLinter;
 };
 
 export type LintResult = {
@@ -40,6 +41,7 @@ export async function executeLint(
 	deps: LintOperationDeps,
 ): Promise<LintResult> {
 	const { connection, notificationManager, lintStateManager } = deps;
+	const runner = deps.runner ?? runLinter;
 	const {
 		uri,
 		filePath,
@@ -86,7 +88,7 @@ export async function executeLint(
 
 	let result: ProcessRunResult;
 	try {
-		result = await runLinter({
+		result = await runner({
 			filePath: targetFilePath,
 			cwd,
 			settings: effectiveSettings,
@@ -103,12 +105,10 @@ export async function executeLint(
 	}
 
 	if (result.timedOut) {
-		lintStateManager.clearInFlight(uri);
 		const formatted = "tsqlrefine: lint timed out";
 		// Don't await - warning message may block in some environments
 		void connection.window.showWarningMessage(formatted);
 		notificationManager.warn(formatted);
-		connection.sendDiagnostics({ uri, diagnostics: [] });
 		return { diagnosticsCount: -1, success: false };
 	}
 
@@ -122,17 +122,18 @@ export async function executeLint(
 
 	// Exit code 0 = no violations, 1 = violations found (both are success)
 	// Exit code 2 = parse error, 3 = config error, 4 = runtime exception
-	if (result.exitCode !== null && result.exitCode >= 2) {
+	if (result.exitCode === null || result.exitCode >= 2) {
 		const description =
-			CLI_EXIT_CODE_DESCRIPTIONS[result.exitCode] ??
-			`exit code ${result.exitCode}`;
+			result.exitCode === null
+				? "process terminated without an exit code"
+				: (CLI_EXIT_CODE_DESCRIPTIONS[result.exitCode] ??
+					`exit code ${result.exitCode}`);
 		const stderrDetail = result.stderr.trim();
 		const detail = stderrDetail ? ` (${firstLine(stderrDetail)})` : "";
 		const formatted = `tsqlrefine: lint failed - ${description}${detail}`;
 
 		void connection.window.showWarningMessage(formatted);
 		notificationManager.warn(formatted);
-		connection.sendDiagnostics({ uri, diagnostics: [] });
 		return { diagnosticsCount: -1, success: false };
 	}
 
