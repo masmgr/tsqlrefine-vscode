@@ -116,6 +116,19 @@ connection.onInitialize((params) => {
 });
 
 connection.onInitialized(async () => {
+	connection.workspace.onDidChangeWorkspaceFolders((event) => {
+		const removed = new Set(
+			event.removed.map((folder) => URI.parse(folder.uri).fsPath),
+		);
+		const added = event.added.map((folder) => URI.parse(folder.uri).fsPath);
+		workspaceFolders = [
+			...workspaceFolders.filter((folder) => !removed.has(folder)),
+			...added,
+		];
+		// Document-scoped settings can depend on workspace folders.
+		settingsManager.invalidateAll();
+	});
+
 	await settingsManager.refreshSettings();
 	await verifyInstallation();
 });
@@ -129,19 +142,6 @@ connection.onNotification(
 		);
 	},
 );
-
-connection.workspace.onDidChangeWorkspaceFolders((event) => {
-	const removed = new Set(
-		event.removed.map((folder) => URI.parse(folder.uri).fsPath),
-	);
-	const added = event.added.map((folder) => URI.parse(folder.uri).fsPath);
-	workspaceFolders = [
-		...workspaceFolders.filter((folder) => !removed.has(folder)),
-		...added,
-	];
-	// Document-scoped settings can depend on workspace folders.
-	settingsManager.invalidateAll();
-});
 
 connection.onDidChangeConfiguration(async () => {
 	const previousPath = settingsManager.getSettings().path;

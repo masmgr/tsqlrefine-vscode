@@ -23,7 +23,9 @@ export function createLanguageClient(
 		},
 	};
 
-	const outputChannel = vscode.window.createOutputChannel("TSQLRefine");
+	const outputChannel = vscode.window.createOutputChannel("TSQLRefine", {
+		log: true,
+	});
 
 	const clientOptions: LanguageClientOptions = {
 		documentSelector: ["sql", "tsql", "mssql"].flatMap((language) => [
