@@ -156,23 +156,36 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 	const setAsDefaultFormatterCommand = vscode.commands.registerCommand(
 		"tsqlrefine.setAsDefaultFormatter",
 		async () => {
-			for (const languageId of LANGUAGE_IDS) {
-				const config = vscode.workspace.getConfiguration("editor", {
-					languageId,
-				});
-				await config.update(
-					"defaultFormatter",
-					EXTENSION_ID,
-					vscode.ConfigurationTarget.Workspace,
-					true,
+			try {
+				// Workspace settings override other extensions' configurationDefaults
+				// (e.g. mssql); fall back to user settings when no workspace is open.
+				const hasWorkspace =
+					(vscode.workspace.workspaceFolders?.length ?? 0) > 0;
+				const target = hasWorkspace
+					? vscode.ConfigurationTarget.Workspace
+					: vscode.ConfigurationTarget.Global;
+				for (const languageId of LANGUAGE_IDS) {
+					const config = vscode.workspace.getConfiguration("editor", {
+						languageId,
+					});
+					await config.update("defaultFormatter", EXTENSION_ID, target, true);
+				}
+				await vscode.window.showInformationMessage(
+					hasWorkspace
+						? "TSQLRefine is now the default SQL formatter for this workspace."
+						: "TSQLRefine is now the default SQL formatter in your user settings.",
+				);
+			} catch (error) {
+				console.error("tsqlrefine: setAsDefaultFormatter failed", error);
+				void vscode.window.showErrorMessage(
+					`TSQLRefine: failed to set default formatter: ${String(error)}`,
 				);
 			}
-			await vscode.window.showInformationMessage(
-				"TSQLRefine is now the default SQL formatter for this workspace.",
-			);
 		},
 	);
 	context.subscriptions.push(setAsDefaultFormatterCommand);
+
+	void maybeSuggestDefaultFormatter(context);
 
 	context.subscriptions.push(
 		vscode.workspace.onDidDeleteFiles(async (event) => {
@@ -184,6 +197,47 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 	);
 
 	return { clientReady };
+}
+
+const CONFLICTING_FORMATTER_EXTENSIONS = ["ms-mssql.mssql"] as const;
+const SUPPRESS_FORMATTER_SUGGESTION_KEY =
+	"tsqlrefine.suppressDefaultFormatterSuggestion";
+
+async function maybeSuggestDefaultFormatter(
+	context: vscode.ExtensionContext,
+): Promise<void> {
+	try {
+		if (context.globalState.get<boolean>(SUPPRESS_FORMATTER_SUGGESTION_KEY)) {
+			return;
+		}
+		const conflicting = CONFLICTING_FORMATTER_EXTENSIONS.filter((id) =>
+			vscode.extensions.getExtension(id),
+		);
+		if (conflicting.length === 0) {
+			return;
+		}
+		const config = vscode.workspace.getConfiguration("editor", {
+			languageId: "sql",
+		});
+		if (config.get<string>("defaultFormatter")) {
+			// The user (or another extension's defaults) already picked one.
+			return;
+		}
+		const setAsDefault = "Set as Default";
+		const dontAskAgain = "Don't Ask Again";
+		const choice = await vscode.window.showInformationMessage(
+			"Multiple SQL formatters are installed. Set TSQLRefine as the default formatter for SQL files?",
+			setAsDefault,
+			dontAskAgain,
+		);
+		if (choice === setAsDefault) {
+			await vscode.commands.executeCommand("tsqlrefine.setAsDefaultFormatter");
+		} else if (choice === dontAskAgain) {
+			await context.globalState.update(SUPPRESS_FORMATTER_SUGGESTION_KEY, true);
+		}
+	} catch (error) {
+		console.error("tsqlrefine: default formatter suggestion failed", error);
+	}
 }
 
 export async function deactivate() {
