@@ -14,12 +14,22 @@ const esbuildProblemMatcherPlugin = {
 			console.log("[watch] build started");
 		});
 		build.onEnd((result) => {
-			result.errors.forEach(({ text, location }) => {
+			for (const { text, location } of result.errors) {
 				console.error(`✘ [ERROR] ${text}`);
-				console.error(
-					`    ${location?.file}:${location?.line}:${location?.column}:`,
-				);
-			});
+				if (location) {
+					console.error(
+						`    ${location.file}:${location.line}:${location.column}:`,
+					);
+				}
+			}
+			for (const { text, location } of result.warnings) {
+				console.warn(`▲ [WARNING] ${text}`);
+				if (location) {
+					console.warn(
+						`    ${location.file}:${location.line}:${location.column}:`,
+					);
+				}
+			}
 			console.log("[watch] build finished");
 		});
 	},
@@ -35,38 +45,33 @@ const baseConfig = {
 	sourcesContent: false,
 	platform: "node",
 	target: "node24",
-	logLevel: "silent",
-	plugins: [
-		/* add to the end of plugins array */
-		esbuildProblemMatcherPlugin,
-	],
+	logLevel: watch ? "silent" : "warning",
+	plugins: watch ? [esbuildProblemMatcherPlugin] : [],
 };
 
 async function main() {
-	const ctx = await esbuild.context({
-		...baseConfig,
-		entryPoints: ["src/extension.ts"],
-		outfile: "dist/extension.js",
-		external: ["vscode"],
-		format: "cjs",
-	});
-
-	const serverCtx = await esbuild.context({
-		...baseConfig,
-		entryPoints: ["src/server/server.ts"],
-		outfile: "dist/server.js",
-		external: [],
-		format: "cjs",
-	});
+	const builds = [
+		{
+			...baseConfig,
+			entryPoints: ["src/extension.ts"],
+			outfile: "dist/extension.js",
+			external: ["vscode"],
+			format: "cjs",
+		},
+		{
+			...baseConfig,
+			entryPoints: ["src/server/server.ts"],
+			outfile: "dist/server.js",
+			external: [],
+			format: "cjs",
+		},
+	];
 
 	if (watch) {
-		await ctx.watch();
-		await serverCtx.watch();
+		const contexts = await Promise.all(builds.map((build) => esbuild.context(build)));
+		await Promise.all(contexts.map((context) => context.watch()));
 	} else {
-		await ctx.rebuild();
-		await serverCtx.rebuild();
-		await ctx.dispose();
-		await serverCtx.dispose();
+		await Promise.all(builds.map((build) => esbuild.build(build)));
 	}
 }
 

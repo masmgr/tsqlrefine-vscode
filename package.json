@@ -179,10 +179,12 @@
 	"scripts": {
 		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"compile": "tsc -p tsconfig.json",
-		"compile:test": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true })\" && tsc -p tsconfig.test.json",
+		"clean:test": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true })\"",
+		"compile:test": "tsc -p tsconfig.test.json",
 		"build": "node esbuild.mjs",
 		"watch": "node esbuild.mjs --watch",
 		"watch:tsc": "tsc -watch -p tsconfig.json",
+		"dev": "run-p watch watch:tsc",
 		"vscode:prepublish": "npm run build -- --production",
 		"package": "vsce package",
 		"lint": "biome lint .",
@@ -210,6 +212,7 @@
 		"husky": "^9.1.7",
 		"lint-staged": "^17.0.7",
 		"mocha": "^11.7.6",
+		"npm-run-all2": "^8.0.4",
 		"source-map-support": "^0.5.21",
 		"typescript": "^6.0.2"
 	},

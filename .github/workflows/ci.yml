@@ -45,7 +45,14 @@ jobs:
       - run: npm run test:unit
         if: runner.os != 'Linux'
 
-      - run: npm run build
+      # Build once, then run E2E against the production bundle.
+      # Packaging invokes vscode:prepublish, so it also performs the Linux build.
+      - name: Build production extension (Windows/macOS)
+        run: npm run build -- --production
+        if: runner.os != 'Linux'
+      - name: Package extension (Linux)
+        run: npm run package
+        if: runner.os == 'Linux'
 
       # Install .NET SDK and tsqlrefine CLI for E2E tests
       - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
@@ -53,27 +60,19 @@ jobs:
           dotnet-version: '8.0.x'
       - name: Install tsqlrefine CLI
         run: dotnet tool install -g TSQLRefine
-        continue-on-error: true
       - name: Verify tsqlrefine installation
-        id: tsqlrefine-check
         run: tsqlrefine --version
-        continue-on-error: true
-
-      # Compile test files for E2E
-      - run: npm run compile:test
 
       # Run E2E tests on Linux with xvfb
       - name: Run E2E tests (Linux)
         run: xvfb-run -a npx vscode-test
-        if: runner.os == 'Linux' && steps.tsqlrefine-check.outcome == 'success'
+        if: runner.os == 'Linux'
 
       # Run E2E tests on Windows/macOS
       - name: Run E2E tests (Windows/macOS)
         run: npx vscode-test
-        if: runner.os != 'Linux' && steps.tsqlrefine-check.outcome == 'success'
+        if: runner.os != 'Linux'
 
-      - run: npm run package
-        if: runner.os == 'Linux'
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: runner.os == 'Linux'
         with:
