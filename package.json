@@ -199,7 +199,7 @@
 		"verify": "npm test && npm run typecheck && npm run lint && npm run format:check"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.5.3",
+		"@biomejs/biome": "^2.5.4",
 		"@sinonjs/fake-timers": "^15.4.0",
 		"@types/mocha": "^10.0.10",
 		"@types/node": "^22.20.0",
@@ -211,7 +211,7 @@
 		"esbuild": "^0.28.1",
 		"fast-check": "^4.9.0",
 		"husky": "^9.1.7",
-		"lint-staged": "^17.0.7",
+		"lint-staged": "^17.1.0",
 		"mocha": "^11.7.6",
 		"npm-run-all2": "^8.0.4",
 		"source-map-support": "^0.5.21",
