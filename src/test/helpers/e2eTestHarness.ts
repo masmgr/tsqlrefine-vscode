@@ -7,8 +7,8 @@ import * as assert from "node:assert";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { type RemovalOptions, removeDirectory, sleep } from "./cleanup";
-import { TEST_DELAYS, TEST_TIMEOUTS } from "./testConstants";
+import { type RemovalOptions, removeDirectory } from "./cleanup";
+import { TEST_TIMEOUTS } from "./testConstants";
 import {
 	applyTestConfig,
 	createSqlDocument,
@@ -118,10 +118,6 @@ export class E2ETestHarness {
 		const documentUri = await createFile(filename, content);
 		this.context.document = await createSqlDocument(documentUri, content);
 
-		// Allow time for LSP textDocument/didOpen and config change notifications
-		// to propagate to the language server before test body executes.
-		await sleep(TEST_DELAYS.LSP_SYNC);
-
 		this.isSetup = true;
 
 		return this.context as E2ETestContext;
@@ -144,16 +140,10 @@ export class E2ETestHarness {
 		// Close all editors
 		await vscode.commands.executeCommand("workbench.action.closeAllEditors");
 
-		// Sleep to allow async operations to complete
-		await sleep(TEST_DELAYS.CLEANUP_SLEEP);
-
 		// Cleanup workspace
 		await cleanupWorkspace(this.context.workspaceRoot);
 
-		// Sleep again for file system to release handles
-		await sleep(TEST_DELAYS.CLEANUP_SLEEP);
-
-		// Remove temporary directory
+		// removeDirectory retries transient file locking failures.
 		if (this.context.tempDir) {
 			await removeDirectory(this.context.tempDir);
 		}
