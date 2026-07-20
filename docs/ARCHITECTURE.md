@@ -883,5 +883,5 @@ The architecture supports adding:
 ---
 
 **Document Version**: 2.0
-**Last Updated**: 2026-02-17
-**Extension Version**: 1.0.0
+**Last Updated**: 2026-07-20
+**Extension Version**: 1.1.0

@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/), and this 
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-20
+
 ### Added
 - `tsqlrefine.setAsDefaultFormatter` command to resolve conflicts with other SQL formatter extensions (e.g. mssql)
 - `tsqlrefine.fixTimeoutMs` setting for independent timeout control on fix operations (previously shared `timeoutMs`)
