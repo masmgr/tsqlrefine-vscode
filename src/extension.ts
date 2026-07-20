@@ -58,97 +58,16 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 	);
 
 	const startPromise = client.start();
-	const maybeReady = (client as { onReady?: () => Promise<void> }).onReady;
-	clientReady = typeof maybeReady === "function" ? maybeReady() : startPromise;
-	context.subscriptions.push({
-		dispose: () => {
-			void client?.stop();
-		},
-	});
+	clientReady = startPromise;
 
-	const lintCommand = vscode.commands.registerCommand(
-		"tsqlrefine.run",
-		async () => {
-			try {
-				const activeEditor = vscode.window.activeTextEditor;
-				if (!activeEditor) {
-					return;
-				}
-				await clientReady;
-				if (!client) {
-					console.error("tsqlrefine: Language client is not initialized");
-					return;
-				}
-				await client.sendRequest("tsqlrefine/lintDocument", {
-					uri: activeEditor.document.uri.toString(),
-				});
-			} catch (error) {
-				console.error("tsqlrefine: lint command failed", error);
-				void vscode.window.showErrorMessage(
-					`TSQLRefine lint failed: ${String(error)}`,
-				);
-			}
-		},
-	);
-	context.subscriptions.push(lintCommand);
-
-	const formatCommand = vscode.commands.registerCommand(
+	registerDocumentCommand(context, "tsqlrefine.run", "lintDocument", "lint");
+	registerDocumentCommand(
+		context,
 		"tsqlrefine.format",
-		async () => {
-			try {
-				const activeEditor = vscode.window.activeTextEditor;
-				if (!activeEditor) {
-					return;
-				}
-				await clientReady;
-				if (!client) {
-					console.error("tsqlrefine: Language client is not initialized");
-					return;
-				}
-				const result = await client.sendRequest<{
-					ok: boolean;
-					error?: string;
-				}>("tsqlrefine/formatDocument", {
-					uri: activeEditor.document.uri.toString(),
-				});
-				if (!result.ok) {
-					throw new Error(result.error ?? "Format failed");
-				}
-			} catch (error) {
-				console.error("tsqlrefine: format command failed", error);
-				void vscode.window.showErrorMessage(
-					`TSQLRefine format failed: ${String(error)}`,
-				);
-			}
-		},
+		"formatDocument",
+		"format",
 	);
-	context.subscriptions.push(formatCommand);
-
-	const fixCommand = vscode.commands.registerCommand(
-		"tsqlrefine.fix",
-		async () => {
-			try {
-				const activeEditor = vscode.window.activeTextEditor;
-				if (!activeEditor) {
-					return;
-				}
-				await clientReady;
-				if (!client) {
-					console.error("tsqlrefine: Language client is not initialized");
-					return;
-				}
-				await client.sendRequest("tsqlrefine/fixDocument", {
-					uri: activeEditor.document.uri.toString(),
-				});
-			} catch (error) {
-				console.error("tsqlrefine: fix command failed", error);
-				void vscode.window.showErrorMessage(
-					`TSQLRefine fix failed: ${String(error)}`,
-				);
-			}
-		},
-	);
-	context.subscriptions.push(fixCommand);
+	registerDocumentCommand(context, "tsqlrefine.fix", "fixDocument", "fix");
 
 	const LANGUAGE_IDS = ["sql", "tsql", "mssql"] as const;
 	const EXTENSION_ID = "masmgr.tsqlrefine";
@@ -156,23 +75,36 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 	const setAsDefaultFormatterCommand = vscode.commands.registerCommand(
 		"tsqlrefine.setAsDefaultFormatter",
 		async () => {
-			for (const languageId of LANGUAGE_IDS) {
-				const config = vscode.workspace.getConfiguration("editor", {
-					languageId,
-				});
-				await config.update(
-					"defaultFormatter",
-					EXTENSION_ID,
-					vscode.ConfigurationTarget.Workspace,
-					true,
+			try {
+				// Workspace settings override other extensions' configurationDefaults
+				// (e.g. mssql); fall back to user settings when no workspace is open.
+				const hasWorkspace =
+					(vscode.workspace.workspaceFolders?.length ?? 0) > 0;
+				const target = hasWorkspace
+					? vscode.ConfigurationTarget.Workspace
+					: vscode.ConfigurationTarget.Global;
+				for (const languageId of LANGUAGE_IDS) {
+					const config = vscode.workspace.getConfiguration("editor", {
+						languageId,
+					});
+					await config.update("defaultFormatter", EXTENSION_ID, target, true);
+				}
+				await vscode.window.showInformationMessage(
+					hasWorkspace
+						? "TSQLRefine is now the default SQL formatter for this workspace."
+						: "TSQLRefine is now the default SQL formatter in your user settings.",
+				);
+			} catch (error) {
+				console.error("tsqlrefine: setAsDefaultFormatter failed", error);
+				void vscode.window.showErrorMessage(
+					`TSQLRefine: failed to set default formatter: ${String(error)}`,
 				);
 			}
-			await vscode.window.showInformationMessage(
-				"TSQLRefine is now the default SQL formatter for this workspace.",
-			);
 		},
 	);
 	context.subscriptions.push(setAsDefaultFormatterCommand);
+
+	void maybeSuggestDefaultFormatter(context);
 
 	context.subscriptions.push(
 		vscode.workspace.onDidDeleteFiles(async (event) => {
@@ -184,6 +116,88 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 	);
 
 	return { clientReady };
+}
+
+function registerDocumentCommand(
+	context: vscode.ExtensionContext,
+	commandId: string,
+	requestName: "lintDocument" | "formatDocument" | "fixDocument",
+	operationName: "lint" | "format" | "fix",
+): void {
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			commandId,
+			async (uriArgument?: vscode.Uri | string) => {
+				try {
+					const uri =
+						typeof uriArgument === "string"
+							? uriArgument
+							: (uriArgument?.toString() ??
+								vscode.window.activeTextEditor?.document.uri.toString());
+					if (!uri) {
+						return;
+					}
+					await clientReady;
+					if (!client) {
+						throw new Error("Language client is not initialized");
+					}
+					const result = await client.sendRequest<{
+						ok?: boolean;
+						error?: string;
+					}>(`tsqlrefine/${requestName}`, { uri });
+					if (result?.ok === false) {
+						throw new Error(result.error ?? `${operationName} failed`);
+					}
+				} catch (error) {
+					console.error(`tsqlrefine: ${operationName} command failed`, error);
+					void vscode.window.showErrorMessage(
+						`TSQLRefine ${operationName} failed: ${String(error)}`,
+					);
+				}
+			},
+		),
+	);
+}
+
+const CONFLICTING_FORMATTER_EXTENSIONS = ["ms-mssql.mssql"] as const;
+const SUPPRESS_FORMATTER_SUGGESTION_KEY =
+	"tsqlrefine.suppressDefaultFormatterSuggestion";
+
+async function maybeSuggestDefaultFormatter(
+	context: vscode.ExtensionContext,
+): Promise<void> {
+	try {
+		if (context.globalState.get<boolean>(SUPPRESS_FORMATTER_SUGGESTION_KEY)) {
+			return;
+		}
+		const conflicting = CONFLICTING_FORMATTER_EXTENSIONS.filter((id) =>
+			vscode.extensions.getExtension(id),
+		);
+		if (conflicting.length === 0) {
+			return;
+		}
+		const config = vscode.workspace.getConfiguration("editor", {
+			languageId: "sql",
+		});
+		if (config.get<string>("defaultFormatter")) {
+			// The user (or another extension's defaults) already picked one.
+			return;
+		}
+		const setAsDefault = "Set as Default";
+		const dontAskAgain = "Don't Ask Again";
+		const choice = await vscode.window.showInformationMessage(
+			"Multiple SQL formatters are installed. Set TSQLRefine as the default formatter for SQL files?",
+			setAsDefault,
+			dontAskAgain,
+		);
+		if (choice === setAsDefault) {
+			await vscode.commands.executeCommand("tsqlrefine.setAsDefaultFormatter");
+		} else if (choice === dontAskAgain) {
+			await context.globalState.update(SUPPRESS_FORMATTER_SUGGESTION_KEY, true);
+		}
+	} catch (error) {
+		console.error("tsqlrefine: default formatter suggestion failed", error);
+	}
 }
 
 export async function deactivate() {

@@ -1,11 +1,15 @@
 import * as assert from "node:assert";
+import { install as installFakeTimers, type Clock } from "@sinonjs/fake-timers";
 import { LintScheduler, type PendingLint } from "../../server/lint/scheduler";
 
-/**
- * Helper to sleep for a specified duration
- */
+let clock: Clock;
+
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function advance(ms: number): Promise<void> {
+	await clock.tickAsync(ms);
 }
 
 /**
@@ -33,6 +37,14 @@ function createMockGetVersion(versions: Map<string, number | null>) {
 }
 
 suite("scheduler", () => {
+	setup(() => {
+		clock = installFakeTimers();
+	});
+
+	teardown(() => {
+		clock.uninstall();
+	});
+
 	suite("Semaphore", () => {
 		// Note: Semaphore is private, so we test it through LintScheduler behavior
 
@@ -57,7 +69,7 @@ suite("scheduler", () => {
 			scheduler.requestLint("file2.sql", "save", 1);
 
 			// Wait for both to complete
-			await sleep(100);
+			await advance(100);
 
 			assert.strictEqual(calls.length, 2);
 			assert.ok(calls.some((c) => c.uri === "file1.sql"));
@@ -87,7 +99,7 @@ suite("scheduler", () => {
 			scheduler.requestLint("file3.sql", "save", 1);
 
 			// Wait for all to complete
-			await sleep(200);
+			await advance(200);
 
 			assert.strictEqual(calls.length, 3);
 		});
@@ -152,11 +164,11 @@ suite("scheduler", () => {
 
 			// Start file1 (blocks)
 			scheduler.requestLint("file1.sql", "save", 1);
-			await sleep(20);
+			await advance(20);
 
 			// Start file2 (should queue)
 			scheduler.requestLint("file2.sql", "save", 1);
-			await sleep(20);
+			await advance(20);
 
 			// Only file1 should have started executing
 			assert.strictEqual(calls.length, 0); // Still blocked
@@ -165,7 +177,7 @@ suite("scheduler", () => {
 			if (file1Resolve) {
 				file1Resolve();
 			}
-			await sleep(100);
+			await advance(100);
 
 			// Now both should have run
 			assert.strictEqual(calls.length, 2);
@@ -185,17 +197,17 @@ suite("scheduler", () => {
 
 			// Rapid type events
 			scheduler.requestLint("file.sql", "type", 1, 100);
-			await sleep(30);
+			await advance(30);
 			scheduler.requestLint("file.sql", "type", 2, 100);
-			await sleep(30);
+			await advance(30);
 			scheduler.requestLint("file.sql", "type", 3, 100);
 
 			// Should not run immediately
-			await sleep(50);
+			await advance(50);
 			assert.strictEqual(calls.length, 0);
 
 			// Wait for debounce
-			await sleep(80);
+			await advance(80);
 
 			// Should run once with latest pending version
 			assert.strictEqual(calls.length, 1);
@@ -215,7 +227,7 @@ suite("scheduler", () => {
 			scheduler.requestLint("file.sql", "save", 1);
 
 			// Should run immediately without debounce
-			await sleep(10);
+			await advance(10);
 			assert.strictEqual(calls.length, 1);
 		});
 
@@ -232,7 +244,7 @@ suite("scheduler", () => {
 			scheduler.requestLint("file.sql", "open", 1);
 
 			// Should run immediately
-			await sleep(10);
+			await advance(10);
 			assert.strictEqual(calls.length, 1);
 		});
 
@@ -260,7 +272,7 @@ suite("scheduler", () => {
 
 			// Start file1 (blocks)
 			scheduler.requestLint("file1.sql", "save", 1);
-			await sleep(10);
+			await advance(10);
 
 			// Manual should wait, not queue
 			const manualPromise = scheduler.requestLint("file2.sql", "manual", 1);
@@ -289,7 +301,7 @@ suite("scheduler", () => {
 
 			// Start type with debounce
 			scheduler.requestLint("file.sql", "type", 1, 100);
-			await sleep(30);
+			await advance(30);
 
 			// Manual should clear the debounce timer
 			await scheduler.requestLint("file.sql", "manual", 2);
@@ -299,7 +311,7 @@ suite("scheduler", () => {
 			assert.strictEqual(calls[0]?.pending.reason, "manual");
 
 			// Wait for original debounce period
-			await sleep(100);
+			await advance(100);
 
 			// Should still be only 1 call (debounce was cleared)
 			assert.strictEqual(calls.length, 1);
@@ -330,11 +342,11 @@ suite("scheduler", () => {
 
 			// Block slot with file1
 			scheduler.requestLint("file1.sql", "save", 1);
-			await sleep(30);
+			await advance(30);
 
 			// Queue file.sql with version 1
 			scheduler.requestLint("file.sql", "save", 1);
-			await sleep(10);
+			await advance(10);
 
 			// Update document version before file1 completes
 			versions.set("file.sql", 2);
@@ -343,7 +355,7 @@ suite("scheduler", () => {
 			if (file1Resolve) {
 				file1Resolve();
 			}
-			await sleep(150);
+			await advance(150);
 
 			// file.sql should have run with updated version 2
 			const fileSqlCalls = calls.filter((c) => c.uri === "file.sql");
@@ -397,13 +409,13 @@ suite("scheduler", () => {
 
 			// Start type with debounce
 			scheduler.requestLint("file.sql", "type", 1, 100);
-			await sleep(30);
+			await advance(30);
 
 			// Clear before debounce fires
 			scheduler.clear("file.sql");
 
 			// Wait for debounce period
-			await sleep(100);
+			await advance(100);
 
 			// Should not have run
 			assert.strictEqual(calls.length, 0);
@@ -434,7 +446,7 @@ suite("scheduler", () => {
 
 			// Block with file1
 			scheduler.requestLint("file1.sql", "save", 1);
-			await sleep(30);
+			await advance(30);
 
 			// Queue file2 multiple times (should only queue once)
 			scheduler.requestLint("file2.sql", "save", 1);
@@ -445,7 +457,7 @@ suite("scheduler", () => {
 			if (file1Resolve) {
 				file1Resolve();
 			}
-			await sleep(100);
+			await advance(100);
 
 			// file2 should only run once with latest pending version
 			const file2Calls = calls.filter((c) => c.uri === "file2.sql");
@@ -503,7 +515,7 @@ suite("scheduler", () => {
 
 			// Block with file1
 			scheduler.requestLint("file1.sql", "save", 1);
-			await sleep(10);
+			await advance(10);
 
 			// Queue file2 and file3
 			scheduler.requestLint("file2.sql", "save", 1);
@@ -513,7 +525,7 @@ suite("scheduler", () => {
 			if (file1Resolve) {
 				file1Resolve();
 			}
-			await sleep(150);
+			await advance(150);
 
 			// All should have run exactly once
 			assert.strictEqual(calls.length, 3);
@@ -551,7 +563,7 @@ suite("scheduler", () => {
 			scheduler.requestLint("file.sql", "type", 1, 0);
 
 			// Should run very quickly
-			await sleep(10);
+			await advance(10);
 			assert.strictEqual(calls.length, 1);
 		});
 
@@ -568,7 +580,7 @@ suite("scheduler", () => {
 			// Type with negative debounce (should be treated as 0)
 			scheduler.requestLint("file.sql", "type", 1, -100);
 
-			await sleep(10);
+			await advance(10);
 			assert.strictEqual(calls.length, 1);
 		});
 	});

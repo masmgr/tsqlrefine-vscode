@@ -2,9 +2,9 @@ import * as assert from "node:assert";
 import type { TsqlRefineSettings } from "../../server/config/settings";
 import {
 	buildArgs,
+	type RunLinterOptions,
 	runLinter,
 	verifyTsqlRefineInstallation,
-	type RunLinterOptions,
 } from "../../server/lint/runLinter";
 
 /**
@@ -36,7 +36,6 @@ function createTestOptions(
 	overrides: Partial<RunLinterOptions> = {},
 ): RunLinterOptions {
 	return {
-		filePath: "test.sql",
 		cwd: process.cwd(),
 		settings: createTestSettings(),
 		signal: new AbortController().signal,

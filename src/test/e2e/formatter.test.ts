@@ -28,9 +28,6 @@ suite("Formatter Test Suite", () => {
 				// Execute the format command
 				await vscode.commands.executeCommand("editor.action.formatDocument");
 
-				// Wait for formatting to complete
-				await new Promise((resolve) => setTimeout(resolve, 1000));
-
 				// Check if the document content was formatted (should be different from original)
 				const formattedContent = editor.document.getText();
 
@@ -63,9 +60,6 @@ suite("Formatter Test Suite", () => {
 				// Execute the format command
 				await vscode.commands.executeCommand("editor.action.formatDocument");
 
-				// Wait for formatting to complete
-				await new Promise((resolve) => setTimeout(resolve, 1000));
-
 				// Document should still have content (formatting should not break it)
 				const content = editor.document.getText();
 				assert.ok(content.length > 0, "Document should have content");
@@ -90,7 +84,6 @@ suite("Formatter Test Suite", () => {
 				});
 
 				await vscode.commands.executeCommand("editor.action.formatDocument");
-				await new Promise((resolve) => setTimeout(resolve, 1000));
 
 				const formattedContent = editor.document.getText();
 

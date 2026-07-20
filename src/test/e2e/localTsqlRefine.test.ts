@@ -36,7 +36,6 @@ suite("E2E (local): real tsqlrefine binary", () => {
 		await fs.writeFile(filePath, fileText, "utf8");
 
 		const result = await runLinter({
-			filePath,
 			cwd: tempDir,
 			settings: {
 				...defaultSettings,
@@ -79,7 +78,6 @@ suite("E2E (local): real tsqlrefine binary", () => {
 		await fs.writeFile(filePath, fileText, "utf8");
 
 		const result = await runLinter({
-			filePath,
 			cwd: tempDir,
 			settings: {
 				...defaultSettings,

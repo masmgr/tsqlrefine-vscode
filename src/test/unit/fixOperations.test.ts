@@ -1,8 +1,8 @@
 import * as assert from "node:assert";
 import type { Connection, TextEdit } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
-import type { DocumentContext } from "../../server/shared/documentContext";
 import type { TsqlRefineSettings } from "../../server/config/settings";
+import type { DocumentContext } from "../../server/shared/documentContext";
 import { DocumentStateManager } from "../../server/state/documentStateManager";
 
 // We need to test executeFix by mocking runFixer
@@ -131,11 +131,10 @@ interface MockNotificationManagerCalls {
 /**
  * Creates a mock NotificationManager for testing.
  */
-function createMockNotificationManager(isMissingError = false): {
+function createMockNotificationManager(): {
 	notificationManager: {
 		log: (message: string) => void;
 		warn: (message: string) => void;
-		isMissingTsqlRefineError: (message: string) => boolean;
 		maybeNotifyMissingTsqlRefine: (message: string) => Promise<void>;
 	};
 	calls: MockNotificationManagerCalls;
@@ -153,7 +152,6 @@ function createMockNotificationManager(isMissingError = false): {
 		warn: (message: string) => {
 			calls.warn.push(message);
 		},
-		isMissingTsqlRefineError: (_message: string) => isMissingError,
 		maybeNotifyMissingTsqlRefine: async (message: string) => {
 			calls.maybeNotifyMissingTsqlRefine.push(message);
 		},
@@ -227,16 +225,6 @@ suite("fixOperations", () => {
 			assert.strictEqual(calls.log[0], "Log message");
 			assert.strictEqual(calls.warn.length, 1);
 			assert.strictEqual(calls.warn[0], "Warn message");
-		});
-
-		test("isMissingTsqlRefineError returns configured value", () => {
-			const { notificationManager: manager1 } =
-				createMockNotificationManager(false);
-			const { notificationManager: manager2 } =
-				createMockNotificationManager(true);
-
-			assert.strictEqual(manager1.isMissingTsqlRefineError("any error"), false);
-			assert.strictEqual(manager2.isMissingTsqlRefineError("any error"), true);
 		});
 	});
 

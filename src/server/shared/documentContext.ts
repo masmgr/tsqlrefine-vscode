@@ -29,7 +29,7 @@ export async function createDocumentContext(
 	const { document, documentSettings, workspaceFolders, isSavedFn } = options;
 	const uri = document.uri;
 	const parsedUri = URI.parse(uri);
-	const filePath = parsedUri.fsPath;
+	const filePath = parsedUri.scheme === "file" ? parsedUri.fsPath : "";
 	const workspaceRoot = resolveWorkspaceRoot(
 		filePath || undefined,
 		workspaceFolders,

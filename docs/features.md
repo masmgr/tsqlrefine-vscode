@@ -48,7 +48,7 @@ Format your T-SQL code using TSQLRefine's formatter.
 
 ### Default Formatter
 
-This extension automatically registers itself as the default formatter for `sql`, `tsql`, and `mssql` languages. If another extension (e.g., mssql) overrides this, add the following to your `settings.json`:
+When another SQL formatter extension (e.g., mssql) is installed, VS Code needs to know which formatter to use. Run the `TSQLRefine: Set as Default Formatter` command to make TSQLRefine the default for `sql`, `tsql`, and `mssql` languages, or add the following to your `settings.json` manually:
 
 ```json
 "[sql]": {

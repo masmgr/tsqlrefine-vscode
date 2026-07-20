@@ -124,6 +124,14 @@ suite("normalize", () => {
 				assert.ok(path.isAbsolute(result));
 			});
 
+			test("resolves relative path against the supplied workspace", () => {
+				const workspaceRoot = path.resolve("workspace-root");
+				assert.strictEqual(
+					normalizeExecutablePath("tools/tsqlrefine", workspaceRoot),
+					path.resolve(workspaceRoot, "tools/tsqlrefine"),
+				);
+			});
+
 			test("preserves absolute path", () => {
 				const absolutePath = path.resolve("/usr/bin/tsqlrefine");
 				const result = normalizeExecutablePath(absolutePath);

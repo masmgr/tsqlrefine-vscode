@@ -1,8 +1,11 @@
 {
 	"extends": "./tsconfig.json",
 	"compilerOptions": {
-		"outDir": "out"
+		"outDir": "out",
+		"types": ["node", "mocha"],
+		"incremental": true,
+		"tsBuildInfoFile": "out/.tsbuildinfo"
 	},
-	"include": ["src/**/*.ts"],
+	"include": ["src/test/**/*.ts"],
 	"exclude": ["node_modules"]
 }

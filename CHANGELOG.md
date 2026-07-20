@@ -12,6 +12,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/), and this 
 - Verbose tracing via `connection.console.debug()` for detailed operation logs when trace logging is enabled
 
 ### Fixed
+- Removed `.sql` file-extension claims from the `sql`/`tsql`/`mssql` language contributions, which nondeterministically stole the `.sql` association from the built-in `sql` language and the mssql extension, breaking formatter resolution ("cannot format" errors / wrong formatter)
+- Removed `configurationDefaults` that forced `editor.defaultFormatter` for the shared `[sql]`/`[mssql]` languages; conflicts with other SQL extensions are now resolved explicitly via the `TSQLRefine: Set as Default Formatter` command or a one-time suggestion prompt shown when a conflicting formatter extension is detected
+- `tsqlrefine.setAsDefaultFormatter` now falls back to user settings when no workspace is open and reports errors instead of failing silently
 - Format/fix operations no longer clobber a newer in-flight operation when an error clears the in-flight state (`clearInFlight` guard)
 - `checkCommandAvailable` in processRunner no longer double-resolves on concurrent calls
 - Lint timeout now correctly clears the in-flight AbortController, preventing stale controllers

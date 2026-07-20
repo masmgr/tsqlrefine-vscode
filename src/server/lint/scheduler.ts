@@ -194,7 +194,7 @@ export class LintScheduler {
 		}
 	}
 
-	private async drainQueue(): Promise<void> {
+	private drainQueue(): void {
 		if (this.draining) {
 			return;
 		}
@@ -215,7 +215,7 @@ export class LintScheduler {
 					release();
 					continue;
 				}
-				await this.runWithRelease(nextUri, release, false);
+				void this.runWithRelease(nextUri, release, false);
 			}
 		} finally {
 			this.draining = false;

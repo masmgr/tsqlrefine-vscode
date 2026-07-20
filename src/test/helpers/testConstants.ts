@@ -23,16 +23,12 @@ export const TEST_TIMEOUTS = {
  * All values are in milliseconds.
  */
 export const TEST_DELAYS = {
-	/** Sleep duration after cleanup operations */
-	CLEANUP_SLEEP: 200,
 	/** Short debounce delay for runOnType tests */
 	DEBOUNCE_SHORT: 50,
 	/** Delay for mock client ready simulation */
 	CLIENT_READY: 10,
 	/** Wait time for process cleanup */
 	PROCESS_CLEANUP: 100,
-	/** Delay to allow LSP document synchronization after setup */
-	LSP_SYNC: 300,
 } as const;
 
 /**

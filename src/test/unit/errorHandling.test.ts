@@ -1,9 +1,10 @@
 import * as assert from "node:assert";
-import {
-	handleOperationError,
-	type ErrorHandlerDeps,
-} from "../../server/shared/errorHandling";
 import type { Connection } from "vscode-languageserver/node";
+import {
+	type ErrorHandlerDeps,
+	handleOperationError,
+} from "../../server/shared/errorHandling";
+import { MissingTsqlRefineError } from "../../server/shared/errors";
 import type { NotificationManager } from "../../server/state/notificationManager";
 
 /**
@@ -29,7 +30,7 @@ function createMockConnection(): {
 /**
  * Mock notification manager for testing.
  */
-function createMockNotificationManager(isMissingTsqlRefine = false): {
+function createMockNotificationManager(): {
 	manager: NotificationManager;
 	warns: string[];
 	missingNotifications: string[];
@@ -45,7 +46,6 @@ function createMockNotificationManager(isMissingTsqlRefine = false): {
 		error: () => {},
 		notifyStderr: () => {},
 		notifyRunFailure: () => {},
-		isMissingTsqlRefineError: () => isMissingTsqlRefine,
 		maybeNotifyMissingTsqlRefine: async (message: string) => {
 			missingNotifications.push(message);
 		},
@@ -60,22 +60,21 @@ suite("handleOperationError", () => {
 	test("handles missing tsqlrefine error", async () => {
 		const { connection } = createMockConnection();
 		const { manager, warns, missingNotifications } =
-			createMockNotificationManager(true);
+			createMockNotificationManager();
 
 		const deps: ErrorHandlerDeps = {
 			connection,
 			notificationManager: manager,
 		};
 
-		const error = new Error("Command 'tsqlrefine' not found");
+		const error = new MissingTsqlRefineError("Command 'tsqlrefine' not found");
 
 		await handleOperationError(error, deps, "format");
 
 		assert.strictEqual(missingNotifications.length, 1);
-		// The error is converted to string which includes "Error: " prefix
 		assert.strictEqual(
 			missingNotifications[0],
-			"Error: Command 'tsqlrefine' not found",
+			"Command 'tsqlrefine' not found",
 		);
 		assert.strictEqual(warns.length, 1);
 		assert.ok(warns[0]?.includes("format failed"));
@@ -83,7 +82,7 @@ suite("handleOperationError", () => {
 
 	test("handles general error", async () => {
 		const { connection, warnings } = createMockConnection();
-		const { manager, warns } = createMockNotificationManager(false);
+		const { manager, warns } = createMockNotificationManager();
 
 		const deps: ErrorHandlerDeps = {
 			connection,
@@ -101,9 +100,23 @@ suite("handleOperationError", () => {
 		assert.ok(warns[0]?.includes("fix failed"));
 	});
 
+	test("does not classify a similarly worded generic error as missing", async () => {
+		const { connection, warnings } = createMockConnection();
+		const { manager, missingNotifications } = createMockNotificationManager();
+
+		await handleOperationError(
+			new Error("tsqlrefine not found after an unrelated failure"),
+			{ connection, notificationManager: manager },
+			"format",
+		);
+
+		assert.strictEqual(missingNotifications.length, 0);
+		assert.strictEqual(warnings.length, 1);
+	});
+
 	test("handles error with multiline message", async () => {
 		const { connection, warnings } = createMockConnection();
-		const { manager } = createMockNotificationManager(false);
+		const { manager } = createMockNotificationManager();
 
 		const deps: ErrorHandlerDeps = {
 			connection,
@@ -122,7 +135,7 @@ suite("handleOperationError", () => {
 
 	test("handles non-Error object", async () => {
 		const { connection, warnings } = createMockConnection();
-		const { manager, warns } = createMockNotificationManager(false);
+		const { manager, warns } = createMockNotificationManager();
 
 		const deps: ErrorHandlerDeps = {
 			connection,

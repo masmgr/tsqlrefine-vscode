@@ -63,6 +63,10 @@ This extension activates for files with the following language IDs:
 
 ## Troubleshooting
 
+### Format Document runs another formatter (e.g., mssql)
+
+When multiple SQL formatter extensions are installed, VS Code uses `editor.defaultFormatter` to pick one. Run the `TSQLRefine: Set as Default Formatter` command to make TSQLRefine the default for SQL files.
+
 ### "tsqlrefine not found"
 
 1. Verify installation: `tsqlrefine --version`

@@ -1,5 +1,6 @@
 import type { Connection } from "vscode-languageserver/node";
 import type { NotificationManager } from "../state/notificationManager";
+import { MissingTsqlRefineError } from "./errors";
 import { firstLine } from "./textUtils";
 
 export type ErrorHandlerDeps = {
@@ -17,9 +18,11 @@ export async function handleOperationError(
 	operationName: string,
 ): Promise<void> {
 	const { connection, notificationManager } = deps;
-	const message = firstLine(String(error));
+	const message = firstLine(
+		error instanceof Error ? error.message : String(error),
+	);
 
-	if (notificationManager.isMissingTsqlRefineError(message)) {
+	if (error instanceof MissingTsqlRefineError) {
 		await notificationManager.maybeNotifyMissingTsqlRefine(message);
 		notificationManager.warn(
 			`tsqlrefine: ${operationName} failed (${message})`,

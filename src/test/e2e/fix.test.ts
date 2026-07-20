@@ -46,9 +46,6 @@ suite("Fix Command Test Suite", () => {
 				// Execute the fix command
 				await vscode.commands.executeCommand("tsqlrefine.fix");
 
-				// Wait for command to complete
-				await new Promise((resolve) => setTimeout(resolve, 1000));
-
 				// Document should still have content (fix should not break it)
 				const content = editor.document.getText();
 				assert.ok(content.length > 0, "Document should have content");
@@ -76,9 +73,6 @@ suite("Fix Command Test Suite", () => {
 
 				// Execute the fix command
 				await vscode.commands.executeCommand("tsqlrefine.fix");
-
-				// Wait for command to complete
-				await new Promise((resolve) => setTimeout(resolve, 1000));
 
 				// Document should still have content after fix
 				const content = editor.document.getText();
@@ -183,17 +177,14 @@ suite("Code Action Test Suite", () => {
 				config: { runOnSave: false, runOnType: false, runOnOpen: false },
 				documentContent: validSql,
 			},
-			async (context, _harness) => {
+			async (context, harness) => {
 				await vscode.window.showTextDocument(context.document, {
 					preview: false,
 				});
 
-				// Wait a bit to ensure no diagnostics appear
-				await new Promise((resolve) => setTimeout(resolve, 500));
-
-				// Get current diagnostics
-				const diagnostics = vscode.languages.getDiagnostics(
+				const diagnostics = await harness.waitForDiagnostics(
 					context.document.uri,
+					(entries) => !entries.some((d) => d.source === "tsqlrefine"),
 				);
 				const hasTsqlrefineDiag = diagnostics.some(
 					(d) => d.source === "tsqlrefine",

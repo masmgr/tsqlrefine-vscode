@@ -23,7 +23,7 @@ npm run verify           # Run all checks (test + typecheck + lint + format)
 
 # Testing
 npm run test:unit        # Run unit tests with Mocha
-npm run test:unit:coverage  # Run unit tests with c8 coverage (targets: 50% lines, 80% functions, 75% branches)
+npm run test:unit:coverage  # Run unit tests with c8 coverage (targets: 85% lines/functions/statements, 80% branches)
 npm run test:e2e         # Run E2E tests with VS Code Test
 npm test                 # Run unit tests
 ```
@@ -46,19 +46,23 @@ Client and server run in separate processes:
 - **Lint Operations** ([src/server/lint/](src/server/lint/)): Runs `tsqlrefine lint -q --output json --stdin`, parses JSON output to diagnostics (0-based character-level ranges). `maxFileSizeKb` limits automatic linting only.
 - **Format Operations** ([src/server/format/](src/server/format/)): Runs `tsqlrefine format -q --stdin`, returns `TextEdit[]` for full document replacement.
 - **Fix Operations** ([src/server/fix/](src/server/fix/)): Runs `tsqlrefine fix -q --stdin --severity`, returns `TextEdit[]`. Integrated with Code Action provider ("Fix all tsqlrefine issues", `QuickFix` kind).
-- **Output Parser** ([src/server/lint/parseOutput.ts](src/server/lint/parseOutput.ts)): Parses `LintResult` JSON with `files[].diagnostics[]`. 0-based positions used directly. Handles Windows case-insensitivity and `<stdin>` path mapping.
+- **Output Parser** ([src/server/lint/parseOutput.ts](src/server/lint/parseOutput.ts)): Parses `LintResult` JSON with `files[].diagnostics[]`. 0-based positions used directly. Handles Windows case-insensitivity and `<stdin>` path mapping. Diagnostics missing required fields (message/range) are skipped rather than throwing.
 
 ### State Management ([src/server/state/](src/server/state/))
 
 - **DocumentStateManager**: Per-document in-flight tracking with AbortController, cancellation of superseded operations. Three independent instances for lint, format, fix.
-- **NotificationManager**: Missing tsqlrefine notification with 5-minute cooldown and install guide integration.
-- **SettingsManager**: Global/document-scoped settings retrieval via LSP with normalization.
+- **NotificationManager**: Missing tsqlrefine notification with 5-minute cooldown and install guide integration; repeated CLI stderr warning popups are throttled to one per 30 seconds. Lazy `debug()` logging (accepts a message or a factory function) gated behind the `trace.server` setting so hot paths (e.g. `parseOutput`) skip building trace strings when tracing is off.
+- **SettingsManager**: Global/document-scoped settings retrieval via LSP with normalization; per-document results are cached for 2 seconds (100-entry LRU) to avoid repeated LSP round-trips while typing, and the cache is fully invalidated on configuration-change events.
 
 ### Shared Utilities ([src/server/shared/](src/server/shared/))
 
 - `documentContext.ts` — Unified `DocumentContext` (uri, filePath, workspaceRoot, cwd, settings, configPath, documentText, isSavedFile)
 - `documentEdit.ts` — `createFullDocumentEdit()` for full document replacement
+- `cliRunner.ts` — `buildCliArgs()` builds shared CLI argument lists (`-q --utf8`, `-c <configPath>`, `--allow-plugins`, `--severity`, `--output json`, `--stdin`); `runCliOperation()` resolves the command and runs it
+- `cliEditOperation.ts` — `executeCliEditOperation()`, the shared format/fix execution path (in-flight tracking, CLI invocation, failure reporting, `TextEdit[]` construction)
+- `operationExecution.ts` — `runWithInFlight()` tracks a document's `AbortController` without an older operation clobbering a newer one; `reportCliFailure()` reports timeout/cancellation/exit-code failures consistently across lint, format, and fix
 - `errorHandling.ts` — `handleOperationError()` for format/fix error handling
+- `errors.ts` — `MissingTsqlRefineError` (typed error for unresolved/unusable tsqlrefine executable, replaces string-matching on error messages)
 - `logging.ts` — `logOperationContext()` for consistent operation logging
 - `textUtils.ts` — `firstLine()`, `resolveTargetFilePath()`
 - `normalize.ts` — Path and config normalization (`normalizeForCompare()`, `normalizeExecutablePath()`, `normalizeConfigPath()`)
@@ -68,7 +72,9 @@ Client and server run in separate processes:
 
 - `COMMAND_CACHE_TTL_MS = 30000`, `COMMAND_CHECK_TIMEOUT_MS = 3000`
 - `CONFIG_CACHE_TTL_MS = 5000`, `CONFIG_CACHE_MAX_SIZE = 100`
+- `DOCUMENT_SETTINGS_CACHE_TTL_MS = 2000`, `DOCUMENT_SETTINGS_CACHE_MAX_SIZE = 100`
 - `MAX_CONCURRENT_RUNS = 4`, `MISSING_TSQLREFINE_NOTICE_COOLDOWN_MS = 300000`
+- `STDERR_NOTICE_COOLDOWN_MS = 30000`
 - `DEFAULT_COMMAND_NAME = "tsqlrefine"`
 - `CLI_EXIT_CODE_DESCRIPTIONS` — 2=parse error, 3=config error, 4=runtime exception
 
@@ -92,10 +98,12 @@ Settings namespace: `tsqlrefine`
 | `maxFileSizeKb` | number | 0 | Max file size (KB) for automatic linting (0 = unlimited) |
 | `minSeverity` | string | "info" | Minimum severity for diagnostics (error/warning/info/hint) |
 | `formatTimeoutMs` | number | 10000 | Process timeout for format |
+| `fixTimeoutMs` | number | 10000 | Process timeout for fix |
 | `enableLint` | boolean | true | Enable linting |
 | `enableFormat` | boolean | true | Enable formatting |
 | `enableFix` | boolean | true | Enable auto-fix |
 | `allowPlugins` | boolean | false | Allow loading tsqlrefine plugins (security-sensitive, opt-in) |
+| `trace.server` | string | "off" | LSP traffic tracing (off/messages/verbose) |
 
 ## Commands
 
@@ -150,7 +158,7 @@ Best practices:
 
 ### Coverage
 
-c8 with targets: 50% lines, 80% functions, 75% branches. Config: [.c8rc.json](.c8rc.json). Reports in `coverage/`.
+c8 with targets: 85% lines/functions/statements and 80% branches. Config: [.c8rc.json](.c8rc.json). Reports in `coverage/`.
 
 ## Important Implementation Notes
 
@@ -162,9 +170,10 @@ c8 with targets: 50% lines, 80% functions, 75% branches. Config: [.c8rc.json](.c
 - `<stdin>` output paths are mapped back to original URIs
 
 ### Error Handling
-- CLI spawn errors reject promise and clear diagnostics
-- Missing installation → notification with install guide (5-minute cooldown)
-- Shared `handleOperationError()` for format/fix; `CLI_EXIT_CODE_DESCRIPTIONS` for specific messages
+- CLI spawn errors reject promise and clear diagnostics; unresolved/unusable executable raises `MissingTsqlRefineError` (checked via `instanceof`, not string matching)
+- Missing installation → notification with install guide (5-minute cooldown); repeated stderr warning popups are throttled to one per 30 seconds
+- `reportCliFailure()` (in `operationExecution.ts`) unifies timeout/cancellation/exit-code reporting for lint, format, and fix; `handleOperationError()` handles thrown errors for format/fix; `CLI_EXIT_CODE_DESCRIPTIONS` for specific messages
+- On timeout/cancellation/output-limit-exceeded, `runProcess()` calls `child.kill()` and (on non-Windows) force-kills with `SIGKILL` after a 1s grace period if the process hasn't exited
 
 ### Windows Compatibility
 - Use `path.resolve()` / `path.normalize()` for file paths

@@ -3,9 +3,12 @@ import type { Connection } from "vscode-languageserver/node";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { TextDocument as TextDocumentImpl } from "vscode-languageserver-textdocument";
-import type { DocumentContext } from "../../server/shared/documentContext";
 import type { TsqlRefineSettings } from "../../server/config/settings";
+import { executeLint } from "../../server/lint/lintOperations";
+import type { DocumentContext } from "../../server/shared/documentContext";
+import { MissingTsqlRefineError } from "../../server/shared/errors";
 import { DocumentStateManager } from "../../server/state/documentStateManager";
+import { NotificationManager } from "../../server/state/notificationManager";
 
 /**
  * Creates default test settings.
@@ -118,13 +121,12 @@ interface MockNotificationManagerCalls {
 /**
  * Creates a mock NotificationManager for testing.
  */
-function createMockNotificationManager(isMissingError = false): {
+function createMockNotificationManager(): {
 	notificationManager: {
 		log: (message: string) => void;
 		warn: (message: string) => void;
 		notifyStderr: (stderr: string) => void;
 		notifyRunFailure: (error: unknown) => void;
-		isMissingTsqlRefineError: (message: string) => boolean;
 		maybeNotifyMissingTsqlRefine: (message: string) => Promise<void>;
 	};
 	calls: MockNotificationManagerCalls;
@@ -150,7 +152,6 @@ function createMockNotificationManager(isMissingError = false): {
 		notifyRunFailure: (error: unknown) => {
 			calls.notifyRunFailure.push(error);
 		},
-		isMissingTsqlRefineError: (_message: string) => isMissingError,
 		maybeNotifyMissingTsqlRefine: async (message: string) => {
 			calls.maybeNotifyMissingTsqlRefine.push(message);
 		},
@@ -250,16 +251,6 @@ suite("lintOperations", () => {
 			assert.strictEqual(calls.notifyStderr.length, 1);
 			assert.strictEqual(calls.notifyStderr[0], "stderr output");
 		});
-
-		test("isMissingTsqlRefineError returns configured value", () => {
-			const { notificationManager: manager1 } =
-				createMockNotificationManager(false);
-			const { notificationManager: manager2 } =
-				createMockNotificationManager(true);
-
-			assert.strictEqual(manager1.isMissingTsqlRefineError("any error"), false);
-			assert.strictEqual(manager2.isMissingTsqlRefineError("any error"), true);
-		});
 	});
 
 	suite("File size limiting", () => {
@@ -310,5 +301,75 @@ suite("lintOperations", () => {
 			assert.strictEqual(context.documentText, "SELECT 2;");
 			assert.strictEqual(context.isSavedFile, false);
 		});
+	});
+
+	test("treats a null exit code as failure without clearing diagnostics", async () => {
+		const diagnosticsCalls: unknown[] = [];
+		const connection = {
+			window: { showWarningMessage: async () => undefined },
+			console: {
+				debug: () => {},
+				log: () => {},
+				warn: () => {},
+				error: () => {},
+			},
+			sendDiagnostics: (params: unknown) => diagnosticsCalls.push(params),
+		} as unknown as Connection;
+		const document = TextDocumentImpl.create(
+			"file:///test.sql",
+			"sql",
+			1,
+			"SELECT 1;",
+		);
+		const context = createMockDocumentContext({
+			uri: document.uri,
+			documentText: document.getText(),
+			effectiveSettings: createTestSettings(),
+		});
+
+		const result = await executeLint(context, document, "manual", {
+			connection,
+			notificationManager: new NotificationManager(connection),
+			lintStateManager: new DocumentStateManager(),
+			runner: async () => ({
+				stdout: "{truncated",
+				stderr: "output limit exceeded",
+				exitCode: null,
+				timedOut: false,
+				cancelled: false,
+			}),
+		});
+
+		assert.strictEqual(result.success, false);
+		assert.strictEqual(result.diagnosticsCount, -1);
+		assert.strictEqual(diagnosticsCalls.length, 0);
+	});
+
+	test("reports a typed missing executable error as a diagnostic", async () => {
+		const { connection, calls } = createMockConnection();
+		const document = createMockTextDocument();
+		const context = createMockDocumentContext({
+			uri: document.uri,
+			documentText: document.getText(),
+		});
+
+		const result = await executeLint(context, document, "manual", {
+			connection,
+			notificationManager: new NotificationManager(connection),
+			lintStateManager: new DocumentStateManager(),
+			runner: async () => {
+				throw new MissingTsqlRefineError(
+					"tsqlrefine executable is unavailable",
+				);
+			},
+		});
+
+		assert.strictEqual(result.success, false);
+		assert.strictEqual(calls.sendDiagnostics.length, 1);
+		assert.ok(
+			calls.sendDiagnostics[0]?.diagnostics[0]?.message.includes(
+				"tsqlrefine executable is unavailable",
+			),
+		);
 	});
 });

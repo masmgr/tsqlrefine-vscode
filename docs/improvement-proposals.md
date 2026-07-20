@@ -167,28 +167,30 @@ Automatically discover tsqlrefine config files in the workspace.
 - Cache results per workspace folder with invalidation on file system changes
 
 **Files likely affected:**
-- `src/server/shared/resolveConfigPath.ts` — Add auto-detection logic
+- `src/server/config/resolveConfigPath.ts` — Add auto-detection logic
 - `src/server/shared/documentContext.ts` — Use auto-detected config when `configPath` is empty
 
 ---
 
 ### Fix Operation Timeout Setting
 
+> **Status: Implemented in v1.0.0** - `fixTimeoutMs` is defined in `package.json`, normalized by `SettingsManager`, and used by `runFixer.ts`.
+
 **Priority:** Low
 **Complexity:** Low (~15 lines)
 
-Add a dedicated `fixTimeoutMs` setting, separate from lint and format timeouts.
+A dedicated `fixTimeoutMs` setting separates fix operations from lint and format timeouts.
 
-**Current gap:** Lint has `timeoutMs`, format has `formatTimeoutMs`, but fix operations reuse one of these. Fix operations may have different performance characteristics (especially for large files with many fixable issues) and should have independent timeout control.
+**Implementation:** Fix operations use the dedicated `fixTimeoutMs` setting, which is normalized independently and defaults to 10 seconds.
 
-**Proposed behavior:**
-- New setting: `tsqlrefine.fixTimeoutMs` (default: 10000)
-- Used by `runFixer.ts` for fix operation timeout
+**Implemented behavior:**
+- Setting: `tsqlrefine.fixTimeoutMs` (default: 10000)
+- `runFixer.ts` uses it for the fix operation timeout
 
-**Files likely affected:**
-- `package.json` — Add `fixTimeoutMs` setting definition
-- `src/server/state/settingsManager.ts` — Include new setting
-- `src/server/fix/runFixer.ts` — Use `fixTimeoutMs`
+**Implementation files:**
+- `package.json` — Defines the `fixTimeoutMs` setting
+- `src/server/state/settingsManager.ts` — Normalizes the setting
+- `src/server/fix/runFixer.ts` — Applies the setting
 
 ---
 

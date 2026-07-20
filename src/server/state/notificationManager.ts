@@ -1,5 +1,8 @@
 import type { Connection } from "vscode-languageserver/node";
-import { MISSING_TSQLREFINE_NOTICE_COOLDOWN_MS } from "../config/constants";
+import {
+	MISSING_TSQLREFINE_NOTICE_COOLDOWN_MS,
+	STDERR_NOTICE_COOLDOWN_MS,
+} from "../config/constants";
 import { firstLine } from "../shared/textUtils";
 
 /**
@@ -7,6 +10,7 @@ import { firstLine } from "../shared/textUtils";
  */
 export class NotificationManager {
 	private lastMissingTsqlRefineNoticeAtMs = 0;
+	private lastStderrNoticeAtMs = 0;
 
 	/**
 	 * Whether verbose debug logging is enabled. Driven by the client's
@@ -72,23 +76,15 @@ export class NotificationManager {
 		if (!trimmed) {
 			return;
 		}
-		// Don't await - warning message may block in some environments
-		void this.connection.window.showWarningMessage(
-			`tsqlrefine: ${firstLine(trimmed)}`,
-		);
+		const now = Date.now();
+		if (now - this.lastStderrNoticeAtMs >= STDERR_NOTICE_COOLDOWN_MS) {
+			this.lastStderrNoticeAtMs = now;
+			// Don't await - warning message may block in some environments
+			void this.connection.window.showWarningMessage(
+				`tsqlrefine: ${firstLine(trimmed)}`,
+			);
+		}
 		this.connection.console.warn(trimmed);
-	}
-
-	/**
-	 * Check if an error message indicates missing tsqlrefine.
-	 */
-	isMissingTsqlRefineError(message: string): boolean {
-		const normalized = message.toLowerCase();
-		return (
-			normalized.includes("tsqlrefine not found") ||
-			normalized.includes("tsqlrefine.path not found") ||
-			normalized.includes("tsqlrefine.path is not a file")
-		);
 	}
 
 	/**
