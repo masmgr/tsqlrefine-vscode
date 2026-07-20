@@ -25,6 +25,5 @@ export async function executeFix(
 	return await executeCliEditOperation(context, document, deps, {
 		operationName: "fix",
 		runner: runFixer,
-		isEnabled: ({ effectiveSettings }) => effectiveSettings.enableFix,
 	});
 }

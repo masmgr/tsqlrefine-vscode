@@ -1,14 +1,14 @@
 import {
+	type CodeAction,
 	CodeActionKind,
+	type CodeActionParams,
+	createConnection,
+	type DocumentFormattingParams,
 	OptionalVersionedTextDocumentIdentifier,
 	ProposedFeatures,
 	TextDocumentEdit,
 	TextDocumentSyncKind,
 	TextDocuments,
-	createConnection,
-	type CodeAction,
-	type CodeActionParams,
-	type DocumentFormattingParams,
 	type TextEdit,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -446,6 +446,12 @@ async function fixDocument(uri: string): Promise<TextEdit[] | null> {
 	);
 }
 
+const ENABLE_SETTING_BY_OPERATION = {
+	Lint: "enableLint",
+	Format: "enableFormat",
+	Fix: "enableFix",
+} as const;
+
 async function withDocumentOperation<T>(
 	uri: string,
 	operation: "Lint" | "Format" | "Fix",
@@ -460,13 +466,8 @@ async function withDocumentOperation<T>(
 		return notFoundResult;
 	}
 	const documentSettings = await settingsManager.getSettingsForDocument(uri);
-	const enabled =
-		operation === "Lint"
-			? documentSettings.enableLint
-			: operation === "Format"
-				? documentSettings.enableFormat
-				: documentSettings.enableFix;
-	if (!enabled) {
+	const enableSetting = ENABLE_SETTING_BY_OPERATION[operation];
+	if (!documentSettings[enableSetting]) {
 		return notFoundResult;
 	}
 	const context = await createDocumentContext({

@@ -24,7 +24,6 @@ suite("E2E (local): real tsqlrefine binary", () => {
 
 		try {
 			const result = await runLinter({
-				filePath,
 				cwd: tempDir,
 				settings: {
 					...defaultSettings,

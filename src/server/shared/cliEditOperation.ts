@@ -1,6 +1,5 @@
 import type { Connection, TextEdit } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
-import { CLI_EXIT_CODE_DESCRIPTIONS } from "../config/constants";
 import { detectEndOfLine, normalizeLineEndings } from "../lint/decodeOutput";
 import type { DocumentStateManager } from "../state/documentStateManager";
 import type { NotificationManager } from "../state/notificationManager";
@@ -8,7 +7,11 @@ import type { DocumentContext } from "./documentContext";
 import { createFullDocumentEdit } from "./documentEdit";
 import { handleOperationError } from "./errorHandling";
 import { logOperationContext } from "./logging";
-import { firstLine } from "./textUtils";
+import {
+	type InFlightExecution,
+	reportCliFailure,
+	runWithInFlight,
+} from "./operationExecution";
 import type { ProcessRunResult } from "./types";
 
 export type CliEditOperationDeps = {
@@ -19,7 +22,6 @@ export type CliEditOperationDeps = {
 
 type CliEditOperationOptions = {
 	operationName: "format" | "fix";
-	isEnabled: (context: DocumentContext) => boolean;
 	runner: (options: {
 		cwd: string;
 		settings: DocumentContext["effectiveSettings"];
@@ -45,15 +47,6 @@ export async function executeCliEditOperation(
 	} = context;
 	const operation = options.operationName;
 
-	if (!options.isEnabled(context)) {
-		notificationManager.debug(
-			`tsqlrefine: ${operation} is disabled for ${uri}`,
-		);
-		return null;
-	}
-
-	const controller = new AbortController();
-	stateManager.setInFlight(uri, controller);
 	logOperationContext(notificationManager, {
 		operation: operation === "format" ? "Format" : "Fix",
 		uri,
@@ -62,50 +55,31 @@ export async function executeCliEditOperation(
 		configPath: effectiveConfigPath,
 	});
 
-	let result: ProcessRunResult;
+	let execution: InFlightExecution<ProcessRunResult>;
 	try {
-		result = await options.runner({
-			cwd,
-			settings: effectiveSettings,
-			signal: controller.signal,
-			stdin: documentText,
-		});
+		execution = await runWithInFlight(stateManager, uri, async (controller) =>
+			options.runner({
+				cwd,
+				settings: effectiveSettings,
+				signal: controller.signal,
+				stdin: documentText,
+			}),
+		);
 	} catch (error) {
-		if (stateManager.isCurrentInFlight(uri, controller)) {
-			stateManager.clearInFlight(uri);
-		}
 		await handleOperationError(error, deps, operation);
 		return null;
 	}
 
-	if (stateManager.isCurrentInFlight(uri, controller)) {
-		stateManager.clearInFlight(uri);
-	}
-	if (result.timedOut) {
-		const message = `tsqlrefine: ${operation} timed out`;
-		void connection.window.showWarningMessage(message);
-		notificationManager.warn(message);
-		return null;
-	}
-	if (controller.signal.aborted || result.cancelled) {
-		return null;
-	}
-	if (result.stderr.trim()) {
-		notificationManager.warn(
-			`tsqlrefine ${operation} stderr: ${result.stderr}`,
-		);
-	}
-	if (result.exitCode !== 0) {
-		const description =
-			result.exitCode === null
-				? "unknown error"
-				: (CLI_EXIT_CODE_DESCRIPTIONS[result.exitCode] ??
-					`exit code ${result.exitCode}`);
-		const stderrDetail = result.stderr.trim();
-		const detail = stderrDetail ? ` (${firstLine(stderrDetail)})` : "";
-		const message = `tsqlrefine: ${operation} failed - ${description}${detail}`;
-		void connection.window.showWarningMessage(message);
-		notificationManager.warn(message);
+	const { controller, result } = execution;
+	if (
+		reportCliFailure({
+			result,
+			operation,
+			deps,
+			successExitCodes: [0],
+			cancelled: controller.signal.aborted,
+		})
+	) {
 		return null;
 	}
 

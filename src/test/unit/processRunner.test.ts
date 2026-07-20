@@ -1,6 +1,26 @@
 import * as assert from "node:assert";
-import { runProcess } from "../../server/shared/processRunner";
 import { MAX_OUTPUT_BYTES } from "../../server/config/constants";
+import { MissingTsqlRefineError } from "../../server/shared/errors";
+import {
+	assertPathExists,
+	runProcess,
+} from "../../server/shared/processRunner";
+
+suite("assertPathExists", () => {
+	test("throws MissingTsqlRefineError when the path does not exist", async () => {
+		await assert.rejects(
+			assertPathExists("path-that-does-not-exist/tsqlrefine"),
+			MissingTsqlRefineError,
+		);
+	});
+
+	test("throws MissingTsqlRefineError when the path is not a file", async () => {
+		await assert.rejects(
+			assertPathExists(process.cwd()),
+			MissingTsqlRefineError,
+		);
+	});
+});
 
 suite("runProcess", () => {
 	test("handles a child closing stdin before a large write completes", async () => {

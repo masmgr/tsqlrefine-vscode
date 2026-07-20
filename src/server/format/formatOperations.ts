@@ -25,6 +25,5 @@ export async function executeFormat(
 	return await executeCliEditOperation(context, document, deps, {
 		operationName: "format",
 		runner: runFormatter,
-		isEnabled: ({ effectiveSettings }) => effectiveSettings.enableFormat,
 	});
 }

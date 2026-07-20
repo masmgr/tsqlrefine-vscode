@@ -1,10 +1,11 @@
 import type { TsqlRefineSettings } from "../config/settings";
 import { buildCliArgs, runCliOperation } from "../shared/cliRunner";
+
 export { verifyInstallation as verifyTsqlRefineInstallation } from "../shared/processRunner";
+
 import type { ProcessRunResult } from "../shared/types";
 
 export type RunLinterOptions = {
-	filePath: string;
 	cwd: string;
 	settings: TsqlRefineSettings;
 	signal: AbortSignal;

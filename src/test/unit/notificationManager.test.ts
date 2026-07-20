@@ -226,60 +226,6 @@ suite("NotificationManager", () => {
 		});
 	});
 
-	suite("isMissingTsqlRefineError", () => {
-		test("returns true for tsqlrefine not found", () => {
-			const { connection } = createMockConnection();
-			const manager = new NotificationManager(connection);
-
-			assert.strictEqual(
-				manager.isMissingTsqlRefineError("tsqlrefine not found in PATH"),
-				true,
-			);
-		});
-
-		test("returns true for tsqlrefine.path not found", () => {
-			const { connection } = createMockConnection();
-			const manager = new NotificationManager(connection);
-
-			assert.strictEqual(
-				manager.isMissingTsqlRefineError(
-					"tsqlrefine.path not found: /invalid/path",
-				),
-				true,
-			);
-		});
-
-		test("returns true for tsqlrefine.path is not a file", () => {
-			const { connection } = createMockConnection();
-			const manager = new NotificationManager(connection);
-
-			assert.strictEqual(
-				manager.isMissingTsqlRefineError("tsqlrefine.path is not a file"),
-				true,
-			);
-		});
-
-		test("returns false for other errors", () => {
-			const { connection } = createMockConnection();
-			const manager = new NotificationManager(connection);
-
-			assert.strictEqual(
-				manager.isMissingTsqlRefineError("spawn ENOENT"),
-				false,
-			);
-		});
-
-		test("is case-insensitive", () => {
-			const { connection } = createMockConnection();
-			const manager = new NotificationManager(connection);
-
-			assert.strictEqual(
-				manager.isMissingTsqlRefineError("TSQLREFINE NOT FOUND"),
-				true,
-			);
-		});
-	});
-
 	suite("log", () => {
 		test("logs message to console", () => {
 			const { connection, calls } = createMockConnection();

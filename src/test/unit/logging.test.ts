@@ -24,7 +24,6 @@ function createMockNotificationManager(): {
 		error: () => {},
 		notifyStderr: () => {},
 		notifyRunFailure: () => {},
-		isMissingTsqlRefineError: () => false,
 		maybeNotifyMissingTsqlRefine: async () => {},
 		lastMissingTsqlRefineNoticeAtMs: 0,
 		connection: {} as Connection,

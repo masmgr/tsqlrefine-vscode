@@ -88,18 +88,6 @@ export class NotificationManager {
 	}
 
 	/**
-	 * Check if an error message indicates missing tsqlrefine.
-	 */
-	isMissingTsqlRefineError(message: string): boolean {
-		const normalized = message.toLowerCase();
-		return (
-			normalized.includes("tsqlrefine not found") ||
-			normalized.includes("tsqlrefine.path not found") ||
-			normalized.includes("tsqlrefine.path is not a file")
-		);
-	}
-
-	/**
 	 * Log a debug message to the console (verbose tracing, not shown by default).
 	 *
 	 * Accepts a lazily-evaluated factory so that callers on hot paths can defer

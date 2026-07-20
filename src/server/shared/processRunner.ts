@@ -8,6 +8,7 @@ import {
 } from "../config/constants";
 import type { TsqlRefineSettings } from "../config/settings";
 import { decodeCliOutput } from "../lint/decodeOutput";
+import { MissingTsqlRefineError } from "./errors";
 import { normalizeExecutablePath } from "./normalize";
 import {
 	type BaseProcessOptions,
@@ -41,14 +42,15 @@ export async function assertPathExists(filePath: string): Promise<void> {
 	try {
 		const stat = await fs.stat(filePath);
 		if (!stat.isFile()) {
-			throw new Error(`tsqlrefine.path is not a file: ${filePath}`);
+			throw new MissingTsqlRefineError(
+				`tsqlrefine.path is not a file: ${filePath}`,
+			);
 		}
 	} catch (error) {
-		// Re-throw if it's already our custom error message
-		if (error instanceof Error && error.message.includes("not a file")) {
+		if (error instanceof MissingTsqlRefineError) {
 			throw error;
 		}
-		throw new Error(`tsqlrefine.path not found: ${filePath}`);
+		throw new MissingTsqlRefineError(`tsqlrefine.path not found: ${filePath}`);
 	}
 }
 
@@ -103,7 +105,7 @@ export async function resolveCommand(
 	if (cached) {
 		const isFresh = Date.now() - cached.checkedAt < COMMAND_CACHE_TTL_MS;
 		if (!cached.available && isFresh) {
-			throw new Error(
+			throw new MissingTsqlRefineError(
 				"tsqlrefine not found. Set tsqlrefine.path or install tsqlrefine.",
 			);
 		}
@@ -116,7 +118,7 @@ export async function resolveCommand(
 	commandAvailabilityCache.set(cacheKey, { available, checkedAt: Date.now() });
 
 	if (!available) {
-		throw new Error(
+		throw new MissingTsqlRefineError(
 			"tsqlrefine not found. Set tsqlrefine.path or install tsqlrefine.",
 		);
 	}

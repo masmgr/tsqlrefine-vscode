@@ -49,7 +49,6 @@ suite("executeCliEditOperation", () => {
 			},
 			{
 				operationName: "format",
-				isEnabled: () => true,
 				runner: async () => ({
 					stdout: "",
 					stderr: "",
@@ -76,7 +75,6 @@ suite("executeCliEditOperation", () => {
 			},
 			{
 				operationName: "fix",
-				isEnabled: () => true,
 				runner: async () => ({
 					stdout: "",
 					stderr: "",

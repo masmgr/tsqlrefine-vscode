@@ -2,9 +2,14 @@ import * as path from "node:path";
 import type { Connection, Diagnostic } from "vscode-languageserver/node";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
-import { CLI_EXIT_CODE_DESCRIPTIONS } from "../config/constants";
 import type { DocumentContext } from "../shared/documentContext";
+import { MissingTsqlRefineError } from "../shared/errors";
 import { logOperationContext } from "../shared/logging";
+import {
+	type InFlightExecution,
+	reportCliFailure,
+	runWithInFlight,
+} from "../shared/operationExecution";
 import { firstLine, resolveTargetFilePath } from "../shared/textUtils";
 import type { ProcessRunResult } from "../shared/types";
 import type { DocumentStateManager } from "../state/documentStateManager";
@@ -71,9 +76,6 @@ export async function executeLint(
 		}
 	}
 
-	const controller = new AbortController();
-	lintStateManager.setInFlight(uri, controller);
-
 	const targetFilePath = resolveTargetFilePath(filePath);
 
 	logOperationContext(notificationManager, {
@@ -86,54 +88,30 @@ export async function executeLint(
 		isSavedFile,
 	});
 
-	let result: ProcessRunResult;
+	let execution: InFlightExecution<ProcessRunResult>;
 	try {
-		result = await runner({
-			filePath: targetFilePath,
-			cwd,
-			settings: effectiveSettings,
-			signal: controller.signal,
-			stdin: documentText,
-		});
+		execution = await runWithInFlight(lintStateManager, uri, (controller) =>
+			runner({
+				cwd,
+				settings: effectiveSettings,
+				signal: controller.signal,
+				stdin: documentText,
+			}),
+		);
 	} catch (error) {
-		lintStateManager.clearInFlight(uri);
 		return await handleLintError(error, uri, deps);
 	}
 
-	if (lintStateManager.isCurrentInFlight(uri, controller)) {
-		lintStateManager.clearInFlight(uri);
-	}
-
-	if (result.timedOut) {
-		const formatted = "tsqlrefine: lint timed out";
-		// Don't await - warning message may block in some environments
-		void connection.window.showWarningMessage(formatted);
-		notificationManager.warn(formatted);
-		return { diagnosticsCount: -1, success: false };
-	}
-
-	if (controller.signal.aborted || result.cancelled) {
-		return { diagnosticsCount: -1, success: false };
-	}
-
-	if (result.stderr.trim()) {
-		notificationManager.notifyStderr(result.stderr);
-	}
-
-	// Exit code 0 = no violations, 1 = violations found (both are success)
-	// Exit code 2 = parse error, 3 = config error, 4 = runtime exception
-	if (result.exitCode === null || result.exitCode >= 2) {
-		const description =
-			result.exitCode === null
-				? "process terminated without an exit code"
-				: (CLI_EXIT_CODE_DESCRIPTIONS[result.exitCode] ??
-					`exit code ${result.exitCode}`);
-		const stderrDetail = result.stderr.trim();
-		const detail = stderrDetail ? ` (${firstLine(stderrDetail)})` : "";
-		const formatted = `tsqlrefine: lint failed - ${description}${detail}`;
-
-		void connection.window.showWarningMessage(formatted);
-		notificationManager.warn(formatted);
+	const { controller, result } = execution;
+	if (
+		reportCliFailure({
+			result,
+			operation: "lint",
+			deps,
+			successExitCodes: [0, 1],
+			cancelled: controller.signal.aborted,
+		})
+	) {
 		return { diagnosticsCount: -1, success: false };
 	}
 
@@ -191,9 +169,11 @@ async function handleLintError(
 	deps: LintOperationDeps,
 ): Promise<LintResult> {
 	const { connection, notificationManager } = deps;
-	const message = firstLine(String(error));
+	const message = firstLine(
+		error instanceof Error ? error.message : String(error),
+	);
 
-	if (notificationManager.isMissingTsqlRefineError(message)) {
+	if (error instanceof MissingTsqlRefineError) {
 		await notificationManager.maybeNotifyMissingTsqlRefine(message);
 		notificationManager.warn(`tsqlrefine: ${message}`);
 		connection.sendDiagnostics({
