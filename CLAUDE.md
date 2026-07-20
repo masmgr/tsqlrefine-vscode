@@ -23,7 +23,7 @@ npm run verify           # Run all checks (test + typecheck + lint + format)
 
 # Testing
 npm run test:unit        # Run unit tests with Mocha
-npm run test:unit:coverage  # Run unit tests with c8 coverage (targets: 50% lines, 80% functions, 75% branches)
+npm run test:unit:coverage  # Run unit tests with c8 coverage (targets: 85% lines/functions/statements, 80% branches)
 npm run test:e2e         # Run E2E tests with VS Code Test
 npm test                 # Run unit tests
 ```
@@ -92,10 +92,12 @@ Settings namespace: `tsqlrefine`
 | `maxFileSizeKb` | number | 0 | Max file size (KB) for automatic linting (0 = unlimited) |
 | `minSeverity` | string | "info" | Minimum severity for diagnostics (error/warning/info/hint) |
 | `formatTimeoutMs` | number | 10000 | Process timeout for format |
+| `fixTimeoutMs` | number | 10000 | Process timeout for fix |
 | `enableLint` | boolean | true | Enable linting |
 | `enableFormat` | boolean | true | Enable formatting |
 | `enableFix` | boolean | true | Enable auto-fix |
 | `allowPlugins` | boolean | false | Allow loading tsqlrefine plugins (security-sensitive, opt-in) |
+| `trace.server` | string | "off" | LSP traffic tracing (off/messages/verbose) |
 
 ## Commands
 
@@ -150,7 +152,7 @@ Best practices:
 
 ### Coverage
 
-c8 with targets: 50% lines, 80% functions, 75% branches. Config: [.c8rc.json](.c8rc.json). Reports in `coverage/`.
+c8 with targets: 85% lines/functions/statements and 80% branches. Config: [.c8rc.json](.c8rc.json). Reports in `coverage/`.
 
 ## Important Implementation Notes
 

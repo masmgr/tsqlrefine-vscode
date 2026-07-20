@@ -44,7 +44,7 @@ const baseConfig = {
 	sourcemap: !production,
 	sourcesContent: false,
 	platform: "node",
-	target: "node24",
+	target: "node22",
 	logLevel: watch ? "silent" : "warning",
 	plugins: watch ? [esbuildProblemMatcherPlugin] : [],
 };
@@ -68,7 +68,9 @@ async function main() {
 	];
 
 	if (watch) {
-		const contexts = await Promise.all(builds.map((build) => esbuild.context(build)));
+		const contexts = await Promise.all(
+			builds.map((build) => esbuild.context(build)),
+		);
 		await Promise.all(contexts.map((context) => context.watch()));
 	} else {
 		await Promise.all(builds.map((build) => esbuild.build(build)));
