@@ -13,6 +13,18 @@ type CacheEntry = {
 const cache = new Map<string, CacheEntry>();
 
 /**
+ * Drop every cached config-file lookup.
+ *
+ * A "no config file here" answer is cached for CONFIG_CACHE_TTL_MS, so without
+ * this a user who changes `tsqlrefine.configPath` (or adds a tsqlrefine.json)
+ * would keep getting the previous resolution until the TTL expires — including
+ * for the re-lints issued right after the configuration change.
+ */
+export function clearConfigPathCache(): void {
+	cache.clear();
+}
+
+/**
  * Evict expired entries and limit cache size to prevent memory leaks.
  */
 function evictStaleEntries(): void {
@@ -149,10 +161,15 @@ async function findNearestConfigFileUncached(
 		}
 
 		if (!isWithinOrEqual(parent, stopDir)) {
+			// Defensive and unreachable: a `current` inside stopDir always has a
+			// parent inside-or-equal to stopDir, and `current === stopDir` already
+			// returned above.
+			/* c8 ignore start */
 			if (isWithinOrEqual(current, stopDir)) {
 				current = stopDir;
 				continue;
 			}
+			/* c8 ignore stop */
 			return null;
 		}
 

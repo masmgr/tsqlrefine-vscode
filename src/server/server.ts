@@ -15,6 +15,7 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import { MAX_CONCURRENT_RUNS } from "./config/constants";
+import { clearConfigPathCache } from "./config/resolveConfigPath";
 import type { TsqlRefineSettings } from "./config/settings";
 import { executeFix, type FixOperationDeps } from "./fix/fixOperations";
 import {
@@ -193,6 +194,12 @@ export function registerServer(
 		const lintInputsChanged =
 			previousLintSignature !== lintSignature(settingsManager.getSettings());
 		const pathChanged = previousPath !== settingsManager.getSettings().path;
+		if (lintInputsChanged) {
+			// `configPath` is part of the lint signature, and a resolved config path
+			// is cached for CONFIG_CACHE_TTL_MS. Without this the re-lints issued
+			// below would run against the previous resolution.
+			clearConfigPathCache();
+		}
 		if (pathChanged) {
 			// A stale "not available" verdict would otherwise survive for up to
 			// COMMAND_CACHE_TTL_MS after the user points at a working executable,
@@ -636,8 +643,12 @@ export function registerServer(
 	}
 }
 
+// Process entry point for the language server. Unit tests call registerServer
+// directly, so this never runs under coverage.
+/* c8 ignore start */
 if (require.main === module) {
 	const connection = createConnection(ProposedFeatures.all);
 	registerServer(connection);
 	connection.listen();
 }
+/* c8 ignore stop */
