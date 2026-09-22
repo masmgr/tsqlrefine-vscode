@@ -7,7 +7,9 @@ import {
 import type { DocumentContext } from "../shared/documentContext";
 import { runFormatter } from "./runFormatter";
 
-export type FormatOperationDeps = CliEditOperationDeps;
+export type FormatOperationDeps = CliEditOperationDeps & {
+	runner?: typeof runFormatter;
+};
 
 /**
  * Execute format operation on a document.
@@ -24,6 +26,6 @@ export async function executeFormat(
 ): Promise<TextEdit[] | null> {
 	return await executeCliEditOperation(context, document, deps, {
 		operationName: "format",
-		runner: runFormatter,
+		runner: deps.runner ?? runFormatter,
 	});
 }

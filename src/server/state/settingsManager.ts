@@ -15,6 +15,7 @@ type DocumentSettingsCacheEntry = {
  */
 export class SettingsManager {
 	private settings: TsqlRefineSettings = defaultSettings;
+	private generation = 0;
 
 	/**
 	 * Short-lived cache of per-document settings to avoid repeated LSP
@@ -38,16 +39,21 @@ export class SettingsManager {
 	 * Refresh settings from the workspace configuration.
 	 */
 	async refreshSettings(): Promise<void> {
+		this.invalidateAll();
+		const generation = this.generation;
 		const config =
 			(await this.connection.workspace.getConfiguration({
 				section: "tsqlrefine",
 			})) ?? {};
+		if (generation !== this.generation) {
+			return;
+		}
 		this.settings = this.normalizeSettings({
 			...defaultSettings,
 			...config,
 		});
 		// Global settings feed into per-document settings, so the cache is stale.
-		this.documentSettingsCache.clear();
+		this.invalidateAll();
 	}
 
 	/**
@@ -66,10 +72,14 @@ export class SettingsManager {
 			return cached.settings;
 		}
 
+		const generation = this.generation;
 		const scopedConfig = ((await this.connection.workspace.getConfiguration({
 			scopeUri: uri,
 			section: "tsqlrefine",
 		})) ?? {}) as Partial<TsqlRefineSettings>;
+		if (generation !== this.generation) {
+			return this.getSettingsForDocument(uri);
+		}
 		const settings = this.normalizeSettings({
 			...defaultSettings,
 			...this.settings,
@@ -91,6 +101,7 @@ export class SettingsManager {
 	 * Invalidate all cached document settings (e.g. on workspace changes).
 	 */
 	invalidateAll(): void {
+		this.generation++;
 		this.documentSettingsCache.clear();
 	}
 

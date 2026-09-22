@@ -1,6 +1,6 @@
 {
 	"all": true,
-	"include": ["out/server/**/*.js", "out/client/**/*.js"],
+	"include": ["out/**/*.js"],
 	"exclude": ["out/test/**", "out/**/*.test.js", "out/test/helpers/**"],
 	"reporter": ["text", "text-summary", "lcov", "html"],
 	"check-coverage": true,

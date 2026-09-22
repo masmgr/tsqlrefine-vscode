@@ -25,6 +25,11 @@ export type InFlightExecution<T> = {
 	result: T;
 };
 
+export type OperationControl = {
+	signal: AbortSignal;
+	isCurrent: () => boolean;
+};
+
 /**
  * Run an operation while safely tracking its AbortController for a document.
  * An older operation never clears a controller installed by a newer operation.
@@ -34,6 +39,7 @@ export async function runWithInFlight<T>(
 	uri: string,
 	run: (controller: AbortController) => Promise<T>,
 ): Promise<InFlightExecution<T>> {
+	stateManager.cancelInFlight(uri);
 	const controller = new AbortController();
 	stateManager.setInFlight(uri, controller);
 	try {

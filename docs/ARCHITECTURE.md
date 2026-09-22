@@ -468,9 +468,9 @@ The server provides quick fixes via LSP code actions:
                          ▼
 ┌─────────────────────────────────────────────────────────┐
 │ 8. CHECK EXIT CODE                                      │
-│    - 0/1 = success (parse stdout for diagnostics)       │
+│    - 0/1/2 = parse stdout for lint diagnostics          │
 │    - 2 = parse error, 3 = config error, 4 = runtime     │
-│    - Exit codes >= 2 show user-facing warning            │
+│    - Exit codes >= 3 show user-facing warning           │
 └────────────────────────┬────────────────────────────────┘
                          │
                          ▼
@@ -847,11 +847,11 @@ Tests run on all three platforms via GitHub Actions CI:
 |-----------|---------|--------|
 | 0 | Success (no violations / operation succeeded) | Parse stdout |
 | 1 | Rule violations found (lint only) | Parse stdout for diagnostics |
-| 2 | Parse error (SQL could not be parsed) | Show warning |
+| 2 | Parse error (SQL could not be parsed) | Parse stdout for lint diagnostics; warn for format/fix |
 | 3 | Configuration error (config file load failure) | Show warning |
 | 4 | Runtime exception (internal error) | Show warning |
 
-Exit codes >= 2 trigger user-facing warnings with specific descriptions via `CLI_EXIT_CODE_DESCRIPTIONS`.
+Lint accepts exit codes 0, 1, and 2 as diagnostic-bearing output. Other failures trigger user-facing warnings with specific descriptions via `CLI_EXIT_CODE_DESCRIPTIONS`.
 
 ### Error Sources
 

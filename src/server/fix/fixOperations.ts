@@ -7,7 +7,9 @@ import {
 import type { DocumentContext } from "../shared/documentContext";
 import { runFixer } from "./runFixer";
 
-export type FixOperationDeps = CliEditOperationDeps;
+export type FixOperationDeps = CliEditOperationDeps & {
+	runner?: typeof runFixer;
+};
 
 /**
  * Execute fix operation on a document.
@@ -24,6 +26,6 @@ export async function executeFix(
 ): Promise<TextEdit[] | null> {
 	return await executeCliEditOperation(context, document, deps, {
 		operationName: "fix",
-		runner: runFixer,
+		runner: deps.runner ?? runFixer,
 	});
 }

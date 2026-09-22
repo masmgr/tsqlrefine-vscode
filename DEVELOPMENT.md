@@ -61,7 +61,7 @@ npm run test:e2e           # Run E2E tests
 
 **Note**: The test scripts run both `npm run build` (to bundle extension code to `dist/`) and `npm run compile` (to compile test files to `out/`). This is necessary because VS Code loads the extension from `dist/extension.js` while the test runner executes tests from `out/test/**/*.test.js`.
 
-**Code Coverage**: Unit tests are run with c8 coverage. Targets are 50% lines, 80% functions, 75% branches. Use `npm run test:unit:coverage` to generate reports in `coverage/`.
+**Code Coverage**: Unit tests are run with c8 coverage. Targets are 85% lines, statements, and functions, and 80% branches. Test compilation includes all production sources, and c8 counts all compiled production files, including the extension entry point and client/server modules. Use `npm run test:unit:coverage` to generate reports in `coverage/`.
 
 ### Publishing
 ```bash
@@ -293,7 +293,7 @@ Test helpers: [src/test/helpers/](src/test/helpers/)
 
 ### Code Coverage
 
-- Minimum targets: 50% lines, 80% functions, 75% branches, 50% statements
+- Minimum targets: 85% lines, functions, and statements; 80% branches
 - Configuration: [.c8rc.json](.c8rc.json)
 - Generate report: `npm run test:unit:coverage`
 
@@ -372,7 +372,7 @@ git commit --no-verify
 ### Concurrency and Cancellation
 - The `LintScheduler` prevents resource exhaustion with its semaphore
 - All operations (lint, format, fix) support cancellation via AbortSignal
-- In-flight requests are tracked in separate `DocumentStateManager` instances and cancelled when superseded
+- In-flight requests, including settings/configuration lookup, are tracked in separate `DocumentStateManager` instances and cancelled when superseded or when the document changes or closes. Results are checked against document identity, version, and configuration revision before publication or application.
 
 ### Stdin-based CLI Invocation
 - All operations use `--stdin` flag instead of temporary files
@@ -388,7 +388,7 @@ git commit --no-verify
   - `2`: Parse error (SQL could not be parsed)
   - `3`: Configuration error (config file load failure, invalid settings)
   - `4`: Runtime exception (internal error)
-- Exit codes >= 2 trigger user-facing warnings with specific descriptions via `CLI_EXIT_CODE_DESCRIPTIONS`
+- Lint parses diagnostics for exit codes 0, 1, and 2; format/fix require exit code 0. Other failures trigger user-facing warnings with specific descriptions via `CLI_EXIT_CODE_DESCRIPTIONS`.
 - CLI spawn errors reject the promise and clear diagnostics
 - Missing installation errors trigger notification with install guide link (5-minute cooldown)
 - Shared `handleOperationError()` provides consistent error handling for format/fix operations

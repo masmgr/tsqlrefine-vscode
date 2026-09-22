@@ -330,7 +330,7 @@ suite("lintOperations", () => {
 		const result = await executeLint(context, document, "manual", {
 			connection,
 			notificationManager: new NotificationManager(connection),
-			lintStateManager: new DocumentStateManager(),
+			control: { signal: new AbortController().signal, isCurrent: () => true },
 			runner: async () => ({
 				stdout: "{truncated",
 				stderr: "output limit exceeded",
@@ -356,7 +356,7 @@ suite("lintOperations", () => {
 		const result = await executeLint(context, document, "manual", {
 			connection,
 			notificationManager: new NotificationManager(connection),
-			lintStateManager: new DocumentStateManager(),
+			control: { signal: new AbortController().signal, isCurrent: () => true },
 			runner: async () => {
 				throw new MissingTsqlRefineError(
 					"tsqlrefine executable is unavailable",

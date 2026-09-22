@@ -1,23 +1,18 @@
 import type { Connection, TextEdit } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { detectEndOfLine, normalizeLineEndings } from "../lint/decodeOutput";
-import type { DocumentStateManager } from "../state/documentStateManager";
 import type { NotificationManager } from "../state/notificationManager";
 import type { DocumentContext } from "./documentContext";
 import { createFullDocumentEdit } from "./documentEdit";
 import { handleOperationError } from "./errorHandling";
 import { logOperationContext } from "./logging";
-import {
-	type InFlightExecution,
-	reportCliFailure,
-	runWithInFlight,
-} from "./operationExecution";
+import { type OperationControl, reportCliFailure } from "./operationExecution";
 import type { ProcessRunResult } from "./types";
 
 export type CliEditOperationDeps = {
 	connection: Connection;
 	notificationManager: NotificationManager;
-	stateManager: DocumentStateManager;
+	control: OperationControl;
 };
 
 type CliEditOperationOptions = {
@@ -36,7 +31,7 @@ export async function executeCliEditOperation(
 	deps: CliEditOperationDeps,
 	options: CliEditOperationOptions,
 ): Promise<TextEdit[] | null> {
-	const { connection, notificationManager, stateManager } = deps;
+	const { connection, notificationManager, control } = deps;
 	const {
 		uri,
 		filePath,
@@ -46,6 +41,9 @@ export async function executeCliEditOperation(
 		documentText,
 	} = context;
 	const operation = options.operationName;
+	if (!control.isCurrent()) {
+		return null;
+	}
 
 	logOperationContext(notificationManager, {
 		operation: operation === "format" ? "Format" : "Fix",
@@ -55,29 +53,31 @@ export async function executeCliEditOperation(
 		configPath: effectiveConfigPath,
 	});
 
-	let execution: InFlightExecution<ProcessRunResult>;
+	let result: ProcessRunResult;
 	try {
-		execution = await runWithInFlight(stateManager, uri, async (controller) =>
-			options.runner({
-				cwd,
-				settings: effectiveSettings,
-				signal: controller.signal,
-				stdin: documentText,
-			}),
-		);
+		result = await options.runner({
+			cwd,
+			settings: effectiveSettings,
+			signal: control.signal,
+			stdin: documentText,
+		});
 	} catch (error) {
-		await handleOperationError(error, deps, operation);
+		if (control.isCurrent()) {
+			await handleOperationError(error, deps, operation);
+		}
 		return null;
 	}
 
-	const { controller, result } = execution;
+	if (!control.isCurrent()) {
+		return null;
+	}
 	if (
 		reportCliFailure({
 			result,
 			operation,
 			deps,
 			successExitCodes: [0],
-			cancelled: controller.signal.aborted,
+			cancelled: control.signal.aborted,
 		})
 	) {
 		return null;

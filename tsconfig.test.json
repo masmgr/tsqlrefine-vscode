@@ -6,6 +6,6 @@
 		"incremental": true,
 		"tsBuildInfoFile": "out/.tsbuildinfo"
 	},
-	"include": ["src/test/**/*.ts"],
+	"include": ["src/**/*.ts"],
 	"exclude": ["node_modules"]
 }

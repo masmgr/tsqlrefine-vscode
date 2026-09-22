@@ -6,13 +6,11 @@ import type { DocumentContext } from "../shared/documentContext";
 import { MissingTsqlRefineError } from "../shared/errors";
 import { logOperationContext } from "../shared/logging";
 import {
-	type InFlightExecution,
+	type OperationControl,
 	reportCliFailure,
-	runWithInFlight,
 } from "../shared/operationExecution";
 import { firstLine, resolveTargetFilePath } from "../shared/textUtils";
 import type { ProcessRunResult } from "../shared/types";
-import type { DocumentStateManager } from "../state/documentStateManager";
 import type { NotificationManager } from "../state/notificationManager";
 import { parseOutput } from "./parseOutput";
 import { runLinter } from "./runLinter";
@@ -21,7 +19,7 @@ import type { LintReason } from "./scheduler";
 export type LintOperationDeps = {
 	connection: Connection;
 	notificationManager: NotificationManager;
-	lintStateManager: DocumentStateManager;
+	control: OperationControl;
 	runner?: typeof runLinter;
 };
 
@@ -45,7 +43,8 @@ export async function executeLint(
 	reason: LintReason,
 	deps: LintOperationDeps,
 ): Promise<LintResult> {
-	const { connection, notificationManager, lintStateManager } = deps;
+	const { connection, notificationManager, control } = deps;
+	const version = document.version;
 	const runner = deps.runner ?? runLinter;
 	const {
 		uri,
@@ -56,6 +55,9 @@ export async function executeLint(
 		documentText,
 		isSavedFile,
 	} = context;
+	if (!control.isCurrent()) {
+		return { diagnosticsCount: -1, success: false };
+	}
 
 	// Check file size limit
 	const maxBytes = maxFileSizeBytes(effectiveSettings.maxFileSizeKb);
@@ -68,6 +70,7 @@ export async function executeLint(
 			);
 			connection.sendDiagnostics({
 				uri,
+				version,
 				diagnostics: [
 					createFileTooLargeDiagnostic(sizeKb, effectiveSettings.maxFileSizeKb),
 				],
@@ -88,28 +91,32 @@ export async function executeLint(
 		isSavedFile,
 	});
 
-	let execution: InFlightExecution<ProcessRunResult>;
+	let result: ProcessRunResult;
 	try {
-		execution = await runWithInFlight(lintStateManager, uri, (controller) =>
-			runner({
-				cwd,
-				settings: effectiveSettings,
-				signal: controller.signal,
-				stdin: documentText,
-			}),
-		);
+		result = await runner({
+			cwd,
+			settings: effectiveSettings,
+			signal: control.signal,
+			stdin: documentText,
+		});
 	} catch (error) {
+		if (!control.isCurrent()) {
+			return { diagnosticsCount: -1, success: false };
+		}
 		return await handleLintError(error, uri, deps);
 	}
 
-	const { controller, result } = execution;
+	if (!control.isCurrent()) {
+		return { diagnosticsCount: -1, success: false };
+	}
 	if (
 		reportCliFailure({
 			result,
 			operation: "lint",
 			deps,
-			successExitCodes: [0, 1],
-			cancelled: controller.signal.aborted,
+			// Parse errors also carry diagnostics in the CLI's JSON output.
+			successExitCodes: [0, 1, 2],
+			cancelled: control.signal.aborted,
 		})
 	) {
 		return { diagnosticsCount: -1, success: false };
@@ -132,7 +139,7 @@ export async function executeLint(
 		},
 	});
 
-	connection.sendDiagnostics({ uri, diagnostics });
+	connection.sendDiagnostics({ uri, version, diagnostics });
 	return { diagnosticsCount: diagnostics.length, success: true };
 }
 
@@ -175,6 +182,9 @@ async function handleLintError(
 
 	if (error instanceof MissingTsqlRefineError) {
 		await notificationManager.maybeNotifyMissingTsqlRefine(message);
+		if (!deps.control.isCurrent()) {
+			return { diagnosticsCount: -1, success: false };
+		}
 		notificationManager.warn(`tsqlrefine: ${message}`);
 		connection.sendDiagnostics({
 			uri,

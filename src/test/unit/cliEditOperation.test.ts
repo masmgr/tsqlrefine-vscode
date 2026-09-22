@@ -4,7 +4,6 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { defaultSettings } from "../../server/config/settings";
 import { executeCliEditOperation } from "../../server/shared/cliEditOperation";
 import type { DocumentContext } from "../../server/shared/documentContext";
-import { DocumentStateManager } from "../../server/state/documentStateManager";
 import { NotificationManager } from "../../server/state/notificationManager";
 
 function createHarness(text: string) {
@@ -45,7 +44,10 @@ suite("executeCliEditOperation", () => {
 			{
 				connection: harness.connection,
 				notificationManager: new NotificationManager(harness.connection),
-				stateManager: new DocumentStateManager(),
+				control: {
+					signal: new AbortController().signal,
+					isCurrent: () => true,
+				},
 			},
 			{
 				operationName: "format",
@@ -71,7 +73,10 @@ suite("executeCliEditOperation", () => {
 			{
 				connection: harness.connection,
 				notificationManager: new NotificationManager(harness.connection),
-				stateManager: new DocumentStateManager(),
+				control: {
+					signal: new AbortController().signal,
+					isCurrent: () => true,
+				},
 			},
 			{
 				operationName: "fix",
