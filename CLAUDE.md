@@ -36,13 +36,13 @@ npm test                 # Run unit tests
 
 Client and server run in separate processes:
 
-- **Client** ([src/extension.ts](src/extension.ts), [src/client/](src/client/)): VS Code extension host. Manages LanguageClient, registers commands, handles file lifecycle events.
-- **Server** ([src/server/server.ts](src/server/server.ts)): Separate Node.js process. Handles document sync, lint/format/fix operations, code actions, and coordinates with LintScheduler.
+- **Client** ([src/extension.ts](src/extension.ts), [src/client/](src/client/)): VS Code extension host. Manages LanguageClient, registers commands, handles file lifecycle events. The status bar keeps per-URI diagnostic tallies and only re-counts the URIs carried by `onDidChangeDiagnostics` — that event fires for every extension's diagnostics, so a full workspace scan on each one is expensive.
+- **Server** ([src/server/server.ts](src/server/server.ts)): Separate Node.js process. Handles document sync, lint/format/fix operations, code actions, and coordinates with LintScheduler. On a configuration change it compares a signature of the lint-affecting settings (`path`, `configPath`, `minSeverity`, `maxFileSizeKb`, `allowPlugins`, `timeoutMs`) and re-lints open documents when it changed, so published diagnostics never outlive the settings that produced them.
 
 ### Core Components
 
-- **LintScheduler** ([src/server/lint/scheduler.ts](src/server/lint/scheduler.ts)): Semaphore-based concurrency (max 4), debouncing for type events (500ms default), version tracking. Manual lints bypass debounce.
-- **Process Runner** ([src/server/shared/processRunner.ts](src/server/shared/processRunner.ts)): CLI execution with command resolution (PATH + caching 30s TTL), installation verification, timeout/cancellation, UTF-8 encoding.
+- **LintScheduler** ([src/server/lint/scheduler.ts](src/server/lint/scheduler.ts)): Semaphore-based concurrency (max 4), debouncing for type events (500ms default), version tracking. Manual lints bypass debounce. Manual lints propagate failures to the caller; every other path is detached, so failures are routed to the `onError` callback instead of escaping as an unhandled rejection (which would terminate the server process).
+- **Process Runner** ([src/server/shared/processRunner.ts](src/server/shared/processRunner.ts)): CLI execution with command resolution (PATH + caching 30s TTL), installation verification, timeout/cancellation, UTF-8 encoding. `clearCommandAvailabilityCache()` drops the cache when `tsqlrefine.path` changes, so a cached "not available" verdict cannot outlive a newly installed executable.
 - **Lint Operations** ([src/server/lint/](src/server/lint/)): Runs `tsqlrefine lint -q --output json --stdin`, parses JSON output to diagnostics (0-based character-level ranges). `maxFileSizeKb` limits automatic linting only.
 - **Format Operations** ([src/server/format/](src/server/format/)): Runs `tsqlrefine format -q --stdin`, returns `TextEdit[]` for full document replacement.
 - **Fix Operations** ([src/server/fix/](src/server/fix/)): Runs `tsqlrefine fix -q --stdin --severity`, returns `TextEdit[]`. Integrated with Code Action provider ("Fix all tsqlrefine issues", `QuickFix` kind).
@@ -75,6 +75,7 @@ Client and server run in separate processes:
 - `DOCUMENT_SETTINGS_CACHE_TTL_MS = 2000`, `DOCUMENT_SETTINGS_CACHE_MAX_SIZE = 100`
 - `MAX_CONCURRENT_RUNS = 4`, `MISSING_TSQLREFINE_NOTICE_COOLDOWN_MS = 300000`
 - `STDERR_NOTICE_COOLDOWN_MS = 30000`
+- `MAX_OUTPUT_BYTES = 10 * 1024 * 1024` — combined stdout+stderr cap per CLI run
 - `DEFAULT_COMMAND_NAME = "tsqlrefine"`
 - `CLI_EXIT_CODE_DESCRIPTIONS` — 2=parse error, 3=config error, 4=runtime exception
 
@@ -172,6 +173,7 @@ c8 with targets: 85% lines/functions/statements and 80% branches. Config: [.c8rc
 ### Error Handling
 - CLI spawn errors reject promise and clear diagnostics; unresolved/unusable executable raises `MissingTsqlRefineError` (checked via `instanceof`, not string matching)
 - Missing installation → notification with install guide (5-minute cooldown); repeated stderr warning popups are throttled to one per 30 seconds
+- Never `await` a user-facing popup from an operation path. `showWarningMessage` with an action button stays unresolved until the user dismisses it, which would hold the operation (and its scheduler slot) open and leave the status bar spinner running. The cooldown timestamp is updated before the popup is shown, so firing it detached still suppresses duplicates.
 - `reportCliFailure()` (in `operationExecution.ts`) unifies timeout/cancellation/exit-code reporting for lint, format, and fix; `handleOperationError()` handles thrown errors for format/fix; `CLI_EXIT_CODE_DESCRIPTIONS` for specific messages
 - On timeout/cancellation/output-limit-exceeded, `runProcess()` calls `child.kill()` and (on non-Windows) force-kills with `SIGKILL` after a 1s grace period if the process hasn't exited
 

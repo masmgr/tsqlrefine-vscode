@@ -46,8 +46,10 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 	);
 
 	context.subscriptions.push(
-		vscode.languages.onDidChangeDiagnostics(() => {
-			statusBarManager.updateDiagnostics();
+		vscode.languages.onDidChangeDiagnostics((event) => {
+			// This fires for every extension's diagnostics, so only re-count the
+			// URIs that actually changed.
+			statusBarManager.updateDiagnostics(event?.uris);
 		}),
 		vscode.workspace.onDidChangeConfiguration((e) => {
 			if (e.affectsConfiguration("tsqlrefine.enableLint")) {
@@ -59,6 +61,15 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 
 	const startPromise = client.start();
 	clientReady = startPromise;
+	// `clientReady` is awaited lazily by the commands, so a start failure would
+	// otherwise surface only as an unhandled rejection. Keep the rejection on
+	// `clientReady` (the commands still report it) and surface it once here.
+	void startPromise.catch((error: unknown) => {
+		console.error("tsqlrefine: language client failed to start", error);
+		void vscode.window.showErrorMessage(
+			`TSQLRefine: language server failed to start: ${String(error)}`,
+		);
+	});
 
 	registerDocumentCommand(context, "tsqlrefine.run", "lintDocument", "lint");
 	registerDocumentCommand(

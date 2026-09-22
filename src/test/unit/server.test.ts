@@ -1,5 +1,5 @@
 import * as assert from "node:assert";
-import { install, type Clock } from "@sinonjs/fake-timers";
+import { type Clock, install } from "@sinonjs/fake-timers";
 import { URI } from "vscode-uri";
 import { MissingTsqlRefineError } from "../../server/shared/errors";
 import type { ProcessRunResult } from "../../server/shared/types";
@@ -135,6 +135,72 @@ suite("Server document lifecycle", () => {
 		await h.request("lint");
 		assert.strictEqual(h.diagnostics.length, before);
 		assert.strictEqual(calls, 2);
+	});
+
+	test("re-lints open documents when a lint-affecting setting changes", async () => {
+		let calls = 0;
+		const h = new ServerHarness({
+			lint: {
+				runner: async () => {
+					calls++;
+					return cliResult(diagnosticJson);
+				},
+			},
+		});
+		await h.initialize();
+		await h.open();
+		await h.request("lint");
+		assert.strictEqual(calls, 1);
+
+		h.settings = { ...h.settings, minSeverity: "error" };
+		await h.invoke("onDidChangeConfiguration");
+		await clock.tickAsync(1);
+
+		assert.strictEqual(calls, 2);
+	});
+
+	test("does not re-lint when only non-lint settings change", async () => {
+		let calls = 0;
+		const h = new ServerHarness({
+			lint: {
+				runner: async () => {
+					calls++;
+					return cliResult(diagnosticJson);
+				},
+			},
+		});
+		await h.initialize();
+		await h.open();
+		await h.request("lint");
+		assert.strictEqual(calls, 1);
+
+		h.settings = { ...h.settings, enableFormat: false, enableFix: false };
+		await h.invoke("onDidChangeConfiguration");
+		await clock.tickAsync(1);
+
+		assert.strictEqual(calls, 1);
+	});
+
+	test("does not re-lint a document with linting disabled", async () => {
+		let calls = 0;
+		const h = new ServerHarness({
+			lint: {
+				runner: async () => {
+					calls++;
+					return cliResult(diagnosticJson);
+				},
+			},
+		});
+		await h.initialize();
+		await h.open();
+		await h.request("lint");
+
+		h.settings = { ...h.settings, minSeverity: "error", enableLint: false };
+		await h.invoke("onDidChangeConfiguration");
+		await clock.tickAsync(1);
+
+		assert.strictEqual(calls, 1);
+		assert.deepStrictEqual(h.diagnostics.at(-1)?.diagnostics, []);
 	});
 
 	test("disable removes pending debounced lint", async () => {

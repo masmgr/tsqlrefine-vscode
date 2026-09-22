@@ -1,5 +1,5 @@
 import * as assert from "node:assert";
-import { install as installFakeTimers, type Clock } from "@sinonjs/fake-timers";
+import { type Clock, install as installFakeTimers } from "@sinonjs/fake-timers";
 import { LintScheduler, type PendingLint } from "../../server/lint/scheduler";
 
 let clock: Clock;
@@ -34,6 +34,15 @@ function createMockGetVersion(versions: Map<string, number | null>) {
 	return (uri: string): number | null => {
 		return versions.get(uri) ?? null;
 	};
+}
+
+/** Minimal deferred used to hold a lint slot open. */
+function deferredNumber() {
+	let resolve!: (value: number) => void;
+	const promise = new Promise<number>((res) => {
+		resolve = res;
+	});
+	return { promise, resolve };
 }
 
 suite("scheduler", () => {
@@ -488,6 +497,105 @@ suite("scheduler", () => {
 
 			// runLint was called despite error
 			assert.strictEqual(calls.length, 1);
+		});
+
+		test("reports detached lint failures through onError instead of rejecting", async () => {
+			const versions = new Map([["file.sql", 1]]);
+			const reported: Array<{ uri: string; error: unknown }> = [];
+
+			const scheduler = new LintScheduler({
+				maxConcurrentRuns: 4,
+				getDocumentVersion: createMockGetVersion(versions),
+				runLint: async () => {
+					throw new Error("Simulated error");
+				},
+				onError: (uri, error) => reported.push({ uri, error }),
+			});
+
+			// "save" takes the fire-and-forget path: nobody awaits the returned
+			// promise, so an unhandled rejection here would kill the server.
+			await scheduler.requestLint("file.sql", "save", 1);
+			await advance(1);
+
+			assert.strictEqual(reported.length, 1);
+			const [first] = reported;
+			assert.strictEqual(first?.uri, "file.sql");
+			assert.ok(first?.error instanceof Error);
+			assert.strictEqual(first.error.message, "Simulated error");
+		});
+
+		test("reports debounced lint failures through onError", async () => {
+			const versions = new Map([["file.sql", 1]]);
+			const reported: string[] = [];
+
+			const scheduler = new LintScheduler({
+				maxConcurrentRuns: 4,
+				getDocumentVersion: createMockGetVersion(versions),
+				runLint: async () => {
+					throw new Error("Simulated error");
+				},
+				onError: (uri) => reported.push(uri),
+			});
+
+			await scheduler.requestLint("file.sql", "type", 1, 100);
+			await advance(200);
+
+			assert.deepStrictEqual(reported, ["file.sql"]);
+		});
+
+		test("reports queued lint failures through onError", async () => {
+			const versions = new Map([
+				["file1.sql", 1],
+				["file2.sql", 1],
+			]);
+			const reported: string[] = [];
+			const release = deferredNumber();
+
+			const scheduler = new LintScheduler({
+				maxConcurrentRuns: 1,
+				getDocumentVersion: createMockGetVersion(versions),
+				runLint: async (uri) => {
+					if (uri === "file1.sql") {
+						return await release.promise;
+					}
+					throw new Error("Simulated error");
+				},
+				onError: (uri) => reported.push(uri),
+			});
+
+			await scheduler.requestLint("file1.sql", "save", 1);
+			// The only slot is taken, so file2 goes through drainQueue.
+			await scheduler.requestLint("file2.sql", "save", 1);
+			release.resolve(0);
+			await advance(1);
+
+			assert.deepStrictEqual(reported, ["file2.sql"]);
+		});
+
+		test("releases the slot and survives when no onError is configured", async () => {
+			const versions = new Map([["file.sql", 1]]);
+			const calls: string[] = [];
+			let shouldFail = true;
+
+			const scheduler = new LintScheduler({
+				maxConcurrentRuns: 1,
+				getDocumentVersion: createMockGetVersion(versions),
+				runLint: async (uri) => {
+					calls.push(uri);
+					if (shouldFail) {
+						throw new Error("Simulated error");
+					}
+					return 0;
+				},
+			});
+
+			await scheduler.requestLint("file.sql", "save", 1);
+			await advance(1);
+
+			// The single slot must have been released despite the rejection.
+			shouldFail = false;
+			await scheduler.requestLint("file.sql", "manual", 1);
+			assert.deepStrictEqual(calls, ["file.sql", "file.sql"]);
 		});
 
 		test("draining flag prevents concurrent drain operations", async () => {

@@ -46,4 +46,27 @@ suite("Settings refresh concurrency", () => {
 		await oldRefresh;
 		assert.strictEqual(manager.getSettings().enableLint, false);
 	});
+
+	test("stops re-fetching scoped settings when the generation never settles", async () => {
+		let calls = 0;
+		let manager!: SettingsManager;
+		manager = new SettingsManager({
+			workspace: {
+				getConfiguration: async ({ scopeUri }: { scopeUri?: string }) => {
+					if (scopeUri) {
+						calls++;
+						// Invalidate on every scoped response so the generation check
+						// never matches; without a bound this would never terminate.
+						manager.invalidateAll();
+					}
+					return { ...defaultSettings, enableLint: false };
+				},
+			},
+		} as unknown as Connection);
+
+		const settings = await manager.getSettingsForDocument("untitled:test");
+
+		assert.strictEqual(settings.enableLint, false);
+		assert.strictEqual(calls, 3);
+	});
 });

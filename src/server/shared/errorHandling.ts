@@ -23,7 +23,10 @@ export async function handleOperationError(
 	);
 
 	if (error instanceof MissingTsqlRefineError) {
-		await notificationManager.maybeNotifyMissingTsqlRefine(message);
+		// Don't await - the warning carries an action button and stays unresolved
+		// until the user dismisses it, which would hold this operation open and
+		// leave the status bar spinner running.
+		void notificationManager.maybeNotifyMissingTsqlRefine(message);
 		notificationManager.warn(
 			`tsqlrefine: ${operationName} failed (${message})`,
 		);

@@ -8,6 +8,12 @@ type SchedulerOptions = {
 	maxConcurrentRuns: number;
 	getDocumentVersion: (uri: string) => number | null;
 	runLint: (uri: string, pending: PendingLint) => Promise<number>;
+	/**
+	 * Reports a failure from a lint that nobody is awaiting (debounced,
+	 * queued or otherwise detached). Without this the rejection would be an
+	 * unhandled promise rejection and take the server process down.
+	 */
+	onError?: (uri: string, error: unknown) => void;
 };
 
 type Release = () => void;
@@ -73,7 +79,6 @@ export class LintScheduler {
 		this.clearDebounce(uri);
 		this.pendingByUri.delete(uri);
 		this.removeFromQueue(uri);
-		this.queuedUriSet.delete(uri);
 	}
 
 	requestLint(
@@ -97,13 +102,13 @@ export class LintScheduler {
 	): void {
 		this.clearDebounce(uri);
 		if (reason !== "type") {
-			void this.runIfReady(uri);
+			this.runIfReady(uri);
 			return;
 		}
 		const delay = Math.max(0, debounceMs ?? 0);
 		const timer = setTimeout(() => {
 			this.debounceTimerByUri.delete(uri);
-			void this.runIfReady(uri);
+			this.runIfReady(uri);
 		}, delay);
 		this.debounceTimerByUri.set(uri, timer);
 	}
@@ -116,14 +121,24 @@ export class LintScheduler {
 		}
 	}
 
-	private async runIfReady(uri: string): Promise<void> {
+	private runIfReady(uri: string): void {
 		this.clearDebounce(uri);
 		const release = this.semaphore.tryAcquire();
 		if (!release) {
 			this.queueUri(uri);
 			return;
 		}
-		await this.runWithRelease(uri, release, false);
+		this.runDetached(uri, release);
+	}
+
+	/**
+	 * Start a lint nobody awaits. A rejection here would otherwise escape as an
+	 * unhandled promise rejection and terminate the server process.
+	 */
+	private runDetached(uri: string, release: Release): void {
+		void this.runWithRelease(uri, release, false).catch((error: unknown) => {
+			this.options.onError?.(uri, error);
+		});
 	}
 
 	private async runWhenPossible(uri: string): Promise<number> {
@@ -215,7 +230,7 @@ export class LintScheduler {
 					release();
 					continue;
 				}
-				void this.runWithRelease(nextUri, release, false);
+				this.runDetached(nextUri, release);
 			}
 		} finally {
 			this.draining = false;

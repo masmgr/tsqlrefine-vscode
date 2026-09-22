@@ -15,6 +15,7 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import { MAX_CONCURRENT_RUNS } from "./config/constants";
+import type { TsqlRefineSettings } from "./config/settings";
 import { executeFix, type FixOperationDeps } from "./fix/fixOperations";
 import {
 	executeFormat,
@@ -28,9 +29,25 @@ import {
 	type OperationControl,
 	runWithInFlight,
 } from "./shared/operationExecution";
+import { clearCommandAvailabilityCache } from "./shared/processRunner";
 import { DocumentStateManager } from "./state/documentStateManager";
 import { NotificationManager } from "./state/notificationManager";
 import { SettingsManager } from "./state/settingsManager";
+
+/**
+ * Fingerprint of every setting that feeds the lint CLI. When it changes,
+ * previously published diagnostics no longer reflect the active configuration.
+ */
+function lintSignature(settings: TsqlRefineSettings): string {
+	return [
+		settings.path,
+		settings.configPath,
+		settings.minSeverity,
+		settings.maxFileSizeKb,
+		settings.allowPlugins,
+		settings.timeoutMs,
+	].join("\u0000");
+}
 
 export type ServerRunners = {
 	lint?: Pick<LintOperationDeps, "runner">;
@@ -90,6 +107,11 @@ export function registerServer(
 			return document ? document.version : null;
 		},
 		runLint: (uri, pending) => runLintNow(uri, pending.reason),
+		onError: (uri, error) => {
+			notificationManager.error(
+				`tsqlrefine: scheduled lint failed for ${uri} (${String(error)})`,
+			);
+		},
 	});
 
 	// ============================================================================
@@ -159,29 +181,50 @@ export function registerServer(
 		for (const document of documents.all()) {
 			cancelDocumentOperations(document.uri);
 		}
-		const previousPath = settingsManager.getSettings().path;
+		const previousSettings = settingsManager.getSettings();
+		const previousPath = previousSettings.path;
+		const previousLintSignature = lintSignature(previousSettings);
 		await settingsManager.refreshSettings();
 		if (revision !== configurationRevision) {
 			return;
 		}
+		// Existing diagnostics were produced with the old settings, so they are
+		// stale as soon as anything the CLI reads changes.
+		const lintInputsChanged =
+			previousLintSignature !== lintSignature(settingsManager.getSettings());
+		const pathChanged = previousPath !== settingsManager.getSettings().path;
+		if (pathChanged) {
+			// A stale "not available" verdict would otherwise survive for up to
+			// COMMAND_CACHE_TTL_MS after the user points at a working executable,
+			// including for the re-lints issued below.
+			clearCommandAvailabilityCache();
+		}
+
 		await Promise.all(
 			documents.all().map(async (document) => {
 				const settings = await settingsManager.getSettingsForDocument(
 					document.uri,
 				);
 				if (
-					revision === configurationRevision &&
-					documents.get(document.uri) === document &&
-					!settings.enableLint
+					revision !== configurationRevision ||
+					documents.get(document.uri) !== document
 				) {
+					return;
+				}
+				if (!settings.enableLint) {
 					scheduler.clear(document.uri);
 					lintStateManager.cancelInFlight(document.uri);
 					connection.sendDiagnostics({ uri: document.uri, diagnostics: [] });
+					return;
+				}
+				if (lintInputsChanged) {
+					// "open" runs without debounce while still honouring maxFileSizeKb.
+					void requestLint(document.uri, "open", null);
 				}
 			}),
 		);
 
-		if (previousPath !== settingsManager.getSettings().path) {
+		if (pathChanged) {
 			await verifyInstallation();
 		}
 	});

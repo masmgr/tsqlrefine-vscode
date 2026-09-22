@@ -5,6 +5,34 @@ export type DiagnosticCounts = {
 	hints: number;
 };
 
+export function emptyDiagnosticCounts(): DiagnosticCounts {
+	return { errors: 0, warnings: 0, infos: 0, hints: 0 };
+}
+
+export function isEmptyDiagnosticCounts(counts: DiagnosticCounts): boolean {
+	return (
+		counts.errors === 0 &&
+		counts.warnings === 0 &&
+		counts.infos === 0 &&
+		counts.hints === 0
+	);
+}
+
+/**
+ * Add `delta` into `target` in place. Pass `sign: -1` to subtract, which is how
+ * a per-file tally is removed from the running totals before being replaced.
+ */
+export function accumulateDiagnosticCounts(
+	target: DiagnosticCounts,
+	delta: DiagnosticCounts,
+	sign: 1 | -1 = 1,
+): void {
+	target.errors += delta.errors * sign;
+	target.warnings += delta.warnings * sign;
+	target.infos += delta.infos * sign;
+	target.hints += delta.hints * sign;
+}
+
 export function formatStatusBarText(
 	counts: DiagnosticCounts,
 	isRunning: boolean,

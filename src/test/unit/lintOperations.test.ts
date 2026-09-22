@@ -372,4 +372,40 @@ suite("lintOperations", () => {
 			),
 		);
 	});
+
+	test("does not wait for the missing-executable popup to be dismissed", async () => {
+		const document = createMockTextDocument();
+		const context = createMockDocumentContext({
+			uri: document.uri,
+			documentText: document.getText(),
+		});
+		const sendDiagnostics: Array<{ uri: string }> = [];
+		// The real popup carries an action button and stays unresolved until the
+		// user dismisses it. Simulate that by never resolving.
+		const connection = {
+			window: { showWarningMessage: () => new Promise<undefined>(() => {}) },
+			sendDiagnostics: (params: { uri: string }) => {
+				sendDiagnostics.push(params);
+			},
+			sendNotification: () => {},
+			console: {
+				log: () => {},
+				warn: () => {},
+				error: () => {},
+				debug: () => {},
+			},
+		} as unknown as Connection;
+
+		const result = await executeLint(context, document, "manual", {
+			connection,
+			notificationManager: new NotificationManager(connection),
+			control: { signal: new AbortController().signal, isCurrent: () => true },
+			runner: async () => {
+				throw new MissingTsqlRefineError("tsqlrefine not found");
+			},
+		});
+
+		assert.strictEqual(result.success, false);
+		assert.strictEqual(sendDiagnostics.length, 1);
+	});
 });

@@ -63,8 +63,12 @@ export class NotificationManager {
 	notifyRunFailure(error: unknown): void {
 		const message = String(error);
 		const formatted = `tsqlrefine: run failed (${message})`;
-		// Don't await - warning message may block in some environments
-		void this.connection.window.showWarningMessage(formatted);
+		// Don't await - warning message may block in some environments.
+		// The popup gets the first line only, matching notifyStderr and
+		// reportCliFailure; the console keeps the full message.
+		void this.connection.window.showWarningMessage(
+			`tsqlrefine: run failed (${firstLine(message)})`,
+		);
 		this.connection.console.warn(formatted);
 	}
 

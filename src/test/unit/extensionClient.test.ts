@@ -116,7 +116,12 @@ function createHarness() {
 			},
 		},
 		languages: {
-			getDiagnostics: () => state.diagnostics,
+			getDiagnostics: (uri?: URI) =>
+				uri
+					? (state.diagnostics.find(
+							([entryUri]) => entryUri.toString() === uri.toString(),
+						)?.[1] ?? [])
+					: state.diagnostics,
 			onDidChangeDiagnostics: subscribe("diagnostics"),
 		},
 		workspace: {
@@ -228,6 +233,49 @@ suite("Extension client integration", () => {
 		await h.call(h.events, "diagnostics");
 		assert.ok(h.statusItem.text.includes("1E 1W"));
 		assert.ok(h.statusItem.tooltip.includes("Hints: 1"));
+
+		// Only the URIs carried by the event are re-counted.
+		h.state.diagnostics = [
+			[URI.parse("untitled:test"), [{ source: "tsqlrefine", severity: 0 }]],
+			[
+				URI.parse("untitled:other"),
+				[
+					{ source: "tsqlrefine", severity: 1 },
+					{ source: "tsqlrefine", severity: 1 },
+				],
+			],
+		];
+		await h.call(h.events, "diagnostics", {
+			uris: [URI.parse("untitled:test")],
+		});
+		assert.ok(
+			h.statusItem.text.includes("1E"),
+			`expected only the changed URI to be re-counted, got: ${h.statusItem.text}`,
+		);
+		assert.ok(!h.statusItem.text.includes("W"));
+
+		await h.call(h.events, "diagnostics", {
+			uris: [URI.parse("untitled:other")],
+		});
+		assert.ok(h.statusItem.text.includes("1E 2W"));
+
+		// A URI that no longer has tsqlrefine diagnostics drops out of the totals.
+		h.state.diagnostics = [
+			[URI.parse("untitled:test"), [{ source: "other", severity: 0 }]],
+			[
+				URI.parse("untitled:other"),
+				[
+					{ source: "tsqlrefine", severity: 1 },
+					{ source: "tsqlrefine", severity: 1 },
+				],
+			],
+		];
+		await h.call(h.events, "diagnostics", {
+			uris: [URI.parse("untitled:test")],
+		});
+		assert.ok(h.statusItem.text.includes("2W"));
+		assert.ok(!h.statusItem.text.includes("E"));
+
 		await h.call(h.notifications, "tsqlrefine/operationState", {
 			state: "started",
 		});

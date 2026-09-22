@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { normalizeConfigPath, normalizeForCompare } from "../shared/normalize";
 import { CONFIG_CACHE_MAX_SIZE, CONFIG_CACHE_TTL_MS } from "./constants";
-import { normalizeForCompare } from "../shared/normalize";
 
 const defaultConfigFileNames = ["tsqlrefine.json"];
 
@@ -45,9 +45,7 @@ export type ResolveConfigPathOptions = {
 export async function resolveConfigPath(
 	options: ResolveConfigPathOptions,
 ): Promise<string | undefined> {
-	const configured = normalizeConfiguredConfigPath(
-		options.configuredConfigPath,
-	);
+	const configured = normalizeConfigPath(options.configuredConfigPath);
 	const baseDir = resolveBaseDir(options.filePath, options.workspaceRoot);
 
 	if (configured) {
@@ -64,19 +62,6 @@ export async function resolveConfigPath(
 			stopDir: baseDir,
 		})) ?? undefined
 	);
-}
-
-function normalizeConfiguredConfigPath(
-	value: string | undefined,
-): string | null {
-	if (!value) {
-		return null;
-	}
-	const trimmed = value.trim();
-	if (!trimmed) {
-		return null;
-	}
-	return trimmed;
 }
 
 function resolveBaseDir(

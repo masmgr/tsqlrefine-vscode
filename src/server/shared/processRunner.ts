@@ -36,6 +36,17 @@ function getCommandCacheKey(configuredPath: string | undefined): string {
 }
 
 /**
+ * Drop every cached availability result.
+ *
+ * A "not available" answer is cached for COMMAND_CACHE_TTL_MS, so without this
+ * a user who installs tsqlrefine and updates `tsqlrefine.path` would keep
+ * getting failures until the TTL expires.
+ */
+export function clearCommandAvailabilityCache(): void {
+	commandAvailabilityCache.clear();
+}
+
+/**
  * Assert that a file path exists and is a file.
  */
 export async function assertPathExists(filePath: string): Promise<void> {

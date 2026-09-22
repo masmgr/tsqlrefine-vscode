@@ -181,10 +181,10 @@ async function handleLintError(
 	);
 
 	if (error instanceof MissingTsqlRefineError) {
-		await notificationManager.maybeNotifyMissingTsqlRefine(message);
-		if (!deps.control.isCurrent()) {
-			return { diagnosticsCount: -1, success: false };
-		}
+		// Don't await - the warning carries an action button and stays unresolved
+		// until the user dismisses it, which would hold this operation (and its
+		// scheduler slot) open and leave the status bar spinner running.
+		void notificationManager.maybeNotifyMissingTsqlRefine(message);
 		notificationManager.warn(`tsqlrefine: ${message}`);
 		connection.sendDiagnostics({
 			uri,

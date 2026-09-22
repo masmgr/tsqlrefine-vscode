@@ -5,6 +5,9 @@ import {
 } from "../config/constants";
 import { defaultSettings, type TsqlRefineSettings } from "../config/settings";
 
+/** Upper bound on scoped-configuration re-fetches when settings keep changing. */
+const MAX_SCOPED_CONFIG_ATTEMPTS = 3;
+
 type DocumentSettingsCacheEntry = {
 	settings: TsqlRefineSettings;
 	cachedAtMs: number;
@@ -72,14 +75,20 @@ export class SettingsManager {
 			return cached.settings;
 		}
 
-		const generation = this.generation;
-		const scopedConfig = ((await this.connection.workspace.getConfiguration({
-			scopeUri: uri,
-			section: "tsqlrefine",
-		})) ?? {}) as Partial<TsqlRefineSettings>;
-		if (generation !== this.generation) {
-			return this.getSettingsForDocument(uri);
+		// Re-fetch when the configuration changed mid-flight, but bound the
+		// attempts so a burst of configuration changes cannot spin here forever.
+		let scopedConfig: Partial<TsqlRefineSettings> = {};
+		for (let attempt = 0; attempt < MAX_SCOPED_CONFIG_ATTEMPTS; attempt++) {
+			const generation = this.generation;
+			scopedConfig = ((await this.connection.workspace.getConfiguration({
+				scopeUri: uri,
+				section: "tsqlrefine",
+			})) ?? {}) as Partial<TsqlRefineSettings>;
+			if (generation === this.generation) {
+				break;
+			}
 		}
+
 		const settings = this.normalizeSettings({
 			...defaultSettings,
 			...this.settings,
