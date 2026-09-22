@@ -10,7 +10,7 @@ This document provides guidance for developers working on the tsqlrefine VS Code
 
 ## Prerequisites
 
-- **Node.js**: v24 or later
+- **Node.js**: v22 or later (CI uses the version pinned in `package.json` under `volta.node`)
 - **npm**: v11 or later
 - **VS Code**: v1.136.0 or later
 - **TypeScript**: Managed via npm
@@ -25,7 +25,7 @@ cd tsqlrefine-vscode
 
 2. Install dependencies:
 ```bash
-npm install
+npm ci
 ```
 
 3. Verify setup:
@@ -47,7 +47,7 @@ npm run typecheck         # Type-check without emitting
 ```bash
 npm run lint              # Lint with Biome
 npm run format            # Format with Biome
-npm run verify            # Run all checks (test + typecheck + lint + format)
+npm run verify            # Typecheck, lint, format check, unit tests, production build
 ```
 
 ### Testing
@@ -56,10 +56,21 @@ npm test                    # Run unit tests
 npm run test:unit          # Run unit tests with Mocha
 npm run test:unit:coverage # Run unit tests with c8 coverage reporting
 npm run test:coverage      # Alias for test:unit:coverage
-npm run test:e2e           # Run E2E tests
+npm run test:e2e           # Build, compile tests, and run E2E tests
+npm run test:e2e:run       # Run E2E against an already-built extension and compiled tests
 ```
 
-**Note**: The test scripts run both `npm run build` (to bundle extension code to `dist/`) and `npm run compile` (to compile test files to `out/`). This is necessary because VS Code loads the extension from `dist/extension.js` while the test runner executes tests from `out/test/**/*.test.js`.
+Unit tests only compile TypeScript using `npm run compile:test`; they do not need VS Code or an extension bundle. E2E tests also need the bundle in `dist/`, since VS Code loads `dist/extension.js` while the test runner executes `out/test/e2e/**/*.test.js`. CI builds the production bundle once and uses `test:e2e:run` to avoid rebuilding it. To remove stale compiled tests after deleting or renaming a test, run `npm run clean:test` before compiling again.
+
+E2E tests require the .NET 8 SDK and the TSQLRefine CLI. CI pins the CLI version in `.github/workflows/ci.yml`; install the same version locally with `dotnet tool install -g TSQLRefine --version 1.1.0`. The default VS Code version is `stable`. Set `VSCODE_TEST_VERSION=minimum` to test the minimum version from `engines.vscode`, or set an explicit version number. For example, in PowerShell:
+
+```powershell
+$env:VSCODE_TEST_VERSION = 'minimum'
+npm run test:e2e
+Remove-Item Env:VSCODE_TEST_VERSION
+```
+
+CI fails if any E2E test is skipped, so a missing CLI cannot silently reduce coverage. `npm run verify` runs the fast local checks and a production build; E2E and coverage checks remain explicit commands.
 
 **Code Coverage**: Unit tests are run with c8 coverage. Targets are 85% lines, statements, and functions, and 80% branches. Test compilation includes all production sources, and c8 counts all compiled production files, including the extension entry point and client/server modules. Use `npm run test:unit:coverage` to generate reports in `coverage/`.
 
@@ -68,6 +79,8 @@ npm run test:e2e           # Run E2E tests
 npm run package           # Create VSIX package
 npm run vscode:prepublish # Production build with optimizations
 ```
+
+Packaging skips dependency discovery because esbuild bundles the runtime dependencies into the client and server. `.vscodeignore` explicitly includes those two bundles and the extension metadata, so stale source maps or other files in `dist/` cannot enter the VSIX.
 
 ## Project Structure
 
@@ -404,26 +417,32 @@ This project uses strict TypeScript settings including:
 
 ### GitHub Actions Workflows
 
-The project includes two CI/CD workflows:
+The project includes three CI/CD workflows:
 
 #### 1. CI Workflow ([.github/workflows/ci.yml](.github/workflows/ci.yml))
 
-Runs on every push and pull request:
-- Type checking and linting
-- Unit tests with coverage reporting (Linux only for performance)
-- E2E tests (cross-platform: Ubuntu, Windows, macOS)
-- Coverage artifact upload (Linux only)
-- Builds VSIX package on Linux
-- Uploads VSIX as artifact
+Runs on pushes and pull requests targeting `main` or `develop`, manual dispatch, and calls from the release workflow:
+- Type checking, linting, and format checking once on Linux
+- Unit tests on Ubuntu, Windows, and macOS, with coverage thresholds on Linux
+- E2E tests against the production bundle on all three operating systems
+- An additional Linux E2E run against the minimum supported VS Code version
+- VSIX packaging on Linux, reusing its production build for E2E tests
+- Coverage reports retained even when tests fail, and VS Code logs uploaded on failure
+- VSIX artifact upload after successful Linux tests; release publishing waits for all platforms
+
+Jobs use the Node.js version from `package.json`, npm's download cache, and `npm ci`. Superseded CI runs are cancelled, each platform has a 20-minute timeout, and a failure on one platform does not cancel the others. Artifacts are retained for seven days.
 
 #### 2. Release Workflow ([.github/workflows/release.yml](.github/workflows/release.yml))
 
 Runs when a release is published on GitHub:
-- Type checking and linting
-- Production build (`--production` flag)
-- Creates VSIX package
-- Publishes to VS Code Marketplace
-- Uploads VSIX to GitHub release assets
+- Calls the same CI workflow, including coverage and cross-platform E2E tests
+- Verifies the release tag is `v` followed by the version in `package.json`
+- Downloads the VSIX artifact from validation and publishes it without rebuilding
+- Uploads the same VSIX to GitHub release assets
+
+#### 3. Dependency Audit ([.github/workflows/audit.yml](.github/workflows/audit.yml))
+
+Runs weekly and on manual dispatch. Audits production dependencies and fails for vulnerabilities rated moderate or higher.
 
 ### Publishing to VS Code Marketplace
 
@@ -489,10 +508,7 @@ If needed, you can publish manually from your local machine:
 # Install vsce globally
 npm install -g @vscode/vsce
 
-# Build for production
-npm run vscode:prepublish
-
-# Create VSIX package
+# Create VSIX package (also builds for production)
 npm run package
 
 # Publish to Marketplace

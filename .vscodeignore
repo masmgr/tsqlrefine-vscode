@@ -1,6 +1,6 @@
 **
-!dist/**
-dist/**/*.map
+!dist/extension.js
+!dist/server.js
 !package.json
 !icon.png
 !LICENSE

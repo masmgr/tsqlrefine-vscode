@@ -9,22 +9,42 @@ on:
     branches:
       - main
       - develop
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' }}
+
+env:
+  HUSKY: '0'
+  TSQLREFINE_VERSION: '1.1.0'
 
 jobs:
   ci:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version-file: package.json
           cache: npm
       - run: npm ci
+      # These checks are platform-independent; run them once.
       - run: npm run typecheck
+        if: runner.os == 'Linux'
       - run: npm run lint
+        if: runner.os == 'Linux'
+      - run: npm run format:check
+        if: runner.os == 'Linux'
 
       # Run unit tests with coverage (Linux only for performance)
       - run: npm run test:unit:coverage
@@ -32,10 +52,11 @@ jobs:
 
       # Upload coverage report
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: runner.os == 'Linux'
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
         with:
           name: coverage-report
           path: coverage/
+          retention-days: 7
 
       # Run unit tests without coverage on Windows/Mac
       - run: npm run test:unit
@@ -55,22 +76,39 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - name: Install tsqlrefine CLI
-        run: dotnet tool install -g TSQLRefine
+        run: dotnet tool install -g TSQLRefine --version ${{ env.TSQLREFINE_VERSION }}
       - name: Verify tsqlrefine installation
         run: tsqlrefine --version
 
       # Run E2E tests on Linux with xvfb
       - name: Run E2E tests (Linux)
-        run: xvfb-run -a npx vscode-test
+        run: xvfb-run -a npm run test:e2e:run
         if: runner.os == 'Linux'
+
+      - name: Run E2E tests on minimum supported VS Code (Linux)
+        run: xvfb-run -a npm run test:e2e:run
+        if: runner.os == 'Linux'
+        env:
+          VSCODE_TEST_VERSION: minimum
 
       # Run E2E tests on Windows/macOS
       - name: Run E2E tests (Windows/macOS)
-        run: npx vscode-test
+        run: npm run test:e2e:run
         if: runner.os != 'Linux'
+
+      - name: Upload E2E logs on failure
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: e2e-logs-${{ matrix.os }}
+          path: .vscode-test/**/logs/**
+          include-hidden-files: true
+          retention-days: 7
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: runner.os == 'Linux'
         with:
           name: vsix-package
           path: '*.vsix'
+          if-no-files-found: error
+          retention-days: 7
