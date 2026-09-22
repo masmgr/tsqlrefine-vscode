@@ -474,6 +474,76 @@ suite("scheduler", () => {
 			assert.strictEqual(file2Calls[0]?.pending.version, 3);
 		});
 
+		test("clear() removes a uri that is waiting in the queue", async () => {
+			const versions = new Map([
+				["blocker.sql", 1],
+				["queued.sql", 1],
+			]);
+			const { runLint, calls } = createMockRunLint();
+			const blocker = deferredNumber();
+
+			const scheduler = new LintScheduler({
+				maxConcurrentRuns: 1,
+				getDocumentVersion: createMockGetVersion(versions),
+				runLint: async (uri, pending) => {
+					if (uri === "blocker.sql") {
+						await blocker.promise;
+					}
+					return runLint(uri, pending);
+				},
+			});
+
+			scheduler.requestLint("blocker.sql", "save", 1);
+			await advance(1);
+			// The only slot is taken, so this one waits in the queue.
+			scheduler.requestLint("queued.sql", "save", 1);
+
+			scheduler.clear("queued.sql");
+			blocker.resolve(0);
+			await advance(50);
+
+			assert.deepStrictEqual(
+				calls.map((call) => call.uri),
+				["blocker.sql"],
+			);
+		});
+
+		test("skips an empty uri left in the queue without leaking a slot", async () => {
+			const versions = new Map([
+				["blocker.sql", 1],
+				["", 1],
+				["after.sql", 1],
+			]);
+			const { runLint, calls } = createMockRunLint();
+			const blocker = deferredNumber();
+
+			const scheduler = new LintScheduler({
+				maxConcurrentRuns: 1,
+				getDocumentVersion: createMockGetVersion(versions),
+				runLint: async (uri, pending) => {
+					if (uri === "blocker.sql") {
+						await blocker.promise;
+					}
+					return runLint(uri, pending);
+				},
+			});
+
+			scheduler.requestLint("blocker.sql", "save", 1);
+			await advance(1);
+			scheduler.requestLint("", "save", 1);
+			scheduler.requestLint("after.sql", "save", 1);
+
+			blocker.resolve(0);
+			await advance(50);
+
+			assert.ok(
+				!calls.some((call) => call.uri === ""),
+				"an empty uri must never be linted",
+			);
+			// after.sql running proves the slot taken for the empty uri was released.
+			assert.ok(calls.some((call) => call.uri === "after.sql"));
+		});
+
 		test("handles runLint throwing errors gracefully", async () => {
 			const versions = new Map([["file.sql", 1]]);
 			const calls: string[] = [];

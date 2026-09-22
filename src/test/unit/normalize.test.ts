@@ -2,9 +2,9 @@ import * as assert from "node:assert";
 import * as path from "node:path";
 import * as fc from "fast-check";
 import {
-	normalizeForCompare,
-	normalizeExecutablePath,
 	normalizeConfigPath,
+	normalizeExecutablePath,
+	normalizeForCompare,
 } from "../../server/shared/normalize";
 
 suite("normalize", () => {

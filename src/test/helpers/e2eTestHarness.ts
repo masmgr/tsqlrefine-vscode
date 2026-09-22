@@ -246,7 +246,7 @@ export async function activateExtension(): Promise<void> {
 
 	const api = (await extension.activate()) as { clientReady?: Promise<void> };
 	const clientReady = api.clientReady;
-	if (clientReady) {
+	if (clientReady !== undefined) {
 		await clientReady;
 	}
 }

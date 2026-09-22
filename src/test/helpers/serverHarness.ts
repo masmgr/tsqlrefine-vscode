@@ -9,40 +9,15 @@ import {
 	type TsqlRefineSettings,
 } from "../../server/config/settings";
 import { registerServer, type ServerRunners } from "../../server/server";
-import type { ProcessRunResult } from "../../server/shared/types";
 
-export function deferred<T>() {
-	let resolve!: (value: T) => void;
-	let reject!: (reason: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
-
-export function cliResult(stdout: string, exitCode = 0): ProcessRunResult {
-	return { stdout, stderr: "", exitCode, timedOut: false, cancelled: false };
-}
-
-export const diagnosticJson = JSON.stringify({
-	files: [
-		{
-			filePath: "<stdin>",
-			diagnostics: [
-				{
-					message: "Parse error near FROM",
-					code: "parse-error",
-					severity: 1,
-					range: {
-						start: { line: 0, character: 7 },
-						end: { line: 0, character: 11 },
-					},
-				},
-			],
-		},
-	],
-});
+// Re-exported so existing imports of these from serverHarness keep working.
+export {
+	cliCancelled,
+	cliResult,
+	cliTimedOut,
+	deferred,
+	diagnosticJson,
+} from "./processResults";
 
 type Handler = (params: never) => unknown;
 
@@ -148,10 +123,31 @@ export class ServerHarness {
 		});
 	}
 
+	async save(version = 1): Promise<void> {
+		await this.invoke("onDidSaveTextDocument", {
+			textDocument: { uri: this.uri, version },
+		});
+	}
+
 	async close(): Promise<void> {
 		await this.invoke("onDidCloseTextDocument", {
 			textDocument: { uri: this.uri },
 		});
+	}
+
+	async changeConfiguration(): Promise<void> {
+		await this.invoke("onDidChangeConfiguration", { settings: {} });
+	}
+
+	/**
+	 * Drain pending microtasks. Detached server work (`void` promises, scheduler
+	 * callbacks) settles across several `await` boundaries, and unlike
+	 * `setImmediate` this keeps working under installed fake timers.
+	 */
+	async settle(iterations = 5): Promise<void> {
+		for (let i = 0; i < iterations; i++) {
+			await Promise.resolve();
+		}
 	}
 
 	async request(operation: "lint" | "format" | "fix", uri = this.uri) {

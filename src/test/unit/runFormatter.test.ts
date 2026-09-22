@@ -2,8 +2,8 @@ import * as assert from "node:assert";
 import type { TsqlRefineSettings } from "../../server/config/settings";
 import {
 	buildArgs,
-	runFormatter,
 	type RunFormatterOptions,
+	runFormatter,
 } from "../../server/format/runFormatter";
 
 /**

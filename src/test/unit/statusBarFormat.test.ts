@@ -6,7 +6,7 @@ import {
 
 const zeroCounts = { errors: 0, warnings: 0, infos: 0, hints: 0 };
 
-suite("statusBar", () => {
+suite("statusBarFormat", () => {
 	suite("formatStatusBarText", () => {
 		test("shows check icon when no issues", () => {
 			const text = formatStatusBarText(zeroCounts, false, false);

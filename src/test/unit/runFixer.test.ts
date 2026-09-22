@@ -2,8 +2,8 @@ import * as assert from "node:assert";
 import type { TsqlRefineSettings } from "../../server/config/settings";
 import {
 	buildArgs,
-	runFixer,
 	type RunFixerOptions,
+	runFixer,
 } from "../../server/fix/runFixer";
 
 /**

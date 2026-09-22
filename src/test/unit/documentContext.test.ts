@@ -1,12 +1,12 @@
 import * as assert from "node:assert";
 import * as path from "node:path";
-import { URI } from "vscode-uri";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { URI } from "vscode-uri";
+import type { TsqlRefineSettings } from "../../server/config/settings";
 import {
 	createDocumentContext,
 	type DocumentContextOptions,
 } from "../../server/shared/documentContext";
-import type { TsqlRefineSettings } from "../../server/config/settings";
 import { normalizeForCompare } from "../../server/shared/normalize";
 
 /**
@@ -259,5 +259,26 @@ suite("createDocumentContext", () => {
 		const context = await createDocumentContext(options);
 
 		assert.ok(context.effectiveSettings);
+	});
+
+	test("matches a workspace folder that already ends with a separator", async () => {
+		// A drive/filesystem root comes through with a trailing separator, so the
+		// prefix must not gain a second one.
+		const root = path.parse(path.resolve("workspace")).root;
+		const filePath = path.join(root, "query.sql");
+		const uri = URI.file(filePath).toString();
+		const document = TextDocument.create(uri, "sql", 1, "SELECT 8;");
+
+		const context = await createDocumentContext({
+			document,
+			documentSettings: createTestSettings(),
+			workspaceFolders: [root],
+			isSavedFn: () => true,
+		});
+
+		assert.strictEqual(
+			normalizeForCompare(context.workspaceRoot ?? ""),
+			normalizeForCompare(root),
+		);
 	});
 });

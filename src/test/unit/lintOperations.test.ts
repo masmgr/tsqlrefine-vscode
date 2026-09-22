@@ -1,336 +1,80 @@
 import * as assert from "node:assert";
-import type { Connection } from "vscode-languageserver/node";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
-import type { TextDocument } from "vscode-languageserver-textdocument";
-import { TextDocument as TextDocumentImpl } from "vscode-languageserver-textdocument";
-import type { TsqlRefineSettings } from "../../server/config/settings";
 import { executeLint } from "../../server/lint/lintOperations";
-import type { DocumentContext } from "../../server/shared/documentContext";
+import type { LintReason } from "../../server/lint/scheduler";
 import { MissingTsqlRefineError } from "../../server/shared/errors";
-import { DocumentStateManager } from "../../server/state/documentStateManager";
-import { NotificationManager } from "../../server/state/notificationManager";
+import type { ProcessRunResult } from "../../server/shared/types";
+import {
+	createOperationDeps,
+	createTestContext,
+	createTestDocument,
+	createTestSettings,
+} from "../helpers/operationHarness";
+import { cliResult } from "../helpers/processResults";
 
-/**
- * Creates default test settings.
- */
-function createTestSettings(
-	overrides: Partial<TsqlRefineSettings> = {},
-): TsqlRefineSettings {
+type RunnerCall = {
+	cwd: string;
+	settings: unknown;
+	signal: AbortSignal;
+	stdin: string;
+};
+
+function setup(
+	options: {
+		text?: string;
+		version?: number;
+		settings?: Parameters<typeof createTestSettings>[0];
+		isCurrent?: () => boolean;
+		runner?: (call: RunnerCall) => Promise<ProcessRunResult>;
+	} = {},
+) {
+	const text = options.text ?? "SELECT 1;";
+	const deps = createOperationDeps(
+		options.isCurrent ? { isCurrent: options.isCurrent } : {},
+	);
+	const document = createTestDocument({
+		text,
+		...(options.version === undefined ? {} : { version: options.version }),
+	});
+	const context = createTestContext({
+		uri: document.uri,
+		documentText: text,
+		effectiveSettings: createTestSettings(options.settings),
+	});
+	const calls: RunnerCall[] = [];
+	const respond = options.runner ?? (async () => cliResult("", 0));
+	const runner = async (call: RunnerCall): Promise<ProcessRunResult> => {
+		calls.push(call);
+		return await respond(call);
+	};
+
 	return {
-		runOnSave: true,
-		runOnType: false,
-		runOnOpen: true,
-		debounceMs: 500,
-		timeoutMs: 10000,
-		maxFileSizeKb: 0,
-		minSeverity: "info",
-		enableLint: true,
-		enableFormat: true,
-		enableFix: true,
-		allowPlugins: false,
-		...overrides,
+		deps,
+		context,
+		document,
+		calls,
+		run: (reason: LintReason = "manual") =>
+			executeLint(context, document, reason, {
+				connection: deps.connection,
+				notificationManager: deps.notificationManager,
+				control: deps.control,
+				runner,
+			}),
 	};
 }
 
-/**
- * Creates a mock DocumentContext for testing.
- */
-function createMockDocumentContext(
-	overrides: Partial<DocumentContext> = {},
-): DocumentContext {
-	return {
-		uri: "file:///test.sql",
-		filePath: "/test.sql",
-		workspaceRoot: "/workspace",
-		cwd: "/workspace",
-		effectiveSettings: createTestSettings(),
-		effectiveConfigPath: undefined,
-		documentText: "SELECT 1;",
-		isSavedFile: true,
-		...overrides,
-	};
-}
+suite("executeLint", () => {
+	test("returns early without invoking the runner when already stale", async () => {
+		const harness = setup({ isCurrent: () => false });
+		const result = await harness.run();
 
-/**
- * Creates a mock TextDocument for testing.
- */
-function createMockTextDocument(
-	uri = "file:///test.sql",
-	text = "SELECT 1;",
-): TextDocument {
-	return TextDocumentImpl.create(uri, "sql", 1, text);
-}
-
-/**
- * Interface for tracking mock connection calls.
- */
-interface MockConnectionCalls {
-	showWarningMessage: string[];
-	sendDiagnostics: Array<{
-		uri: string;
-		diagnostics: Array<{ message: string; severity?: DiagnosticSeverity }>;
-	}>;
-}
-
-/**
- * Creates a mock Connection for testing.
- */
-function createMockConnection(): {
-	connection: Connection;
-	calls: MockConnectionCalls;
-} {
-	const calls: MockConnectionCalls = {
-		showWarningMessage: [],
-		sendDiagnostics: [],
-	};
-
-	const connection = {
-		window: {
-			showWarningMessage: async (message: string) => {
-				calls.showWarningMessage.push(message);
-				return undefined;
-			},
-		},
-		sendDiagnostics: (params: {
-			uri: string;
-			diagnostics: Array<{ message: string; severity?: DiagnosticSeverity }>;
-		}) => {
-			calls.sendDiagnostics.push(params);
-		},
-		console: {
-			log: () => {},
-			warn: () => {},
-			error: () => {},
-		},
-	} as unknown as Connection;
-
-	return { connection, calls };
-}
-
-/**
- * Interface for tracking mock notification manager calls.
- */
-interface MockNotificationManagerCalls {
-	log: string[];
-	warn: string[];
-	notifyStderr: string[];
-	notifyRunFailure: unknown[];
-	maybeNotifyMissingTsqlRefine: string[];
-}
-
-/**
- * Creates a mock NotificationManager for testing.
- */
-function createMockNotificationManager(): {
-	notificationManager: {
-		log: (message: string) => void;
-		warn: (message: string) => void;
-		notifyStderr: (stderr: string) => void;
-		notifyRunFailure: (error: unknown) => void;
-		maybeNotifyMissingTsqlRefine: (message: string) => Promise<void>;
-	};
-	calls: MockNotificationManagerCalls;
-} {
-	const calls: MockNotificationManagerCalls = {
-		log: [],
-		warn: [],
-		notifyStderr: [],
-		notifyRunFailure: [],
-		maybeNotifyMissingTsqlRefine: [],
-	};
-
-	const notificationManager = {
-		log: (message: string) => {
-			calls.log.push(message);
-		},
-		warn: (message: string) => {
-			calls.warn.push(message);
-		},
-		notifyStderr: (stderr: string) => {
-			calls.notifyStderr.push(stderr);
-		},
-		notifyRunFailure: (error: unknown) => {
-			calls.notifyRunFailure.push(error);
-		},
-		maybeNotifyMissingTsqlRefine: async (message: string) => {
-			calls.maybeNotifyMissingTsqlRefine.push(message);
-		},
-	};
-
-	return { notificationManager, calls };
-}
-
-suite("lintOperations", () => {
-	suite("DocumentStateManager integration", () => {
-		test("setInFlight and clearInFlight work correctly", () => {
-			const stateManager = new DocumentStateManager();
-			const uri = "file:///test.sql";
-			const controller = new AbortController();
-
-			stateManager.setInFlight(uri, controller);
-			assert.strictEqual(stateManager.isCurrentInFlight(uri, controller), true);
-
-			stateManager.clearInFlight(uri);
-			assert.strictEqual(
-				stateManager.isCurrentInFlight(uri, controller),
-				false,
-			);
-		});
-
-		test("cancelInFlight aborts the controller", () => {
-			const stateManager = new DocumentStateManager();
-			const uri = "file:///test.sql";
-			const controller = new AbortController();
-
-			stateManager.setInFlight(uri, controller);
-			assert.strictEqual(controller.signal.aborted, false);
-
-			stateManager.cancelInFlight(uri);
-			assert.strictEqual(controller.signal.aborted, true);
-		});
-
-		test("isCurrentInFlight returns false for different controller", () => {
-			const stateManager = new DocumentStateManager();
-			const uri = "file:///test.sql";
-			const controller1 = new AbortController();
-			const controller2 = new AbortController();
-
-			stateManager.setInFlight(uri, controller1);
-			assert.strictEqual(
-				stateManager.isCurrentInFlight(uri, controller2),
-				false,
-			);
-		});
-	});
-
-	suite("Mock connection behavior", () => {
-		test("mock connection tracks showWarningMessage calls", async () => {
-			const { connection, calls } = createMockConnection();
-
-			await connection.window.showWarningMessage("Test warning");
-
-			assert.strictEqual(calls.showWarningMessage.length, 1);
-			assert.strictEqual(calls.showWarningMessage[0], "Test warning");
-		});
-
-		test("mock connection tracks sendDiagnostics calls", () => {
-			const { connection, calls } = createMockConnection();
-
-			connection.sendDiagnostics({
-				uri: "file:///test.sql",
-				diagnostics: [
-					{
-						message: "Test diagnostic",
-						severity: DiagnosticSeverity.Error,
-						range: {
-							start: { line: 0, character: 0 },
-							end: { line: 0, character: 1 },
-						},
-					},
-				],
-			});
-
-			assert.strictEqual(calls.sendDiagnostics.length, 1);
-			assert.strictEqual(calls.sendDiagnostics[0]?.uri, "file:///test.sql");
-			assert.strictEqual(calls.sendDiagnostics[0]?.diagnostics.length, 1);
-		});
-	});
-
-	suite("Mock notification manager behavior", () => {
-		test("tracks log and warn calls", () => {
-			const { notificationManager, calls } = createMockNotificationManager();
-
-			notificationManager.log("Log message");
-			notificationManager.warn("Warn message");
-			notificationManager.notifyStderr("stderr output");
-
-			assert.strictEqual(calls.log.length, 1);
-			assert.strictEqual(calls.log[0], "Log message");
-			assert.strictEqual(calls.warn.length, 1);
-			assert.strictEqual(calls.warn[0], "Warn message");
-			assert.strictEqual(calls.notifyStderr.length, 1);
-			assert.strictEqual(calls.notifyStderr[0], "stderr output");
-		});
-	});
-
-	suite("File size limiting", () => {
-		test("calculates document size correctly", () => {
-			const text = "SELECT 1;\n".repeat(100);
-			const document = createMockTextDocument("file:///test.sql", text);
-
-			const sizeBytes = Buffer.byteLength(document.getText(), "utf8");
-			const sizeKb = Math.ceil(sizeBytes / 1024);
-
-			assert.ok(sizeBytes > 0);
-			assert.ok(sizeKb > 0);
-		});
-
-		test("detects when file exceeds size limit", () => {
-			const largeText = "SELECT 1;\n".repeat(10000); // ~90KB
-			const sizeBytes = Buffer.byteLength(largeText, "utf8");
-			const sizeKb = Math.ceil(sizeBytes / 1024);
-			const maxFileSizeKb = 10;
-
-			assert.ok(sizeKb > maxFileSizeKb, "Document should exceed limit");
-		});
-	});
-
-	suite("Mock document context", () => {
-		test("creates valid context with defaults", () => {
-			const context = createMockDocumentContext();
-
-			assert.strictEqual(context.uri, "file:///test.sql");
-			assert.strictEqual(context.filePath, "/test.sql");
-			assert.strictEqual(context.cwd, "/workspace");
-			assert.strictEqual(context.documentText, "SELECT 1;");
-			assert.strictEqual(context.isSavedFile, true);
-		});
-
-		test("creates valid context with overrides", () => {
-			const context = createMockDocumentContext({
-				uri: "file:///custom.sql",
-				filePath: "/custom/custom.sql",
-				cwd: "/custom",
-				documentText: "SELECT 2;",
-				isSavedFile: false,
-			});
-
-			assert.strictEqual(context.uri, "file:///custom.sql");
-			assert.strictEqual(context.filePath, "/custom/custom.sql");
-			assert.strictEqual(context.cwd, "/custom");
-			assert.strictEqual(context.documentText, "SELECT 2;");
-			assert.strictEqual(context.isSavedFile, false);
-		});
+		assert.deepStrictEqual(result, { diagnosticsCount: -1, success: false });
+		assert.strictEqual(harness.calls.length, 0);
+		assert.strictEqual(harness.deps.diagnostics.length, 0);
 	});
 
 	test("treats a null exit code as failure without clearing diagnostics", async () => {
-		const diagnosticsCalls: unknown[] = [];
-		const connection = {
-			window: { showWarningMessage: async () => undefined },
-			console: {
-				debug: () => {},
-				log: () => {},
-				warn: () => {},
-				error: () => {},
-			},
-			sendDiagnostics: (params: unknown) => diagnosticsCalls.push(params),
-		} as unknown as Connection;
-		const document = TextDocumentImpl.create(
-			"file:///test.sql",
-			"sql",
-			1,
-			"SELECT 1;",
-		);
-		const context = createMockDocumentContext({
-			uri: document.uri,
-			documentText: document.getText(),
-			effectiveSettings: createTestSettings(),
-		});
-
-		const result = await executeLint(context, document, "manual", {
-			connection,
-			notificationManager: new NotificationManager(connection),
-			control: { signal: new AbortController().signal, isCurrent: () => true },
+		const harness = setup({
 			runner: async () => ({
 				stdout: "{truncated",
 				stderr: "output limit exceeded",
@@ -339,73 +83,159 @@ suite("lintOperations", () => {
 				cancelled: false,
 			}),
 		});
+		const result = await harness.run();
 
 		assert.strictEqual(result.success, false);
 		assert.strictEqual(result.diagnosticsCount, -1);
-		assert.strictEqual(diagnosticsCalls.length, 0);
+		assert.strictEqual(harness.deps.diagnostics.length, 0);
 	});
 
 	test("reports a typed missing executable error as a diagnostic", async () => {
-		const { connection, calls } = createMockConnection();
-		const document = createMockTextDocument();
-		const context = createMockDocumentContext({
-			uri: document.uri,
-			documentText: document.getText(),
-		});
-
-		const result = await executeLint(context, document, "manual", {
-			connection,
-			notificationManager: new NotificationManager(connection),
-			control: { signal: new AbortController().signal, isCurrent: () => true },
+		const harness = setup({
 			runner: async () => {
 				throw new MissingTsqlRefineError(
 					"tsqlrefine executable is unavailable",
 				);
 			},
 		});
+		const result = await harness.run();
 
 		assert.strictEqual(result.success, false);
-		assert.strictEqual(calls.sendDiagnostics.length, 1);
+		assert.strictEqual(harness.deps.diagnostics.length, 1);
+		const diagnostic = harness.deps.diagnostics[0]?.diagnostics[0];
+		// LSP 3.18 widened `message` to string | MarkupContent; the server only
+		// ever produces plain strings.
+		const message = diagnostic?.message;
 		assert.ok(
-			calls.sendDiagnostics[0]?.diagnostics[0]?.message.includes(
-				"tsqlrefine executable is unavailable",
-			),
+			typeof message === "string" &&
+				message.includes("tsqlrefine executable is unavailable"),
+			`unexpected diagnostic message: ${JSON.stringify(message)}`,
 		);
+		assert.strictEqual(diagnostic?.code, "tsqlrefine-not-found");
+		assert.strictEqual(diagnostic?.severity, DiagnosticSeverity.Error);
 	});
 
 	test("does not wait for the missing-executable popup to be dismissed", async () => {
-		const document = createMockTextDocument();
-		const context = createMockDocumentContext({
-			uri: document.uri,
-			documentText: document.getText(),
-		});
-		const sendDiagnostics: Array<{ uri: string }> = [];
-		// The real popup carries an action button and stays unresolved until the
-		// user dismisses it. Simulate that by never resolving.
-		const connection = {
-			window: { showWarningMessage: () => new Promise<undefined>(() => {}) },
-			sendDiagnostics: (params: { uri: string }) => {
-				sendDiagnostics.push(params);
-			},
-			sendNotification: () => {},
-			console: {
-				log: () => {},
-				warn: () => {},
-				error: () => {},
-				debug: () => {},
-			},
-		} as unknown as Connection;
-
-		const result = await executeLint(context, document, "manual", {
-			connection,
-			notificationManager: new NotificationManager(connection),
-			control: { signal: new AbortController().signal, isCurrent: () => true },
+		const harness = setup({
 			runner: async () => {
 				throw new MissingTsqlRefineError("tsqlrefine not found");
 			},
 		});
+		// The real popup carries an action button and stays unresolved until the
+		// user dismisses it; awaiting it would hold the scheduler slot open.
+		harness.deps.setWarningResponse(() => new Promise(() => {}));
+
+		const result = await harness.run();
 
 		assert.strictEqual(result.success, false);
-		assert.strictEqual(sendDiagnostics.length, 1);
+		assert.strictEqual(harness.deps.diagnostics.length, 1);
+	});
+
+	test("routes a generic runner failure through notifyRunFailure", async () => {
+		const harness = setup({
+			runner: async () => {
+				throw new TypeError("nope");
+			},
+		});
+		const result = await harness.run();
+
+		assert.deepStrictEqual(result, { diagnosticsCount: -1, success: false });
+		// A non-typed failure clears the document's diagnostics rather than
+		// leaving stale ones behind.
+		assert.strictEqual(harness.deps.diagnostics.length, 1);
+		assert.deepStrictEqual(harness.deps.diagnostics[0]?.diagnostics, []);
+		assert.ok(
+			harness.deps.console.warn.some((message) =>
+				message.includes("run failed"),
+			),
+			`unexpected console.warn: ${JSON.stringify(harness.deps.console.warn)}`,
+		);
+	});
+
+	test("reports a runner rejection that is not an Error", async () => {
+		const harness = setup({
+			// A CLI wrapper can reject with a bare value rather than an Error.
+			runner: () => Promise.reject("plain string failure"),
+		});
+		const result = await harness.run();
+
+		assert.deepStrictEqual(result, { diagnosticsCount: -1, success: false });
+		assert.ok(
+			harness.deps.console.warn.some((message) =>
+				message.includes("plain string failure"),
+			),
+			`unexpected console.warn: ${JSON.stringify(harness.deps.console.warn)}`,
+		);
+	});
+
+	suite("maxFileSizeKb", () => {
+		const largeText = "SELECT 1;\n".repeat(205); // ~2KB
+
+		test("skips the lint and publishes a file-too-large diagnostic for automatic reasons", async () => {
+			const harness = setup({
+				text: largeText,
+				version: 4,
+				settings: { maxFileSizeKb: 1 },
+			});
+			const result = await harness.run("save");
+
+			assert.deepStrictEqual(result, { diagnosticsCount: 0, success: true });
+			assert.strictEqual(harness.calls.length, 0);
+
+			const published = harness.deps.diagnostics[0];
+			assert.ok(published);
+			assert.strictEqual(published.version, 4);
+			const diagnostic = published.diagnostics[0];
+			assert.strictEqual(diagnostic?.code, "lint-skipped-file-too-large");
+			assert.strictEqual(diagnostic?.severity, DiagnosticSeverity.Information);
+			assert.strictEqual(diagnostic?.source, "tsqlrefine");
+			assert.deepStrictEqual(diagnostic?.range, {
+				start: { line: 0, character: 0 },
+				end: { line: 0, character: 0 },
+			});
+		});
+
+		test('still lints a large file when the reason is "manual"', async () => {
+			const harness = setup({
+				text: largeText,
+				settings: { maxFileSizeKb: 1 },
+			});
+			const result = await harness.run("manual");
+
+			assert.strictEqual(result.success, true);
+			assert.strictEqual(harness.calls.length, 1);
+		});
+
+		test("does not apply the size limit when maxFileSizeKb is 0", async () => {
+			const harness = setup({
+				text: largeText,
+				settings: { maxFileSizeKb: 0 },
+			});
+			await harness.run("save");
+
+			assert.strictEqual(harness.calls.length, 1);
+		});
+
+		test("ignores a non-finite maxFileSizeKb", async () => {
+			const harness = setup({
+				text: largeText,
+				settings: { maxFileSizeKb: Number.NaN },
+			});
+			await harness.run("save");
+
+			assert.strictEqual(harness.calls.length, 1);
+		});
+
+		test("measures the size in UTF-8 bytes, not characters", async () => {
+			// 400 characters, but 1200 bytes once encoded.
+			const harness = setup({
+				text: "あ".repeat(400),
+				settings: { maxFileSizeKb: 1 },
+			});
+			const result = await harness.run("save");
+
+			assert.strictEqual(harness.calls.length, 0);
+			assert.strictEqual(result.diagnosticsCount, 0);
+		});
 	});
 });

@@ -1,486 +1,136 @@
 import * as assert from "node:assert";
-import type { Connection, TextEdit } from "vscode-languageserver/node";
-import type { TextDocument } from "vscode-languageserver-textdocument";
-import type { TsqlRefineSettings } from "../../server/config/settings";
-import type { DocumentContext } from "../../server/shared/documentContext";
-import { DocumentStateManager } from "../../server/state/documentStateManager";
-
-// We need to test executeFix by mocking runFixer
-// Since runFixer is imported directly, we use a different approach:
-// We test the behavior through integration with a mock state manager
-
-/**
- * Creates default test settings.
- */
-function createTestSettings(
-	overrides: Partial<TsqlRefineSettings> = {},
-): TsqlRefineSettings {
-	return {
-		runOnSave: true,
-		runOnType: false,
-		runOnOpen: true,
-		debounceMs: 500,
-		timeoutMs: 10000,
-		maxFileSizeKb: 0,
-		minSeverity: "info",
-		enableLint: true,
-		enableFormat: true,
-		enableFix: true,
-		allowPlugins: false,
-		...overrides,
-	};
-}
+import * as os from "node:os";
+import * as path from "node:path";
+import { executeFix } from "../../server/fix/fixOperations";
+import type { runFixer } from "../../server/fix/runFixer";
+import type { ProcessRunResult } from "../../server/shared/types";
+import {
+	createOperationDeps,
+	createTestContext,
+	createTestDocument,
+	createTestSettings,
+} from "../helpers/operationHarness";
+import { cliResult } from "../helpers/processResults";
 
 /**
- * Creates a mock DocumentContext for testing.
+ * `executeFix` is a thin wrapper over `executeCliEditOperation`, so these tests
+ * only cover the wiring it owns: which runner is used, what the runner is
+ * handed, and that the operation is reported as "fix". Every branch of the
+ * shared execution path is covered by cliEditOperation.test.ts.
  */
-function createMockDocumentContext(
-	overrides: Partial<DocumentContext> = {},
-): DocumentContext {
-	return {
-		uri: "file:///test.sql",
-		filePath: "/test.sql",
-		workspaceRoot: "/workspace",
-		cwd: "/workspace",
-		effectiveSettings: createTestSettings(),
-		effectiveConfigPath: undefined,
-		documentText: "SELECT 1;",
-		isSavedFile: true,
-		...overrides,
-	};
-}
 
-/**
- * Creates a mock TextDocument for testing.
- */
-function createMockTextDocument(
-	overrides: Partial<{
-		uri: string;
-		text: string;
-		lineCount: number;
-	}> = {},
-): TextDocument {
-	const text = overrides.text ?? "SELECT 1;";
-	const lineCount = overrides.lineCount ?? 1;
+type RunnerCall = Parameters<typeof runFixer>[0];
+
+function setup(
+	options: {
+		text?: string;
+		runner?: (call: RunnerCall) => Promise<ProcessRunResult>;
+		/** Omit `deps.runner` entirely so the real runFixer is used. */
+		useRealRunner?: boolean;
+		settings?: Parameters<typeof createTestSettings>[0];
+	} = {},
+) {
+	const text = options.text ?? "SELECT 1;";
+	const deps = createOperationDeps();
+	const document = createTestDocument({ text });
+	const context = createTestContext({
+		uri: document.uri,
+		documentText: text,
+		effectiveSettings: createTestSettings(options.settings),
+	});
+	const calls: RunnerCall[] = [];
+	const respond = options.runner ?? (async () => cliResult("SELECT 2;"));
+	const runner = options.useRealRunner
+		? undefined
+		: async (call: RunnerCall): Promise<ProcessRunResult> => {
+				calls.push(call);
+				return await respond(call);
+			};
 
 	return {
-		uri: overrides.uri ?? "file:///test.sql",
-		languageId: "sql",
-		version: 1,
-		getText: (range?: { start: { line: number }; end: { line: number } }) => {
-			if (!range) return text;
-			// For getting the last line
-			const lines = text.split("\n");
-			if (range.start.line === lineCount - 1) {
-				return lines[range.start.line] ?? "";
-			}
-			return text;
-		},
-		lineCount,
-		positionAt: (offset: number) => ({ line: 0, character: offset }),
-		offsetAt: (position: { line: number; character: number }) =>
-			position.character,
-	} as TextDocument;
-}
-
-/**
- * Interface for tracking mock connection calls.
- */
-interface MockConnectionCalls {
-	showWarningMessage: string[];
-}
-
-/**
- * Creates a mock Connection for testing.
- */
-function createMockConnection(): {
-	connection: Connection;
-	calls: MockConnectionCalls;
-} {
-	const calls: MockConnectionCalls = {
-		showWarningMessage: [],
+		deps,
+		context,
+		document,
+		calls,
+		run: () =>
+			executeFix(context, document, {
+				connection: deps.connection,
+				notificationManager: deps.notificationManager,
+				control: deps.control,
+				...(runner ? { runner } : {}),
+			}),
 	};
-
-	const connection = {
-		window: {
-			showWarningMessage: async (message: string) => {
-				calls.showWarningMessage.push(message);
-				return undefined;
-			},
-		},
-		console: {
-			log: () => {},
-			warn: () => {},
-			error: () => {},
-		},
-		sendNotification: () => {},
-	} as unknown as Connection;
-
-	return { connection, calls };
 }
 
-/**
- * Interface for tracking mock notification manager calls.
- */
-interface MockNotificationManagerCalls {
-	log: string[];
-	warn: string[];
-	maybeNotifyMissingTsqlRefine: string[];
-}
+suite("executeFix", () => {
+	test("passes the document context through to the injected runner", async () => {
+		const harness = setup();
+		await harness.run();
 
-/**
- * Creates a mock NotificationManager for testing.
- */
-function createMockNotificationManager(): {
-	notificationManager: {
-		log: (message: string) => void;
-		warn: (message: string) => void;
-		maybeNotifyMissingTsqlRefine: (message: string) => Promise<void>;
-	};
-	calls: MockNotificationManagerCalls;
-} {
-	const calls: MockNotificationManagerCalls = {
-		log: [],
-		warn: [],
-		maybeNotifyMissingTsqlRefine: [],
-	};
-
-	const notificationManager = {
-		log: (message: string) => {
-			calls.log.push(message);
-		},
-		warn: (message: string) => {
-			calls.warn.push(message);
-		},
-		maybeNotifyMissingTsqlRefine: async (message: string) => {
-			calls.maybeNotifyMissingTsqlRefine.push(message);
-		},
-	};
-
-	return { notificationManager, calls };
-}
-
-suite("fixOperations", () => {
-	suite("DocumentStateManager integration", () => {
-		test("setInFlight and clearInFlight work correctly", () => {
-			const stateManager = new DocumentStateManager();
-			const uri = "file:///test.sql";
-			const controller = new AbortController();
-
-			stateManager.setInFlight(uri, controller);
-			assert.strictEqual(stateManager.isCurrentInFlight(uri, controller), true);
-
-			stateManager.clearInFlight(uri);
-			assert.strictEqual(
-				stateManager.isCurrentInFlight(uri, controller),
-				false,
-			);
-		});
-
-		test("cancelInFlight aborts the controller", () => {
-			const stateManager = new DocumentStateManager();
-			const uri = "file:///test.sql";
-			const controller = new AbortController();
-
-			stateManager.setInFlight(uri, controller);
-			assert.strictEqual(controller.signal.aborted, false);
-
-			stateManager.cancelInFlight(uri);
-			assert.strictEqual(controller.signal.aborted, true);
-		});
-
-		test("isCurrentInFlight returns false for different controller", () => {
-			const stateManager = new DocumentStateManager();
-			const uri = "file:///test.sql";
-			const controller1 = new AbortController();
-			const controller2 = new AbortController();
-
-			stateManager.setInFlight(uri, controller1);
-			assert.strictEqual(
-				stateManager.isCurrentInFlight(uri, controller2),
-				false,
-			);
-		});
+		assert.strictEqual(harness.calls.length, 1);
+		const call = harness.calls[0];
+		assert.ok(call);
+		assert.strictEqual(call.cwd, harness.context.cwd);
+		assert.strictEqual(call.settings, harness.context.effectiveSettings);
+		assert.strictEqual(call.signal, harness.deps.control.signal);
+		assert.strictEqual(call.stdin, harness.context.documentText);
 	});
 
-	suite("Mock connection behavior", () => {
-		test("mock connection tracks showWarningMessage calls", async () => {
-			const { connection, calls } = createMockConnection();
+	test("returns a full-document edit when the CLI changes the text", async () => {
+		const result = await setup().run();
 
-			await connection.window.showWarningMessage("Test warning");
-
-			assert.strictEqual(calls.showWarningMessage.length, 1);
-			assert.strictEqual(calls.showWarningMessage[0], "Test warning");
-		});
+		assert.ok(result);
+		assert.strictEqual(result.length, 1);
+		assert.deepStrictEqual(result[0]?.range.start, { line: 0, character: 0 });
+		assert.strictEqual(result[0]?.newText, "SELECT 2;");
 	});
 
-	suite("Mock notification manager behavior", () => {
-		test("tracks log and warn calls", () => {
-			const { notificationManager, calls } = createMockNotificationManager();
+	test("returns an empty edit list when the CLI output matches the document", async () => {
+		const harness = setup({ runner: async () => cliResult("SELECT 1;") });
 
-			notificationManager.log("Log message");
-			notificationManager.warn("Warn message");
-
-			assert.strictEqual(calls.log.length, 1);
-			assert.strictEqual(calls.log[0], "Log message");
-			assert.strictEqual(calls.warn.length, 1);
-			assert.strictEqual(calls.warn[0], "Warn message");
-		});
+		assert.deepStrictEqual(await harness.run(), []);
 	});
 
-	suite("TextEdit creation", () => {
-		test("createFullDocumentEdit creates correct range for single line", () => {
-			const document = createMockTextDocument({
-				text: "SELECT 1;",
-				lineCount: 1,
-			});
+	test('reports the operation as "fix" when the CLI returns empty output', async () => {
+		const harness = setup({ runner: async () => cliResult("") });
 
-			// Simulate what createFullDocumentEdit does
-			const lastLineIndex = document.lineCount - 1;
-			const lastLine = document.getText({
-				start: { line: lastLineIndex, character: 0 },
-				end: { line: lastLineIndex, character: Number.MAX_SAFE_INTEGER },
-			});
-
-			const edit: TextEdit = {
-				range: {
-					start: { line: 0, character: 0 },
-					end: { line: lastLineIndex, character: lastLine.length },
-				},
-				newText: "SELECT 1;",
-			};
-
-			assert.deepStrictEqual(edit.range.start, { line: 0, character: 0 });
-			assert.strictEqual(edit.range.end.line, 0);
-			assert.strictEqual(edit.range.end.character, 9); // "SELECT 1;".length
-		});
-
-		test("createFullDocumentEdit creates correct range for multiline", () => {
-			const text = "SELECT 1;\nSELECT 2;";
-			const document = createMockTextDocument({
-				text,
-				lineCount: 2,
-			});
-
-			const lastLineIndex = document.lineCount - 1;
-			const lastLine = document.getText({
-				start: { line: lastLineIndex, character: 0 },
-				end: { line: lastLineIndex, character: Number.MAX_SAFE_INTEGER },
-			});
-
-			const edit: TextEdit = {
-				range: {
-					start: { line: 0, character: 0 },
-					end: { line: lastLineIndex, character: lastLine.length },
-				},
-				newText: text,
-			};
-
-			assert.deepStrictEqual(edit.range.start, { line: 0, character: 0 });
-			assert.strictEqual(edit.range.end.line, 1);
-			assert.strictEqual(edit.range.end.character, 9); // "SELECT 2;".length
-		});
+		assert.strictEqual(await harness.run(), null);
+		assert.strictEqual(
+			harness.deps.warnings[0],
+			"tsqlrefine: fix failed - empty output for a non-empty document",
+		);
 	});
 
-	suite("DocumentContext creation", () => {
-		test("mock context has all required properties", () => {
-			const context = createMockDocumentContext();
+	test("treats exit code 1 as a failure", async () => {
+		const harness = setup({ runner: async () => cliResult("SELECT 2;", 1) });
 
-			assert.strictEqual(context.uri, "file:///test.sql");
-			assert.strictEqual(context.filePath, "/test.sql");
-			assert.strictEqual(context.cwd, "/workspace");
-			assert.strictEqual(context.documentText, "SELECT 1;");
-			assert.strictEqual(context.isSavedFile, true);
-			assert.ok(context.effectiveSettings);
-		});
-
-		test("mock context can be customized", () => {
-			const context = createMockDocumentContext({
-				uri: "file:///custom.sql",
-				documentText: "SELECT * FROM users;",
-				isSavedFile: false,
-			});
-
-			assert.strictEqual(context.uri, "file:///custom.sql");
-			assert.strictEqual(context.documentText, "SELECT * FROM users;");
-			assert.strictEqual(context.isSavedFile, false);
-		});
-
-		test("uses untitled.sql fallback when filePath is empty", () => {
-			const context = createMockDocumentContext({
-				filePath: "",
-			});
-
-			// The actual code uses: const targetFilePath = filePath || "untitled.sql";
-			const targetFilePath = context.filePath || "untitled.sql";
-			assert.strictEqual(targetFilePath, "untitled.sql");
-		});
+		assert.strictEqual(await harness.run(), null);
+		assert.ok(
+			harness.deps.warnings.some((message) =>
+				message.includes("fix failed - exit code 1"),
+			),
+			`unexpected warnings: ${JSON.stringify(harness.deps.warnings)}`,
+		);
 	});
 
-	suite("Result handling patterns (simulated)", () => {
-		test("empty array is returned when text unchanged", () => {
-			const originalText = "SELECT 1;";
-			const fixedText = "SELECT 1;";
-
-			// Logic from executeFix: if (fixedText === documentText) return [];
-			const edits: TextEdit[] =
-				fixedText === originalText ? [] : [{ range: {} as never, newText: "" }];
-
-			assert.strictEqual(edits.length, 0);
+	test("falls back to runFixer when no runner is injected", async () => {
+		// No runner override: the real runFixer resolves the executable and fails
+		// on a path that cannot exist, which exercises the fallback without
+		// needing the tsqlrefine CLI.
+		const missing = path.join(os.tmpdir(), `missing-tsqlrefine-${Date.now()}`);
+		const harness = setup({
+			useRealRunner: true,
+			settings: { path: missing },
 		});
 
-		test("TextEdit array is returned when text changes", () => {
-			const originalText = "select 1;";
-			const fixedText = "SELECT 1;";
-
-			// Use string comparison that TypeScript can understand
-			const hasChanges = String(fixedText) !== String(originalText);
-			assert.strictEqual(hasChanges, true);
-		});
-
-		test("null is returned for timeout (simulated)", () => {
-			const result = {
-				stdout: "",
-				stderr: "",
-				exitCode: null,
-				timedOut: true,
-				cancelled: false,
-			};
-
-			// Logic from executeFix: if (result.timedOut) return null;
-			const edits = result.timedOut ? null : [];
-			assert.strictEqual(edits, null);
-		});
-
-		test("null is returned for cancellation (simulated)", () => {
-			const controller = new AbortController();
-			controller.abort();
-
-			const result = {
-				stdout: "",
-				stderr: "",
-				exitCode: null,
-				timedOut: false,
-				cancelled: true,
-			};
-
-			// Logic from executeFix: if (controller.signal.aborted || result.cancelled) return null;
-			const edits = controller.signal.aborted || result.cancelled ? null : [];
-			assert.strictEqual(edits, null);
-		});
-
-		test("null is returned for non-zero exit code (simulated)", () => {
-			const result = {
-				stdout: "",
-				stderr: "Error message",
-				exitCode: 1,
-				timedOut: false,
-				cancelled: false,
-			};
-
-			// Logic from executeFix: if (result.exitCode !== 0) return null;
-			const edits = result.exitCode !== 0 ? null : [];
-			assert.strictEqual(edits, null);
-		});
-	});
-
-	suite("Error message extraction", () => {
-		test("firstLine extracts first line from multiline text", () => {
-			const text = "First line\nSecond line\nThird line";
-			const index = text.indexOf("\n");
-			const firstLine = index === -1 ? text : text.slice(0, index);
-
-			assert.strictEqual(firstLine, "First line");
-		});
-
-		test("firstLine returns full text when no newline", () => {
-			const text = "Single line text";
-			const index = text.indexOf("\n");
-			const firstLine = index === -1 ? text : text.slice(0, index);
-
-			assert.strictEqual(firstLine, "Single line text");
-		});
-
-		test("firstLine handles empty string", () => {
-			const text = "";
-			const index = text.indexOf("\n");
-			const firstLine = index === -1 ? text : text.slice(0, index);
-
-			assert.strictEqual(firstLine, "");
-		});
-	});
-
-	suite("Stderr handling", () => {
-		test("stderr is logged when present", () => {
-			const { notificationManager, calls } = createMockNotificationManager();
-			const stderr = "Warning: something happened";
-
-			if (stderr.trim()) {
-				notificationManager.warn(`tsqlrefine fix stderr: ${stderr}`);
-			}
-
-			assert.strictEqual(calls.warn.length, 1);
-			assert.ok(calls.warn[0]?.includes("tsqlrefine fix stderr:"));
-		});
-
-		test("stderr is not logged when empty", () => {
-			const { notificationManager, calls } = createMockNotificationManager();
-			const stderr = "   ";
-
-			if (stderr.trim()) {
-				notificationManager.warn(`tsqlrefine fix stderr: ${stderr}`);
-			}
-
-			assert.strictEqual(calls.warn.length, 0);
-		});
-	});
-
-	suite("Exit code handling", () => {
-		test("exit code 2 maps to SQL parse error description", () => {
-			const CLI_EXIT_CODE_DESCRIPTIONS: Record<number, string> = {
-				2: "SQL parse error",
-				3: "configuration error",
-				4: "runtime exception",
-			};
-			const exitCode = 2;
-			const description =
-				CLI_EXIT_CODE_DESCRIPTIONS[exitCode] ?? `exit code ${exitCode}`;
-			assert.strictEqual(description, "SQL parse error");
-		});
-
-		test("exit code 3 maps to configuration error description", () => {
-			const CLI_EXIT_CODE_DESCRIPTIONS: Record<number, string> = {
-				2: "SQL parse error",
-				3: "configuration error",
-				4: "runtime exception",
-			};
-			const exitCode = 3;
-			const description =
-				CLI_EXIT_CODE_DESCRIPTIONS[exitCode] ?? `exit code ${exitCode}`;
-			assert.strictEqual(description, "configuration error");
-		});
-
-		test("exit code 4 maps to runtime exception description", () => {
-			const CLI_EXIT_CODE_DESCRIPTIONS: Record<number, string> = {
-				2: "SQL parse error",
-				3: "configuration error",
-				4: "runtime exception",
-			};
-			const exitCode = 4;
-			const description =
-				CLI_EXIT_CODE_DESCRIPTIONS[exitCode] ?? `exit code ${exitCode}`;
-			assert.strictEqual(description, "runtime exception");
-		});
-
-		test("stderr detail is included in error message", () => {
-			const stderrDetail = "Config file not found";
-			const description = "configuration error";
-			const detail = stderrDetail ? ` (${stderrDetail})` : "";
-			const formatted = `tsqlrefine: fix failed - ${description}${detail}`;
-			assert.strictEqual(
-				formatted,
-				"tsqlrefine: fix failed - configuration error (Config file not found)",
-			);
-		});
+		assert.strictEqual(await harness.run(), null);
+		assert.ok(
+			harness.deps.console.warn.some(
+				(message) =>
+					message.includes("tsqlrefine: fix failed") &&
+					message.includes("not found"),
+			),
+			`unexpected console.warn: ${JSON.stringify(harness.deps.console.warn)}`,
+		);
 	});
 });

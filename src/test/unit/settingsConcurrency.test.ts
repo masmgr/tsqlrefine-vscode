@@ -69,4 +69,27 @@ suite("Settings refresh concurrency", () => {
 		assert.strictEqual(settings.enableLint, false);
 		assert.strictEqual(calls, 3);
 	});
+
+	test("stops retrying as soon as the generation is stable", async () => {
+		let calls = 0;
+		let manager!: SettingsManager;
+		manager = new SettingsManager({
+			workspace: {
+				getConfiguration: async ({ scopeUri }: { scopeUri?: string }) => {
+					if (scopeUri) {
+						// Invalidate only on the first scoped response, so the second
+						// attempt sees a stable generation and breaks out of the loop.
+						if (++calls === 1) {
+							manager.invalidateAll();
+						}
+					}
+					return { ...defaultSettings, enableLint: false };
+				},
+			},
+		} as unknown as Connection);
+
+		await manager.getSettingsForDocument("untitled:test");
+
+		assert.strictEqual(calls, 2);
+	});
 });

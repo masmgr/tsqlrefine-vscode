@@ -1,280 +1,137 @@
 import * as assert from "node:assert";
-import type { Connection } from "vscode-languageserver/node";
-import type { TsqlRefineSettings } from "../../server/config/settings";
-import type { DocumentContext } from "../../server/shared/documentContext";
-import { DocumentStateManager } from "../../server/state/documentStateManager";
+import * as os from "node:os";
+import * as path from "node:path";
+import { executeFormat } from "../../server/format/formatOperations";
+import type { runFormatter } from "../../server/format/runFormatter";
+import type { ProcessRunResult } from "../../server/shared/types";
+import {
+	createOperationDeps,
+	createTestContext,
+	createTestDocument,
+	createTestSettings,
+} from "../helpers/operationHarness";
+import { cliResult } from "../helpers/processResults";
 
 /**
- * Creates default test settings.
+ * `executeFormat` is a thin wrapper over `executeCliEditOperation`, so these
+ * tests only cover the wiring it owns: which runner is used, what the runner is
+ * handed, and that the operation is reported as "format". Every branch of the
+ * shared execution path is covered by cliEditOperation.test.ts, and the
+ * `enableFormat` gate belongs to server.ts (see server.test.ts).
  */
-function createTestSettings(
-	overrides: Partial<TsqlRefineSettings> = {},
-): TsqlRefineSettings {
+
+type RunnerCall = Parameters<typeof runFormatter>[0];
+
+function setup(
+	options: {
+		text?: string;
+		runner?: (call: RunnerCall) => Promise<ProcessRunResult>;
+		/** Omit `deps.runner` entirely so the real runFormatter is used. */
+		useRealRunner?: boolean;
+		settings?: Parameters<typeof createTestSettings>[0];
+	} = {},
+) {
+	const text = options.text ?? "SELECT 1;";
+	const deps = createOperationDeps();
+	const document = createTestDocument({ text });
+	const context = createTestContext({
+		uri: document.uri,
+		documentText: text,
+		effectiveSettings: createTestSettings(options.settings),
+	});
+	const calls: RunnerCall[] = [];
+	const respond = options.runner ?? (async () => cliResult("SELECT 2;"));
+	const runner = options.useRealRunner
+		? undefined
+		: async (call: RunnerCall): Promise<ProcessRunResult> => {
+				calls.push(call);
+				return await respond(call);
+			};
+
 	return {
-		runOnSave: true,
-		runOnType: false,
-		runOnOpen: true,
-		debounceMs: 500,
-		timeoutMs: 10000,
-		maxFileSizeKb: 0,
-		minSeverity: "info",
-		enableLint: true,
-		enableFormat: true,
-		enableFix: true,
-		allowPlugins: false,
-		...overrides,
+		deps,
+		context,
+		document,
+		calls,
+		run: () =>
+			executeFormat(context, document, {
+				connection: deps.connection,
+				notificationManager: deps.notificationManager,
+				control: deps.control,
+				...(runner ? { runner } : {}),
+			}),
 	};
 }
 
-/**
- * Creates a mock DocumentContext for testing.
- */
-function createMockDocumentContext(
-	overrides: Partial<DocumentContext> = {},
-): DocumentContext {
-	return {
-		uri: "file:///test.sql",
-		filePath: "/test.sql",
-		workspaceRoot: "/workspace",
-		cwd: "/workspace",
-		effectiveSettings: createTestSettings(),
-		effectiveConfigPath: undefined,
-		documentText: "SELECT 1;",
-		isSavedFile: true,
-		...overrides,
-	};
-}
+suite("executeFormat", () => {
+	test("passes the document context through to the injected runner", async () => {
+		const harness = setup();
+		await harness.run();
 
-/**
- * Interface for tracking mock connection calls.
- */
-interface MockConnectionCalls {
-	showWarningMessage: string[];
-}
-
-/**
- * Creates a mock Connection for testing.
- */
-function createMockConnection(): {
-	connection: Connection;
-	calls: MockConnectionCalls;
-} {
-	const calls: MockConnectionCalls = {
-		showWarningMessage: [],
-	};
-
-	const connection = {
-		window: {
-			showWarningMessage: async (message: string) => {
-				calls.showWarningMessage.push(message);
-				return undefined;
-			},
-		},
-		console: {
-			log: () => {},
-			warn: () => {},
-			error: () => {},
-		},
-	} as unknown as Connection;
-
-	return { connection, calls };
-}
-
-/**
- * Interface for tracking mock notification manager calls.
- */
-interface MockNotificationManagerCalls {
-	log: string[];
-	warn: string[];
-	maybeNotifyMissingTsqlRefine: string[];
-}
-
-/**
- * Creates a mock NotificationManager for testing.
- */
-function createMockNotificationManager(): {
-	notificationManager: {
-		log: (message: string) => void;
-		warn: (message: string) => void;
-		maybeNotifyMissingTsqlRefine: (message: string) => Promise<void>;
-	};
-	calls: MockNotificationManagerCalls;
-} {
-	const calls: MockNotificationManagerCalls = {
-		log: [],
-		warn: [],
-		maybeNotifyMissingTsqlRefine: [],
-	};
-
-	const notificationManager = {
-		log: (message: string) => {
-			calls.log.push(message);
-		},
-		warn: (message: string) => {
-			calls.warn.push(message);
-		},
-		maybeNotifyMissingTsqlRefine: async (message: string) => {
-			calls.maybeNotifyMissingTsqlRefine.push(message);
-		},
-	};
-
-	return { notificationManager, calls };
-}
-
-suite("formatOperations", () => {
-	suite("DocumentStateManager integration", () => {
-		test("setInFlight and clearInFlight work correctly", () => {
-			const stateManager = new DocumentStateManager();
-			const uri = "file:///test.sql";
-			const controller = new AbortController();
-
-			stateManager.setInFlight(uri, controller);
-			assert.strictEqual(stateManager.isCurrentInFlight(uri, controller), true);
-
-			stateManager.clearInFlight(uri);
-			assert.strictEqual(
-				stateManager.isCurrentInFlight(uri, controller),
-				false,
-			);
-		});
-
-		test("cancelInFlight aborts the controller", () => {
-			const stateManager = new DocumentStateManager();
-			const uri = "file:///test.sql";
-			const controller = new AbortController();
-
-			stateManager.setInFlight(uri, controller);
-			assert.strictEqual(controller.signal.aborted, false);
-
-			stateManager.cancelInFlight(uri);
-			assert.strictEqual(controller.signal.aborted, true);
-		});
-
-		test("isCurrentInFlight returns false for different controller", () => {
-			const stateManager = new DocumentStateManager();
-			const uri = "file:///test.sql";
-			const controller1 = new AbortController();
-			const controller2 = new AbortController();
-
-			stateManager.setInFlight(uri, controller1);
-			assert.strictEqual(
-				stateManager.isCurrentInFlight(uri, controller2),
-				false,
-			);
-		});
+		assert.strictEqual(harness.calls.length, 1);
+		const call = harness.calls[0];
+		assert.ok(call);
+		assert.strictEqual(call.cwd, harness.context.cwd);
+		assert.strictEqual(call.settings, harness.context.effectiveSettings);
+		assert.strictEqual(call.signal, harness.deps.control.signal);
+		assert.strictEqual(call.stdin, harness.context.documentText);
 	});
 
-	suite("Mock connection behavior", () => {
-		test("mock connection tracks showWarningMessage calls", async () => {
-			const { connection, calls } = createMockConnection();
+	test("returns a full-document edit when the CLI changes the text", async () => {
+		const result = await setup().run();
 
-			await connection.window.showWarningMessage("Test warning");
-
-			assert.strictEqual(calls.showWarningMessage.length, 1);
-			assert.strictEqual(calls.showWarningMessage[0], "Test warning");
-		});
+		assert.ok(result);
+		assert.strictEqual(result.length, 1);
+		assert.deepStrictEqual(result[0]?.range.start, { line: 0, character: 0 });
+		assert.strictEqual(result[0]?.newText, "SELECT 2;");
 	});
 
-	suite("Mock notification manager behavior", () => {
-		test("tracks log and warn calls", () => {
-			const { notificationManager, calls } = createMockNotificationManager();
+	test("returns an empty edit list when the CLI output matches the document", async () => {
+		const harness = setup({ runner: async () => cliResult("SELECT 1;") });
 
-			notificationManager.log("Log message");
-			notificationManager.warn("Warn message");
-
-			assert.strictEqual(calls.log.length, 1);
-			assert.strictEqual(calls.log[0], "Log message");
-			assert.strictEqual(calls.warn.length, 1);
-			assert.strictEqual(calls.warn[0], "Warn message");
-		});
+		assert.deepStrictEqual(await harness.run(), []);
 	});
 
-	suite("Format disabled handling", () => {
-		test("checks enableFormat setting correctly", () => {
-			const context = createMockDocumentContext({
-				effectiveSettings: createTestSettings({
-					enableFormat: false,
-				}),
-			});
+	test('reports the operation as "format" when the CLI returns empty output', async () => {
+		const harness = setup({ runner: async () => cliResult("") });
 
-			assert.strictEqual(context.effectiveSettings.enableFormat, false);
-		});
-
-		test("enableFormat is true by default", () => {
-			const context = createMockDocumentContext();
-
-			assert.strictEqual(context.effectiveSettings.enableFormat, true);
-		});
+		assert.strictEqual(await harness.run(), null);
+		assert.strictEqual(
+			harness.deps.warnings[0],
+			"tsqlrefine: format failed - empty output for a non-empty document",
+		);
 	});
 
-	suite("Timeout handling", () => {
-		test("uses formatTimeoutMs when available", () => {
-			const settings = createTestSettings({
-				formatTimeoutMs: 5000,
-				timeoutMs: 10000,
-			});
+	test("treats exit code 1 as a failure", async () => {
+		const harness = setup({ runner: async () => cliResult("SELECT 2;", 1) });
 
-			const timeoutMs = settings.formatTimeoutMs ?? settings.timeoutMs;
-
-			assert.strictEqual(timeoutMs, 5000);
-		});
-
-		test("falls back to timeoutMs when formatTimeoutMs is not set", () => {
-			const settings = createTestSettings({
-				timeoutMs: 15000,
-			});
-
-			const timeoutMs = settings.formatTimeoutMs ?? settings.timeoutMs;
-
-			assert.strictEqual(timeoutMs, 15000);
-		});
+		assert.strictEqual(await harness.run(), null);
+		assert.ok(
+			harness.deps.warnings.some((message) =>
+				message.includes("format failed - exit code 1"),
+			),
+			`unexpected warnings: ${JSON.stringify(harness.deps.warnings)}`,
+		);
 	});
 
-	suite("Mock document context", () => {
-		test("creates valid context with defaults", () => {
-			const context = createMockDocumentContext();
-
-			assert.strictEqual(context.uri, "file:///test.sql");
-			assert.strictEqual(context.filePath, "/test.sql");
-			assert.strictEqual(context.cwd, "/workspace");
-			assert.strictEqual(context.documentText, "SELECT 1;");
-			assert.strictEqual(context.isSavedFile, true);
+	test("falls back to runFormatter when no runner is injected", async () => {
+		// No runner override: the real runFormatter resolves the executable and
+		// fails on a path that cannot exist, which exercises the fallback without
+		// needing the tsqlrefine CLI.
+		const missing = path.join(os.tmpdir(), `missing-tsqlrefine-${Date.now()}`);
+		const harness = setup({
+			useRealRunner: true,
+			settings: { path: missing },
 		});
 
-		test("creates valid context with overrides", () => {
-			const context = createMockDocumentContext({
-				uri: "file:///custom.sql",
-				filePath: "/custom/custom.sql",
-				cwd: "/custom",
-				documentText: "select   2;",
-				isSavedFile: false,
-			});
-
-			assert.strictEqual(context.uri, "file:///custom.sql");
-			assert.strictEqual(context.filePath, "/custom/custom.sql");
-			assert.strictEqual(context.cwd, "/custom");
-			assert.strictEqual(context.documentText, "select   2;");
-			assert.strictEqual(context.isSavedFile, false);
-		});
-	});
-
-	suite("Document change detection", () => {
-		test("detects when formatted text differs from original", () => {
-			const originalText: string = "select   1;";
-			const formattedText: string = "SELECT 1;";
-
-			const hasChanges = formattedText !== originalText;
-
-			assert.strictEqual(hasChanges, true);
-		});
-
-		test("detects when formatted text is identical to original", () => {
-			const originalText: string = "SELECT 1;";
-			const formattedText: string = "SELECT 1;";
-
-			const hasChanges = formattedText !== originalText;
-
-			assert.strictEqual(hasChanges, false);
-		});
+		assert.strictEqual(await harness.run(), null);
+		assert.ok(
+			harness.deps.console.warn.some(
+				(message) =>
+					message.includes("tsqlrefine: format failed") &&
+					message.includes("not found"),
+			),
+			`unexpected console.warn: ${JSON.stringify(harness.deps.console.warn)}`,
+		);
 	});
 });

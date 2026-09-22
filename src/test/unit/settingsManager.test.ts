@@ -1,7 +1,8 @@
 import * as assert from "node:assert";
 import type { Connection } from "vscode-languageserver/node";
-import { SettingsManager } from "../../server/state/settingsManager";
+import { DOCUMENT_SETTINGS_CACHE_MAX_SIZE } from "../../server/config/constants";
 import { defaultSettings } from "../../server/config/settings";
+import { SettingsManager } from "../../server/state/settingsManager";
 
 /**
  * Interface for tracking mock connection calls.
@@ -200,6 +201,68 @@ suite("SettingsManager", () => {
 			// 1 (initial doc) + 1 (refresh) + 1 (doc re-fetch) = 3
 			assert.strictEqual(calls.getConfiguration.length, 3);
 		});
+
+		test("evicts the least recently used document once the cache is full", async () => {
+			const { connection, calls } = createMockConnection();
+			const manager = new SettingsManager(connection);
+
+			for (let i = 0; i < DOCUMENT_SETTINGS_CACHE_MAX_SIZE; i++) {
+				await manager.getSettingsForDocument(`file:///doc${i}.sql`);
+			}
+			const afterFill = calls.getConfiguration.length;
+
+			// One more document pushes the oldest entry out.
+			await manager.getSettingsForDocument("file:///overflow.sql");
+			await manager.getSettingsForDocument("file:///doc0.sql");
+
+			assert.strictEqual(
+				calls.getConfiguration.length,
+				afterFill + 2,
+				"doc0 should have been evicted and re-fetched",
+			);
+			// The most recently cached document is still served from cache.
+			const newest = `file:///doc${DOCUMENT_SETTINGS_CACHE_MAX_SIZE - 1}.sql`;
+			await manager.getSettingsForDocument(newest);
+			assert.strictEqual(calls.getConfiguration.length, afterFill + 2);
+		});
+
+		test("refreshes the LRU order on a cache hit", async () => {
+			const { connection, calls } = createMockConnection();
+			const manager = new SettingsManager(connection);
+
+			for (let i = 0; i < DOCUMENT_SETTINGS_CACHE_MAX_SIZE; i++) {
+				await manager.getSettingsForDocument(`file:///doc${i}.sql`);
+			}
+			// Touch doc0 so doc1 becomes the oldest entry instead.
+			await manager.getSettingsForDocument("file:///doc0.sql");
+			const afterTouch = calls.getConfiguration.length;
+
+			await manager.getSettingsForDocument("file:///overflow.sql");
+			await manager.getSettingsForDocument("file:///doc0.sql");
+
+			assert.strictEqual(
+				calls.getConfiguration.length,
+				afterTouch + 1,
+				"doc0 was touched most recently and should still be cached",
+			);
+		});
+
+		test("re-caching a document already in a full cache evicts nothing", async () => {
+			const { connection, calls } = createMockConnection();
+			const manager = new SettingsManager(connection);
+
+			for (let i = 0; i < DOCUMENT_SETTINGS_CACHE_MAX_SIZE; i++) {
+				await manager.getSettingsForDocument(`file:///doc${i}.sql`);
+			}
+			manager.invalidateDocument("file:///doc5.sql");
+			await manager.getSettingsForDocument("file:///doc5.sql");
+			const afterRefill = calls.getConfiguration.length;
+
+			// doc0 is still cached: re-inserting doc5 did not evict anything.
+			await manager.getSettingsForDocument("file:///doc0.sql");
+
+			assert.strictEqual(calls.getConfiguration.length, afterRefill);
+		});
 	});
 
 	suite("normalizeSettings", () => {
@@ -377,6 +440,24 @@ suite("SettingsManager", () => {
 
 			await manager.refreshSettings();
 			assert.strictEqual(manager.getSettings().debounceMs, 0);
+		});
+
+		test("falls back to info for an unrecognized minSeverity", async () => {
+			const { connection } = createMockConnection({ minSeverity: "critical" });
+			const manager = new SettingsManager(connection);
+
+			await manager.refreshSettings();
+			assert.strictEqual(manager.getSettings().minSeverity, "info");
+		});
+
+		test("preserves each recognized minSeverity", async () => {
+			for (const severity of ["error", "warning", "info", "hint"] as const) {
+				const { connection } = createMockConnection({ minSeverity: severity });
+				const manager = new SettingsManager(connection);
+
+				await manager.refreshSettings();
+				assert.strictEqual(manager.getSettings().minSeverity, severity);
+			}
 		});
 	});
 });

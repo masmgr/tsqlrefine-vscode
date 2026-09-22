@@ -497,6 +497,71 @@ suite("parseOutput", () => {
 			assert.strictEqual(diagnostics.length, 0);
 		});
 
+		test("skips a file entry whose diagnostics field is not an array", () => {
+			const cwd = path.resolve("workspace");
+			const filePath = path.join(cwd, "query.sql");
+			const uri = URI.file(filePath).toString();
+			const stdout = JSON.stringify({
+				files: [{ filePath: "<stdin>", diagnostics: "oops" }],
+			});
+
+			const diagnostics = parseOutput({ stdout, uri, cwd });
+
+			assert.strictEqual(diagnostics.length, 0);
+		});
+
+		test("skips a diagnostic that is missing required fields and logs it", () => {
+			const cwd = path.resolve("workspace");
+			const filePath = path.join(cwd, "query.sql");
+			const uri = URI.file(filePath).toString();
+			const debugMessages: string[] = [];
+			const stdout = JSON.stringify({
+				files: [
+					{
+						filePath: "<stdin>",
+						diagnostics: [
+							// Missing range.start.character.
+							{
+								message: "Malformed",
+								range: {
+									start: { line: 0 },
+									end: { line: 0, character: 5 },
+								},
+							},
+							{
+								message: "Well formed",
+								range: {
+									start: { line: 1, character: 0 },
+									end: { line: 1, character: 5 },
+								},
+							},
+						],
+					},
+				],
+			});
+
+			const diagnostics = parseOutput({
+				stdout,
+				uri,
+				cwd,
+				logger: {
+					debug: (message) =>
+						debugMessages.push(
+							typeof message === "function" ? message() : message,
+						),
+				},
+			});
+
+			assert.strictEqual(diagnostics.length, 1);
+			assert.strictEqual(diagnostics[0]?.message, "Well formed");
+			assert.ok(
+				debugMessages.some((message) =>
+					message.includes("Skipping malformed diagnostic"),
+				),
+				`unexpected debug messages: ${JSON.stringify(debugMessages)}`,
+			);
+		});
+
 		test("handles unicode in error messages", () => {
 			const cwd = path.resolve("workspace");
 			const filePath = path.join(cwd, "query.sql");

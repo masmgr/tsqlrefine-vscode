@@ -1,4 +1,6 @@
 import * as assert from "node:assert";
+import * as os from "node:os";
+import * as path from "node:path";
 import { type Clock, install } from "@sinonjs/fake-timers";
 import { URI } from "vscode-uri";
 import { MissingTsqlRefineError } from "../../server/shared/errors";
@@ -66,13 +68,13 @@ suite("Server document lifecycle", () => {
 				});
 				await h.open();
 				const request = h.request(operation);
-				const signal = await started.promise;
+				const runnerSignal = await started.promise;
 				if (transition === "edit") await h.change();
 				else {
 					await h.close();
 					if (transition === "reopen") await h.open("SELECT 2;", 1);
 				}
-				assert.ok(signal.aborted);
+				assert.ok(runnerSignal.aborted);
 				const before = h.diagnostics.length;
 				result.resolve(
 					cliResult(operation === "lint" ? diagnosticJson : "SELECT 9;"),
@@ -124,10 +126,10 @@ suite("Server document lifecycle", () => {
 		await h.open();
 		await h.request("lint");
 		const request = h.request("lint");
-		const signal = await started.promise;
+		const runnerSignal = await started.promise;
 		h.settings = { ...h.settings, enableLint: false };
 		await h.invoke("onDidChangeConfiguration");
-		assert.ok(signal.aborted);
+		assert.ok(runnerSignal.aborted);
 		assert.deepStrictEqual(h.diagnostics.at(-1)?.diagnostics, []);
 		const before = h.diagnostics.length;
 		result.resolve(cliResult(diagnosticJson, 2));
@@ -412,5 +414,194 @@ suite("Server document lifecycle", () => {
 		warning.resolve(undefined);
 		await request;
 		assert.strictEqual(h.diagnostics.length, before);
+	});
+
+	test("logs a detached lint failure through the scheduler onError callback", async () => {
+		let lintCalls = 0;
+		const h = new ServerHarness({
+			lint: {
+				runner: async () => {
+					lintCalls++;
+					return cliResult(diagnosticJson);
+				},
+			},
+		});
+		let failScoped = false;
+		h.configuration = async (scopeUri?: string) => {
+			if (scopeUri && failScoped) {
+				throw new Error("cfg boom");
+			}
+			return h.settings;
+		};
+		// Debounce longer than the per-document settings cache TTL so the
+		// scheduled lint has to re-fetch settings when the timer fires.
+		h.settings = { ...h.settings, runOnType: true, debounceMs: 3000 };
+		await h.initialize();
+		await h.open();
+		await h.change();
+
+		failScoped = true;
+		await clock.tickAsync(3000);
+		await h.settle();
+
+		assert.strictEqual(lintCalls, 0);
+		assert.ok(
+			h.logs.some((message) => message.includes("scheduled lint failed for")),
+			`unexpected logs: ${JSON.stringify(h.logs)}`,
+		);
+	});
+
+	test("warns at startup when tsqlrefine is not installed", async () => {
+		const h = new ServerHarness();
+		h.settings = {
+			...h.settings,
+			path: path.join(os.tmpdir(), `missing-tsqlrefine-${Date.now()}`),
+		};
+
+		await h.initialize();
+
+		assert.ok(
+			h.logs.some(
+				(message) =>
+					message.includes("[startup]") && message.includes("not found"),
+			),
+			`unexpected logs: ${JSON.stringify(h.logs)}`,
+		);
+		assert.ok(
+			h.warnings.some((message) => message.includes("not found")),
+			`unexpected warnings: ${JSON.stringify(h.warnings)}`,
+		);
+	});
+
+	test("discards a configuration refresh that a newer change supersedes", async () => {
+		let lintCalls = 0;
+		const h = new ServerHarness({
+			lint: {
+				runner: async () => {
+					lintCalls++;
+					return cliResult(diagnosticJson);
+				},
+			},
+		});
+		await h.initialize();
+		await h.open();
+
+		const held = deferred<typeof h.settings>();
+		let globalCalls = 0;
+		h.configuration = async (scopeUri?: string) => {
+			if (!scopeUri && ++globalCalls === 1) {
+				return held.promise;
+			}
+			return h.settings;
+		};
+
+		// The first change stalls inside refreshSettings while a second one lands.
+		const superseded = h.changeConfiguration();
+		await h.settle();
+		h.settings = { ...h.settings, minSeverity: "error" };
+		await h.changeConfiguration();
+		await clock.tickAsync(1);
+		const callsAfterNewer = lintCalls;
+
+		held.resolve(h.settings);
+		await superseded;
+		await clock.tickAsync(1);
+
+		assert.strictEqual(
+			lintCalls,
+			callsAfterNewer,
+			"the superseded refresh must not issue another re-lint",
+		);
+	});
+
+	test("skips a per-document re-lint when the document closes mid-refresh", async () => {
+		let lintCalls = 0;
+		const h = new ServerHarness({
+			lint: {
+				runner: async () => {
+					lintCalls++;
+					return cliResult(diagnosticJson);
+				},
+			},
+		});
+		let scopedGate: ReturnType<typeof deferred<typeof h.settings>> | null =
+			null;
+		h.configuration = async (scopeUri?: string) => {
+			if (scopeUri && scopedGate) {
+				return scopedGate.promise;
+			}
+			return h.settings;
+		};
+		await h.initialize();
+		await h.open();
+
+		h.settings = { ...h.settings, minSeverity: "error" };
+		scopedGate = deferred<typeof h.settings>();
+		const change = h.changeConfiguration();
+		await h.settle();
+
+		await h.close();
+		scopedGate.resolve(h.settings);
+		await change;
+		await clock.tickAsync(1);
+
+		assert.strictEqual(lintCalls, 0);
+	});
+
+	suite("event handler failures", () => {
+		/** A harness whose document-scoped settings lookups always fail. */
+		function createFailingHarness() {
+			const h = new ServerHarness();
+			h.configuration = async (scopeUri?: string) => {
+				if (scopeUri) {
+					throw new Error("cfg boom");
+				}
+				return h.settings;
+			};
+			return h;
+		}
+
+		test("logs a failure while reacting to an open", async () => {
+			const h = createFailingHarness();
+			await h.initialize();
+
+			await h.open();
+			await h.settle();
+
+			assert.ok(
+				h.logs.some((message) => message.includes("failed to react to open")),
+				`unexpected logs: ${JSON.stringify(h.logs)}`,
+			);
+		});
+
+		test("logs a failure while reacting to a change", async () => {
+			const h = createFailingHarness();
+			await h.initialize();
+			await h.open();
+			await h.settle();
+
+			await h.change();
+			await h.settle();
+
+			assert.ok(
+				h.logs.some((message) => message.includes("failed to react to change")),
+				`unexpected logs: ${JSON.stringify(h.logs)}`,
+			);
+		});
+
+		test("logs a failure while reacting to a save", async () => {
+			const h = createFailingHarness();
+			await h.initialize();
+			await h.open();
+			await h.settle();
+
+			await h.save();
+			await h.settle();
+
+			assert.ok(
+				h.logs.some((message) => message.includes("failed to react to save")),
+				`unexpected logs: ${JSON.stringify(h.logs)}`,
+			);
+		});
 	});
 });

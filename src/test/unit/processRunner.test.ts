@@ -11,6 +11,7 @@ import {
 	resolveCommand,
 	runProcess,
 } from "../../server/shared/processRunner";
+import { createStubCommandDir } from "../helpers/stubCommand";
 
 suite("assertPathExists", () => {
 	test("throws MissingTsqlRefineError when the path does not exist", async () => {
@@ -43,26 +44,6 @@ suite("clearCommandAvailabilityCache", () => {
 		await fs.rm(tempRoot, { recursive: true, force: true });
 	});
 
-	/** Creates a directory holding a spawnable no-op `tsqlrefine`. */
-	async function createStubCommandDir(): Promise<string> {
-		const dir = path.join(tempRoot, "bin");
-		await fs.mkdir(dir, { recursive: true });
-		if (process.platform === "win32") {
-			// Node's spawn resolves PATHEXT, so the stub must be a real executable.
-			const target = path.join(dir, "tsqlrefine.exe");
-			try {
-				await fs.link(process.execPath, target);
-			} catch {
-				await fs.copyFile(process.execPath, target);
-			}
-		} else {
-			const target = path.join(dir, "tsqlrefine");
-			await fs.writeFile(target, "#!/bin/sh\nexit 0\n");
-			await fs.chmod(target, 0o755);
-		}
-		return dir;
-	}
-
 	test("re-checks availability after a negative result is cleared", async function () {
 		this.timeout(30000);
 		const emptyDir = path.join(tempRoot, "empty");
@@ -76,7 +57,7 @@ suite("clearCommandAvailabilityCache", () => {
 
 		// The negative verdict is cached, so making the command available is not
 		// enough on its own.
-		process.env["PATH"] = await createStubCommandDir();
+		process.env["PATH"] = await createStubCommandDir(tempRoot);
 		await assert.rejects(
 			resolveCommand(defaultSettings, tempRoot),
 			MissingTsqlRefineError,
