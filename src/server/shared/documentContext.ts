@@ -1,6 +1,6 @@
 import * as path from "node:path";
-import { URI } from "vscode-uri";
 import type { TextDocument } from "vscode-languageserver-textdocument";
+import { URI } from "vscode-uri";
 import { resolveConfigPath } from "../config/resolveConfigPath";
 import type { TsqlRefineSettings } from "../config/settings";
 import { normalizeForCompare } from "./normalize";

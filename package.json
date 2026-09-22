@@ -177,7 +177,9 @@
 		]
 	},
 	"scripts": {
-		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"typecheck": "npm run typecheck:src && npm run typecheck:test",
+		"typecheck:src": "tsc -p tsconfig.json --noEmit",
+		"typecheck:test": "tsc -p tsconfig.test.json --noEmit --incremental false",
 		"compile": "tsc -p tsconfig.json",
 		"clean:test": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true })\"",
 		"compile:test": "tsc -p tsconfig.test.json",
@@ -188,6 +190,7 @@
 		"vscode:prepublish": "npm run build -- --production",
 		"package": "vsce package --no-dependencies",
 		"lint": "biome lint .",
+		"check": "biome check .",
 		"format": "biome format --write .",
 		"format:check": "biome format .",
 		"test:unit": "npm run compile:test && mocha --config .mocharc.unit.json",
@@ -197,7 +200,7 @@
 		"test:e2e": "npm run build && npm run compile:test && npm run test:e2e:run",
 		"test": "npm run test:unit",
 		"prepare": "husky",
-		"verify": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run build -- --production"
+		"verify": "npm run typecheck && npm run check && npm test && npm run build -- --production"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.12",
@@ -220,11 +223,8 @@
 	},
 	"lint-staged": {
 		"package-lock.json": [],
-		"*.ts": [
-			"biome format --write",
-			"biome lint --fix"
-		],
-		"*.json": "biome format --write"
+		"*.{ts,mjs,cjs}": "biome check --write --no-errors-on-unmatched",
+		"*.json": "biome check --write --no-errors-on-unmatched"
 	},
 	"dependencies": {
 		"vscode-languageclient": "^10.1.0",

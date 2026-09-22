@@ -38,12 +38,15 @@ jobs:
           node-version-file: package.json
           cache: npm
       - run: npm ci
-      # These checks are platform-independent; run them once.
+      # Type checking is platform-dependent: forceConsistentCasingInFileNames
+      # only catches wrong-cased imports on a case-insensitive filesystem, and
+      # type resolution can differ per OS. Run it everywhere.
       - run: npm run typecheck
-        if: runner.os == 'Linux'
-      - run: npm run lint
-        if: runner.os == 'Linux'
-      - run: npm run format:check
+
+      # Lint, format and import-order checks are platform-independent
+      # (line endings are pinned to LF by .gitattributes and biome.json);
+      # run them once.
+      - run: npm run check
         if: runner.os == 'Linux'
 
       # Run unit tests with coverage (Linux only for performance)

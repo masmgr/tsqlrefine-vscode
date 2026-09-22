@@ -1,7 +1,7 @@
 import type { TsqlRefineSettings } from "../config/settings";
 import { normalizeConfigPath } from "./normalize";
 import { resolveCommand, runProcess } from "./processRunner";
-import { type ProcessRunResult, createCancelledResult } from "./types";
+import { createCancelledResult, type ProcessRunResult } from "./types";
 
 export type CliOperation = "lint" | "format" | "fix";
 

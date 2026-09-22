@@ -20,7 +20,7 @@ type Release = () => void;
 
 class Semaphore {
 	private available: number;
-	private waiters: Array<(release: Release) => void> = [];
+	private readonly waiters: Array<(release: Release) => void> = [];
 
 	constructor(maxConcurrentRuns: number) {
 		this.available = Math.max(1, maxConcurrentRuns);
@@ -47,9 +47,14 @@ class Semaphore {
 	private createRelease(): Release {
 		let released = false;
 		return () => {
+			// Defensive: every release is called exactly once, from either
+			// runWithRelease's finally or drainQueue's early continue, so this guard
+			// is not reachable through LintScheduler's public API.
+			/* c8 ignore start */
 			if (released) {
 				return;
 			}
+			/* c8 ignore stop */
 			released = true;
 			this.available += 1;
 			const next = this.waiters.shift();
@@ -226,10 +231,16 @@ export class LintScheduler {
 					continue;
 				}
 				this.queuedUriSet.delete(nextUri);
+				// Defensive: a queued uri always has a pending entry. Queuing only
+				// happens when no slot was free, and every release drains the queue
+				// before anything else can observe the free slot, so nothing can
+				// consume the pending entry while the uri waits here.
+				/* c8 ignore start */
 				if (!this.pendingByUri.has(nextUri)) {
 					release();
 					continue;
 				}
+				/* c8 ignore stop */
 				this.runDetached(nextUri, release);
 			}
 		} finally {

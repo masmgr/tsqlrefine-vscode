@@ -12,11 +12,18 @@
 		"exactOptionalPropertyTypes": true,
 		"noImplicitOverride": true,
 		"noPropertyAccessFromIndexSignature": true,
-		"skipLibCheck": true
-		/* Additional Checks */
-		// "noImplicitReturns": true, /* Report error when not all code paths in function return a value. */
-		// "noFallthroughCasesInSwitch": true, /* Report errors for fallthrough cases in switch statement. */
-		// "noUnusedParameters": true,  /* Report errors on unused parameters. */
+		"skipLibCheck": true,
+		/* Additional checks. `verbatimModuleSyntax` is intentionally absent: the
+		   project emits CJS (module Node16 without "type": "module" in
+		   package.json), so it would reject every import/export. */
+		"noImplicitReturns": true,
+		"noFallthroughCasesInSwitch": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"allowUnreachableCode": false,
+		"allowUnusedLabels": false,
+		"forceConsistentCasingInFileNames": true,
+		"isolatedModules": true
 	},
 	"include": ["src/**/*.ts"],
 	"exclude": ["src/test"]

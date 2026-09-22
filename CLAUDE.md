@@ -14,16 +14,19 @@ npm install              # Install dependencies
 npm run build            # Bundle extension/server to dist/ with esbuild
 npm run compile          # Compile TypeScript to out/ (for tests)
 npm run watch            # Watch mode for development (esbuild)
-npm run typecheck        # Type-check without emitting
+npm run typecheck        # Type-check src and tests without emitting
+npm run typecheck:src    # Type-check src only (tsconfig.json)
+npm run typecheck:test   # Type-check src + tests (tsconfig.test.json)
 
 # Code Quality
-npm run lint             # Lint with Biome
+npm run check            # Lint + format + import-order check with Biome (CI gate)
+npm run lint             # Lint only with Biome
 npm run format           # Format with Biome
-npm run verify           # Run all checks (test + typecheck + lint + format)
+npm run verify           # Run all checks (typecheck + check + test + production build)
 
 # Testing
 npm run test:unit        # Run unit tests with Mocha
-npm run test:unit:coverage  # Run unit tests with c8 coverage (targets: 85% lines/functions/statements, 80% branches)
+npm run test:unit:coverage  # Run unit tests with c8 coverage (targets: 98% lines/statements, 99% functions, 96% branches)
 npm run test:e2e         # Run E2E tests with VS Code Test
 npm test                 # Run unit tests
 ```
@@ -37,7 +40,7 @@ npm test                 # Run unit tests
 Client and server run in separate processes:
 
 - **Client** ([src/extension.ts](src/extension.ts), [src/client/](src/client/)): VS Code extension host. Manages LanguageClient, registers commands, handles file lifecycle events. The status bar keeps per-URI diagnostic tallies and only re-counts the URIs carried by `onDidChangeDiagnostics` — that event fires for every extension's diagnostics, so a full workspace scan on each one is expensive.
-- **Server** ([src/server/server.ts](src/server/server.ts)): Separate Node.js process. Handles document sync, lint/format/fix operations, code actions, and coordinates with LintScheduler. On a configuration change it compares a signature of the lint-affecting settings (`path`, `configPath`, `minSeverity`, `maxFileSizeKb`, `allowPlugins`, `timeoutMs`) and re-lints open documents when it changed, so published diagnostics never outlive the settings that produced them.
+- **Server** ([src/server/server.ts](src/server/server.ts)): Separate Node.js process. Handles document sync, lint/format/fix operations, code actions, and coordinates with LintScheduler. On a configuration change it compares a signature of the lint-affecting settings (`path`, `configPath`, `minSeverity`, `maxFileSizeKb`, `allowPlugins`, `timeoutMs`) and re-lints open documents when it changed, so published diagnostics never outlive the settings that produced them. The same check drops the resolved-config-path cache (`clearConfigPathCache()`), so a `configPath` change — or a newly created `tsqlrefine.json` — cannot be masked for up to `CONFIG_CACHE_TTL_MS` by the previous resolution.
 
 ### Core Components
 
@@ -129,6 +132,19 @@ src/test/
 
 Config: [.mocharc.unit.json](.mocharc.unit.json) (unit), [.vscode-test.mjs](.vscode-test.mjs) (E2E, fixture workspace at [test/fixtures/workspace/](test/fixtures/workspace/)).
 
+Shared test helpers ([src/test/helpers/](src/test/helpers/)):
+
+| Helper | Purpose |
+|--------|---------|
+| `operationHarness.ts` | Operation-layer test doubles: `createTestSettings()` (spreads `defaultSettings`), `createTestDocument()` (a real `TextDocument`), `createTestContext()`, `createTestConnection()` (records warnings/console/diagnostics/notifications/edits), `createOperationControl()`, `createOperationDeps()`. Use these instead of redefining per-file fakes. |
+| `processResults.ts` | `ProcessRunResult` builders: `cliResult()`, `cliTimedOut()`, `cliCancelled()`, plus `deferred()` and `diagnosticJson`. Re-exported from `serverHarness.ts` for existing imports. |
+| `serverHarness.ts` | `ServerHarness` boots `registerServer` against a fake `Connection` and drives real LSP notifications (`open`/`change`/`save`/`close`/`changeConfiguration`/`request`, plus `settle()` to drain microtasks under fake timers). |
+| `moduleMocks.ts` | `loadWithMocks()` patches `Module._load` to swap host modules (`vscode`, `vscode-languageclient/node`) while requiring a fresh instance. |
+| `stubCommand.ts` | `createStubCommandDir()` writes a spawnable no-op executable for PATH-resolution tests (a real `.exe` on Windows, where `spawn` resolves `PATHEXT`). |
+| `cleanup.ts` | `rmWithRetry()` (Windows file locks), `removeDirectory()`, `sleep()`. |
+
+The `NotificationManager` is never faked in tests: operation tests use the real class over a recording connection so cooldowns, lazy debug gating and stderr routing are exercised rather than stubbed.
+
 ### E2E Test Rules
 
 - Always use `runE2ETest()` from `e2eTestHarness.ts` for setup/teardown
@@ -148,7 +164,7 @@ PBT tests are integrated into unit test files under `suite("Property-based tests
 | `utf8BufferWithOptionalBom` | Buffers with/without UTF-8 BOM |
 | `cliDiagnostic` / `cliJsonOutput` | Valid CLI output structures |
 
-Modules with PBT coverage: `textUtils.ts`, `normalize.ts`, `decodeOutput.ts`, `parseOutput.ts`.
+Modules with PBT coverage: `textUtils.ts`, `normalize.ts`, `decodeOutput.ts`, `parseOutput.ts`, `documentStateManager.ts`, `cliEditOperation.ts`.
 
 Best practices:
 - Test one property per test, use `property:` prefix in test name
@@ -159,7 +175,11 @@ Best practices:
 
 ### Coverage
 
-c8 with targets: 85% lines/functions/statements and 80% branches. Config: [.c8rc.json](.c8rc.json). Reports in `coverage/`.
+c8 with targets: 98% lines/statements, 99% functions and 96% branches. Config: [.c8rc.json](.c8rc.json). Reports in `coverage/` (including `coverage-summary.json` for machine-readable numbers).
+
+Thresholds sit just below the measured value on purpose: platform-conditional code (`normalize.ts` win32 casing, `processRunner.ts` SIGKILL escalation) and unseeded fast-check inputs move the numbers slightly between OSes and runs. `check-coverage` is only evaluated by the Linux CI job, so thresholds are chosen against that run.
+
+Code that is unreachable through the public API carries `/* c8 ignore start|stop */` plus a reason instead of a contrived test: the `require.main === module` entry point in [server.ts](src/server/server.ts), the double-release guard and the "queued without pending" guard in [scheduler.ts](src/server/lint/scheduler.ts), and the stopDir re-entry branch in [resolveConfigPath.ts](src/server/config/resolveConfigPath.ts).
 
 ## Important Implementation Notes
 
@@ -182,9 +202,12 @@ c8 with targets: 85% lines/functions/statements and 80% branches. Config: [.c8rc
 - Use `normalizeForCompare()` for case-insensitive comparison
 
 ### TypeScript Configuration
-- `strict: true`, `noUncheckedIndexedAccess: true`, `exactOptionalPropertyTypes: true`
+- `strict: true`, `noUncheckedIndexedAccess: true`, `exactOptionalPropertyTypes: true`, `noImplicitOverride: true`, `noPropertyAccessFromIndexSignature: true`
+- Also enabled: `noImplicitReturns`, `noFallthroughCasesInSwitch`, `noUnusedLocals`, `noUnusedParameters`, `allowUnreachableCode: false`, `allowUnusedLabels: false`, `forceConsistentCasingInFileNames`, `isolatedModules`
+- Prefix a deliberately unused parameter with `_` (TS exempts those from `noUnusedParameters`)
+- `verbatimModuleSyntax` is intentionally **not** enabled: the project emits CJS (`module: Node16` with no `"type": "module"`), so it would reject every import/export
 - Always handle array access with optional chaining or default values
 
 ### Git Hooks
-- Husky pre-commit: lint-staged (Biome format + lint on `.ts`, format on `.json`) + typecheck
+- Husky pre-commit: lint-staged (`biome check --write` on `.ts`/`.mjs`/`.cjs`/`.json`) + `npm run typecheck` (blocking — wrapped in an `if`, not `&& ... || true`)
 - Installed automatically via `npm install`

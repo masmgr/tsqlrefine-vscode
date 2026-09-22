@@ -1,6 +1,9 @@
 # Run lint-staged for formatting and linting
 npx lint-staged
 
-# Run type checking on staged TypeScript files
-# Only if TypeScript files are staged
-git diff --cached --name-only --diff-filter=ACM | grep -q '\.ts$' && npm run typecheck || true
+# Type-check when TypeScript files are staged.
+# Written as an `if` on purpose: `grep -q ... && npm run typecheck || true`
+# would swallow a typecheck failure as well as the "nothing staged" case.
+if git diff --cached --name-only --diff-filter=ACM | grep -q '\.ts$'; then
+	npm run typecheck
+fi

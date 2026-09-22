@@ -1,14 +1,15 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.5.12/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
 	"files": {
 		"includes": [
 			"**",
-			"!node_modules",
 			"!out",
 			"!dist",
-			"!.vscode-test",
-			"!.nyc_output",
-			"!coverage",
 			"!.claude",
 			"!*.md",
 			"!*.yml",
@@ -16,12 +17,54 @@
 			"!package-lock.json"
 		]
 	},
+	"formatter": {
+		"enabled": true,
+		"lineEnding": "lf"
+	},
 	"linter": {
 		"rules": {
-			"preset": "recommended"
+			"preset": "recommended",
+			"complexity": {
+				"useLiteralKeys": "off",
+				"noExcessiveCognitiveComplexity": "off"
+			},
+			"correctness": {
+				"noPrivateImports": "error",
+				"noUnresolvedImports": "error"
+			},
+			"suspicious": {
+				"noDuplicateTestHooks": "error",
+				"noEvolvingTypes": "error",
+				"noFocusedTests": "error",
+				"noImportCycles": "error",
+				"noNestedPromises": "error",
+				"noShadow": "error",
+				"noSkippedTests": "error",
+				"noTsIgnore": "error",
+				"noUnusedExpressions": "error",
+				"useArraySortCompare": "error",
+				"useErrorMessage": "error",
+				"useGuardForIn": "error",
+				"useIterableCallbackReturn": "error"
+			},
+			"style": {
+				"noYodaExpression": "error",
+				"useCollapsedElseIf": "error",
+				"useConsistentArrayType": "error",
+				"useConsistentCurlyBraces": "error",
+				"useConsistentMemberAccessibility": "error",
+				"useErrorCause": "error",
+				"useReadonlyClassProperties": "error",
+				"useShorthandFunctionType": "error",
+				"useThrowOnlyError": "error"
+			},
+			"nursery": {
+				"noIdenticalTestTitle": "error",
+				"noMisusedPromises": "error",
+				"noUselessTypeConversion": "error",
+				"useExhaustiveSwitchCases": "error",
+				"useImportsFirst": "error"
+			}
 		}
-	},
-	"formatter": {
-		"enabled": true
 	}
 }

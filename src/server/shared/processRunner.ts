@@ -61,7 +61,9 @@ export async function assertPathExists(filePath: string): Promise<void> {
 		if (error instanceof MissingTsqlRefineError) {
 			throw error;
 		}
-		throw new MissingTsqlRefineError(`tsqlrefine.path not found: ${filePath}`);
+		throw new MissingTsqlRefineError(`tsqlrefine.path not found: ${filePath}`, {
+			cause: error,
+		});
 	}
 }
 

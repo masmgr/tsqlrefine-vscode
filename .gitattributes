@@ -1,0 +1,7 @@
+# Normalize line endings to LF in the repository and the working tree.
+# Without this, a clone made with core.autocrlf=true checks out CRLF and
+# `npm run format:check` reports every file as unformatted.
+* text=auto eol=lf
+
+*.png binary
+*.vsix binary

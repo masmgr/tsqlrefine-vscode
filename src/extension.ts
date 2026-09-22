@@ -95,10 +95,15 @@ export function activate(context: vscode.ExtensionContext): TsqlRefineLiteApi {
 					? vscode.ConfigurationTarget.Workspace
 					: vscode.ConfigurationTarget.Global;
 				for (const languageId of LANGUAGE_IDS) {
-					const config = vscode.workspace.getConfiguration("editor", {
+					const languageConfig = vscode.workspace.getConfiguration("editor", {
 						languageId,
 					});
-					await config.update("defaultFormatter", EXTENSION_ID, target, true);
+					await languageConfig.update(
+						"defaultFormatter",
+						EXTENSION_ID,
+						target,
+						true,
+					);
 				}
 				await vscode.window.showInformationMessage(
 					hasWorkspace
