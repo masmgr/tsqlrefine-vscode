@@ -12,7 +12,7 @@ This document provides guidance for developers working on the tsqlrefine VS Code
 
 - **Node.js**: v24 or later
 - **npm**: v11 or later
-- **VS Code**: v1.108.1 or later
+- **VS Code**: v1.136.0 or later
 - **TypeScript**: Managed via npm
 
 ## Setup
